@@ -1,0 +1,41 @@
+[project]
+name = "mammaprint"
+version = "0.1.0"
+authors = [
+    { name = "Oliver Rainoch", email = "540484@mail.muni.cz" },
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { file = "LICENSE" }
+dependencies = [
+    "lightning>=2.0.0",
+    "albumentations>=1.4.14",
+    "torchvision>=0.17.2",
+    "pandas>=2.2.2",
+    "torch>=2.2.2",
+    "tqdm>=4.66.5",
+    "rationai-mlkit @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/mlkit.git",
+    "rationai-masks @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/masks.git",
+    "rationai-tiling @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/tiling.git",
+]
+
+[tool.pdm.dev-dependencies]
+dev = ["mypy", "pre-commit", "ruff"]
+
+[tool.pdm.scripts]
+fit = "python -m mammaprint mode=fit"
+validate = "python -m mammaprint mode=validate"
+test = "python -m mammaprint mode=test"
+predict = "python -m mammaprint mode=predict"
+l = { composite = ["lint", "format", "mypy"] }
+lint = "ruff check --fix"
+format = "ruff format"
+mypy = "mypy ."
+post_install = { composite = [
+    "pre-commit autoupdate",
+    "pre-commit install",
+    "pre-commit install --hook-type commit-msg",
+] }
+
+[tool.pdm]
+distribution = false
