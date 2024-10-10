@@ -22,7 +22,7 @@ def process_slide(slide_path: Path) -> None:
         xres = 1000 / (float(slide.properties[PROPERTY_NAME_MPP_X]) * downsample)
         yres = 1000 / (float(slide.properties[PROPERTY_NAME_MPP_Y]) * downsample)
 
-    slide = pyvips.Image.new_from_file(slide_path, page=LEVEL)
+    slide = pyvips.Image.new_from_file(slide_path, level=LEVEL)
     mask = tissue_mask(slide)
     mask_path = Path(MASK_DEST, f"{Path(slide_path).stem}.tiff")
     mask_path.parent.mkdir(exist_ok=True, parents=True)
