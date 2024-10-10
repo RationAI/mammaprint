@@ -12,8 +12,8 @@ from sklearn.model_selection import train_test_split
 
 
 SLIDES_PATH = "/mnt/data/rationai/data/summer-school/BreastCancer/slides"
-TISSUE_MASKS_PATH = "data/tissue_masks"
-ANNOTATION_MASKS_PATH = "data/annotation_masks"
+TISSUE_MASKS_PATH = ""
+ANNOTATION_MASKS_PATH = ""
 
 
 @dataclass
@@ -63,7 +63,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
 
 def main() -> None:
     slides, test_slides = train_test_split(
-        list(Path(SLIDES_PATH).rglob("*.tiff")), test_size=0.2
+        list(Path(SLIDES_PATH).rglob("*.mrxs")), test_size=0.2
     )
     train_slides, val_slides = train_test_split(slides, test_size=0.1)
 
@@ -71,20 +71,20 @@ def main() -> None:
     val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
     test_slides_df, test_tiles_df = tiling(slides=list(test_slides), handler=handler)
 
-    mlflow.set_experiment(experiment_name="Breast Cancer")
-    with mlflow.start_run(run_name="Breast Cancer Dataset") as _:
+    mlflow.set_experiment(experiment_name="Mamma-print")
+    with mlflow.start_run(run_name="Luminal-type Dataset") as _:
         save_mlflow_dataset(
             slides=train_slides_df,
             tiles=train_tiles_df,
-            dataset_name="Breast Cancer - train",
+            dataset_name="Luminal-type - train",
         )
         save_mlflow_dataset(
-            slides=val_slides_df, tiles=val_tiles_df, dataset_name="Breast Cancer - val"
+            slides=val_slides_df, tiles=val_tiles_df, dataset_name="Luminal-type - val"
         )
         save_mlflow_dataset(
             slides=test_slides_df,
             tiles=test_tiles_df,
-            dataset_name="Breast Cancer - test",
+            dataset_name="Luminal-type - test",
         )
 
 

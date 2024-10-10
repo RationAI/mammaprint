@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prostate_cancer.data.datasets import ProstateCancerPredict
+from mammaprint.data.datasets import MammaprintPredict
 
 
 URIS = [
@@ -12,7 +12,7 @@ URIS = [
 
 
 def main() -> None:
-    dataset = ProstateCancerPredict(URIS)
+    dataset = MammaprintPredict(URIS)
     dataloader = DataLoader(dataset, batch_size=1, num_workers=4)
 
     means = []

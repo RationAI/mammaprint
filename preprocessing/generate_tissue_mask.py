@@ -10,9 +10,9 @@ from rationai.masks import (
 )
 
 
-SLIDES_PATH = "/mnt/data/rationai/data/summer-school/BreastCancer/slides"
-MASK_DEST = "data/tissue_masks"
-LEVEL = 3
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
+MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
+LEVEL = 1
 
 
 @ray.remote
@@ -30,7 +30,7 @@ def process_slide(slide_path: Path) -> None:
 
 
 def main() -> None:
-    slides = Path(SLIDES_PATH).rglob("*.tiff")
+    slides = Path(SLIDES_PATH).rglob("*.mrxs")
     process_items(list(slides), process_item=process_slide)
 
 
