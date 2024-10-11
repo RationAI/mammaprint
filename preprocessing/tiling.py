@@ -11,8 +11,8 @@ from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
 
 
-SLIDES_PATH = "/mnt/data/rationai/data/summer-school/BreastCancer/slides"
-TISSUE_MASKS_PATH = ""
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
+TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
 ANNOTATION_MASKS_PATH = ""
 
 
@@ -53,10 +53,10 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
     slide, tiles = source(slide_path)
 
     tissue_mask_path = Path(TISSUE_MASKS_PATH, slide_path.name)
-    cancer_mask_path = Path(ANNOTATION_MASKS_PATH, slide_path.name)
+    #cancer_mask_path = Path(ANNOTATION_MASKS_PATH, slide_path.name)
 
     tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
-    tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
+    #tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
 
     return slide, tiles
 
