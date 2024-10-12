@@ -1,7 +1,8 @@
 # Customized original code taken from https://github.com/schaugf/HEnorm_python/blob/master/normalizeStaining.py
 
-import pyvips
+import argparse
 import numpy as np
+import pyvips
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -9,17 +10,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Directories
 BG_DIR_TIFF_INPUT = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/'
-BG_DIR_TIFF_OUTPUT = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_normalized_tiff/'
+BG_DIR_TIFF_OUTPUT = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_normalized/'
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 # Macenko Normalization Function
 def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
     """
     Perform Macenko stain normalization on a NumPy image array.
     """
-    # Reference matrix for H&E
     HERef = np.array([[0.5626, 0.2159],
                       [0.7201, 0.8012],
                       [0.4062, 0.5581]])
@@ -31,10 +32,10 @@ def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
 
     # Convert RGB to OD
     OD = -np.log((image_np.astype(np.float32) + 1) / Io)
-    
+
     # Remove transparent or low-intensity pixels (OD < beta)
     ODhat = OD[~np.any(OD < beta, axis=1)]
-    
+
     # Check if the tile has sufficient valid pixels to perform normalization
     if ODhat.size == 0:
         logging.warning("Tile contains insufficient data for normalization, skipping.")
@@ -72,19 +73,29 @@ def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
 
     return Inorm
 
+
 # Function to process and normalize a single tile
 def process_tile(image, tile_size, x, y):
     """
     Extract and process a tile of size tile_size at coordinates (x, y).
     Applies Macenko normalization to the tile.
     """
-    tile = image.crop(x, y, tile_size, tile_size)
+    # Handle boundary tiles (make sure we don't go beyond image size)
+    tile_size_x = min(tile_size, image.width - x)
+    tile_size_y = min(tile_size, image.height - y)
     
+    # Crop the tile
+    try:
+        tile = image.crop(x, y, tile_size_x, tile_size_y)
+    except pyvips.error.Error as e:
+        logging.error(f"Error cropping tile at ({x}, {y}): {e}")
+        return None
+
     # Convert tile to NumPy array
     tile_np = np.ndarray(buffer=tile.write_to_memory(),
                          dtype=np.uint8,
-                         shape=[tile.height, tile.width, 3])
-    
+                         shape=[tile_size_y, tile_size_x, 3])
+
     # Apply Macenko normalization
     normalized_tile_np = macenko_normalization(tile_np)
 
@@ -96,8 +107,9 @@ def process_tile(image, tile_size, x, y):
         normalized_tile_np.shape[2],  # bands (channels)
         'uchar'
     )
-    
+
     return x, y, normalized_tile
+
 
 # Function to process tiles in batches
 def process_batch(tiles, image, tile_size):
@@ -106,8 +118,11 @@ def process_batch(tiles, image, tile_size):
     """
     results = []
     for (x, y) in tiles:
-        results.append(process_tile(image, tile_size, x, y))
+        result = process_tile(image, tile_size, x, y)
+        if result:
+            results.append(result)
     return results
+
 
 # Function to convert tiff to normalized tiff with batch processing and parallelization
 def convert_tiff_to_tiff_parallel(input_file, output_file, tile_size=256, num_threads=4, batch_size=16):
@@ -146,8 +161,10 @@ def convert_tiff_to_tiff_parallel(input_file, output_file, tile_size=256, num_th
             futures = [executor.submit(process_tile, image, tile_size, x, y) for (x, y) in batch_tiles]
 
             for future in as_completed(futures):
-                x, y, normalized_tile = future.result()
-                output_image = output_image.insert(normalized_tile, x, y)
+                result = future.result()
+                if result:
+                    x, y, normalized_tile = result
+                    output_image = output_image.insert(normalized_tile, x, y)
 
         # Update the number of processed tiles
         processed_tiles += len(batch_tiles)
@@ -170,6 +187,7 @@ def convert_tiff_to_tiff_parallel(input_file, output_file, tile_size=256, num_th
     end_time = datetime.now()
     logging.info(f"Batch and parallel processing completed in {end_time - start_time}")
 
+
 # Main function to process the first 3 TIFF slides
 def main():
     # Get the first 3 .tiff files
@@ -189,6 +207,7 @@ def main():
             convert_tiff_to_tiff_parallel(bg_in_path, bg_out_path, tile_size=256, num_threads=4, batch_size=16)
         else:
             logging.info(f"File {bg_out_path} already exists. Skipping conversion. ({(index/total_files)*100:.2f}%)")
+
 
 if __name__ == '__main__':
     main()
