@@ -17,15 +17,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
     """
     Perform Macenko stain normalization on a NumPy image array.
-
-    Parameters:
-    - image_np: The input RGB image as a NumPy array.
-    - Io: Transmitted light intensity.
-    - alpha: Percentile for robust extremes.
-    - beta: Threshold for removing low-intensity pixels.
-
-    Returns:
-    - Inorm: Normalized image.
     """
     HERef = np.array([[0.5626, 0.2159],
                       [0.7201, 0.8012],
@@ -88,10 +79,6 @@ def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
 def process_image(input_file, output_file):
     """
     Read a TIFF file, apply Macenko normalization, and save the result as a normalized TIFF image.
-
-    Parameters:
-    - input_file: Path to the input TIFF file.
-    - output_file: Path to the output normalized TIFF file.
     """
     start_time = datetime.now()
     logging.info(f"Processing {input_file}...")
@@ -99,24 +86,35 @@ def process_image(input_file, output_file):
     # Read the image using pyvips
     image = pyvips.Image.new_from_file(input_file, access='sequential')
 
+    logging.info(f"Image {input_file} has {image.bands} bands")
+
+    # Handle images with 4 bands in sRGB color space (likely RGBA)
+    if image.bands == 4 and image.interpretation == 'srgb':
+        # Extract the first 3 bands (RGB) and discard the alpha channel
+        image = image.extract_band(0, n=3)
+        logging.info(f"Extracted RGB channels from RGBA image.")
+    elif image.bands == 3:
+        # Image is already RGB, no action needed
+        logging.info(f"Image is already in RGB format.")
+    else:
+        logging.warning(f"Image {input_file} has {image.bands} bands which is not supported. Skipping.")
+        return
+
     # Convert pyvips image to numpy array
     memory_array = image.write_to_memory()
     image_np = np.frombuffer(memory_array, dtype=np.uint8).reshape(image.height, image.width, image.bands)
-
-    # Check if image has 3 bands (RGB)
-    if image_np.shape[2] != 3:
-        logging.warning(f"Image {input_file} does not have 3 bands (RGB). Skipping.")
-        return
 
     # Apply Macenko normalization
     Inorm = macenko_normalization(image_np)
 
     # Convert normalized numpy array back to pyvips image
-    normalized_image = pyvips.Image.new_from_memory(Inorm.tobytes(),
-                                                    Inorm.shape[1],
-                                                    Inorm.shape[0],
-                                                    Inorm.shape[2],
-                                                    'uchar')
+    normalized_image = pyvips.Image.new_from_memory(
+        Inorm.tobytes(),
+        Inorm.shape[1],
+        Inorm.shape[0],
+        Inorm.shape[2],
+        'uchar'
+    )
 
     # Save the normalized image as a TIFF
     normalized_image.tiffsave(output_file, compression='deflate', bigtiff=True)
