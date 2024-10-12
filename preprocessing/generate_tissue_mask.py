@@ -9,7 +9,6 @@ from rationai.masks import (
     write_big_tiff,
 )
 
-
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
 MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
 LEVEL = 1
@@ -17,6 +16,11 @@ LEVEL = 1
 
 @ray.remote
 def process_slide(slide_path: Path) -> None:
+    mask_path = Path(MASK_DEST, f"{Path(slide_path).stem}.tiff")
+    if mask_path.exists():
+        print(f"Mask for {slide_path} already exists, skipping.")
+        return
+
     with OpenSlide(slide_path) as slide:
         downsample = slide.level_downsamples[LEVEL]
         xres = 1000 / (float(slide.properties[PROPERTY_NAME_MPP_X]) * downsample)
@@ -24,7 +28,6 @@ def process_slide(slide_path: Path) -> None:
 
     slide = pyvips.Image.new_from_file(slide_path, level=LEVEL)
     mask = tissue_mask(slide)
-    mask_path = Path(MASK_DEST, f"{Path(slide_path).stem}.tiff")
     mask_path.parent.mkdir(exist_ok=True, parents=True)
     write_big_tiff(mask, path=mask_path, xres=xres, yres=yres)
 
@@ -36,3 +39,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
