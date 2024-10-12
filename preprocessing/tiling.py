@@ -16,9 +16,9 @@ TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks
 ANNOTATION_MASKS_PATH = ""
 
 
-@dataclass
-class CancerTileMetadata(TileMetadata):
-    cancer_percentage: float
+# @dataclass
+# class CancerTileMetadata(TileMetadata):
+#     cancer_percentage: float
 
 
 class TissueMask(PyvipsMask[TileMetadata]):
@@ -30,22 +30,22 @@ class TissueMask(PyvipsMask[TileMetadata]):
         return tile_labels
 
 
-class CancerMask(PyvipsMask[CancerTileMetadata]):
-    def forward_tile(
-        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
-    ) -> CancerTileMetadata:
-        return CancerTileMetadata(
-            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
-        )
+# class CancerMask(PyvipsMask[CancerTileMetadata]):
+#     def forward_tile(
+#         self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+#     ) -> CancerTileMetadata:
+#         return CancerTileMetadata(
+#             **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
+#         )
 
 
 source = OpenSlideTileSource(mpp=0.48, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
-cancer_mask = CancerMask(
-    tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
-)
+# cancer_mask = CancerMask(
+#     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
+# )
 
 
 @ray.remote
