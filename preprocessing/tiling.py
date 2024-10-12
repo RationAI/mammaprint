@@ -11,7 +11,7 @@ from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
 
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
 ANNOTATION_MASKS_PATH = ""
 
@@ -63,7 +63,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
 
 def main() -> None:
     slides, test_slides = train_test_split(
-        list(Path(SLIDES_PATH).rglob("*.mrxs")), test_size=0.2
+        list(Path(SLIDES_PATH).rglob("*.tiff")), test_size=0.2
     )
     train_slides, val_slides = train_test_split(slides, test_size=0.1)
 
