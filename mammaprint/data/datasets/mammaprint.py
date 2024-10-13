@@ -22,8 +22,6 @@ class Mammaprint(MetaTiledSlides[Sample]):
         super().__init__(uris=uris)
 
     def generate_datasets(self) -> Iterable[Dataset[Sample]]:
-        self.slides, self.tiles = _update_dataset_columns(self.slides, self.tiles)
-
         self.tiles["cancer"] = self.tiles["cancer_percentage"] > self.cancer_threshold
 
         return (
@@ -47,8 +45,6 @@ class MammaprintPredict(MetaTiledSlides[PredictSample]):
         super().__init__(uris=uris)
 
     def generate_datasets(self) -> Iterable[Dataset[PredictSample]]:
-        self.slides, self.tiles = _update_dataset_columns(self.slides, self.tiles)
-
         return (
             _MammaprintSlideTiles(
                 slide,
@@ -101,26 +97,3 @@ class _MammaprintSlideTiles(Dataset[Sample | PredictSample]):
             return image, label, metadata
 
         return image, metadata
-
-
-def _update_dataset_columns(
-    slides: pd.DataFrame, tiles: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Update columns in the slides and tiles DataFrames to match the expected column names."""
-    slides["id"] = slides["slide_name"]
-    slides["tile_extent_x"] = slides["tile_size"]
-    slides["tile_extent_y"] = slides["tile_size"]
-    slides.rename(
-        columns={
-            "sample_level": "level",
-            "slide_fp": "path",
-        },
-        inplace=True,
-    )
-
-    tiles["slide_id"] = tiles["slide_name"]
-    tiles.rename(columns={"annot_coverage": "cancer_percentage"}, inplace=True)
-    if "coord_x" in tiles.columns:
-        tiles.rename(columns={"coord_x": "x", "coord_y": "y"}, inplace=True)
-
-    return slides, tiles
