@@ -1,6 +1,6 @@
 defaults:
   - /data/transforms@transforms: test
 
-_target_: breast_cancer.data.datasets.mammaprint
+_target_: mammaprint.data.datasets.mammaprint
 uris: ["mlflow-artifacts:/17/02e1cc96a6b344d7b92e2ea8c4267b60/artifacts/dataset"]
 cancer_threshold: 0.1
