@@ -20,8 +20,6 @@ OmegaConf.register_new_resolver(
 def main(config: DictConfig, logger: Logger | None) -> None:
     seed_everything(config.seed, workers=True)
 
-    torch.set_float32_matmul_precision(precision="high")
-
     data = hydra.utils.instantiate(
         config.data,
         _recursive_=False,  # to avoid instantiating all the datasets
