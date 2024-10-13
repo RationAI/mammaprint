@@ -22,7 +22,7 @@ class Mammaprint(MetaTiledSlides[Sample]):
         super().__init__(uris=uris)
 
     def generate_datasets(self) -> Iterable[Dataset[Sample]]:
-        self.tiles["cancer"] = self.tiles["cancer_percentage"] > self.cancer_threshold
+        self.tiles["cancer"] = self.tiles["cancer_coverage"] > self.cancer_threshold
 
         return (
             _MammaprintSlideTiles(
