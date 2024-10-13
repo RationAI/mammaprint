@@ -5,7 +5,7 @@ defaults:
   - /data/datasets@data.val: mammaprint/val
   - /data/datasets@data.test: mammaprint/test
   - /data/datasets@data.predict: mammaprint/predict
-  - /model/backbone: vgg16
+  - /model/backbone: ???
   - _self_
 
 seed: ${random_seed:}
