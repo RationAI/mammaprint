@@ -27,7 +27,7 @@ data:
   num_workers: 8
 
 metadata:
-  experiment_name: Mamma-Print
+  experiment_name: Mamma-print
   run_name: Luminal-type training
   description: Training a model on the luminal-type dataset
   hyperparams: {}
