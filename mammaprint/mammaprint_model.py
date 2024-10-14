@@ -25,7 +25,6 @@ class MammaprintModel(LightningModule):
             }
         )
         self.test_metrics = LazyMetricDict(self.val_metrics.clone())
-        self.train_metrics = self.val_metrics.clone()
         self.val_metrics.prefix = "validation/"
 
     def forward(self, x: Tensor) -> Outputs:
@@ -40,8 +39,7 @@ class MammaprintModel(LightningModule):
         self.log(
             "train/loss", loss, batch_size=len(inputs), on_step=True, prog_bar=True
         )
-        self.train_metrics.update(outputs, targets)
-        self.log_dict(self.train_metrics, batch_size=len(inputs), on_step=True, prog_bar=True)
+
         return loss
 
     def validation_step(self, batch: Input) -> None:
