@@ -9,18 +9,18 @@ from rationai.masks import (
     write_big_tiff,
 )
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
-MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint/"
+MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
 LEVEL = 1
-FILE_SIZE_LIMIT_MB = 3  # Size limit in MB
+# FILE_SIZE_LIMIT_MB = 3  # Size limit in MB
 
 
 @ray.remote
 def process_slide(slide_path: Path) -> None:
     mask_path = Path(MASK_DEST, f"{Path(slide_path).stem}.tiff")
-    if mask_path.exists() and mask_path.stat().st_size > FILE_SIZE_LIMIT_MB * 1024 * 1024:
-        print(f"Mask for {slide_path} is larger than {FILE_SIZE_LIMIT_MB}MB, skipping.")
-        return 
+    # if mask_path.exists() and mask_path.stat().st_size > FILE_SIZE_LIMIT_MB * 1024 * 1024:
+    #     print(f"Mask for {slide_path} is larger than {FILE_SIZE_LIMIT_MB}MB, skipping.")
+    #     return 
 
     with OpenSlide(slide_path) as slide:
         downsample = slide.level_downsamples[LEVEL]
