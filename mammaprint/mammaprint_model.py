@@ -25,7 +25,7 @@ class MammaprintModel(LightningModule):
             }
         )
         self.test_metrics = LazyMetricDict(self.val_metrics.clone())
-        self.train_metrics = LazyMetricDict(self.val_metrics.clone())
+        self.train_metrics = self.val_metrics.clone()
         self.val_metrics.prefix = "validation/"
 
     def forward(self, x: Tensor) -> Outputs:
