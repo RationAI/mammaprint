@@ -9,8 +9,8 @@ from rationai.masks import (
     write_big_tiff,
 )
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint/"
-MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint/"
+MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
 LEVEL = 1
 # FILE_SIZE_LIMIT_MB = 3  # Size limit in MB
 
