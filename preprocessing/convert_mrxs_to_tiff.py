@@ -5,8 +5,11 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-BG_DIR_MRXS = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/'
-BG_DIR_TIFF = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/'
+BG_DIR_MRXS = '/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint/'
+BG_DIR_TIFF = '/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff/'
+
+# Set file size threshold to 500 MB
+SIZE_THRESHOLD_MB = 500 * 1024 * 1024  # Convert MB to bytes
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -39,11 +42,19 @@ def main():
         bg_out_path = os.path.join(BG_DIR_TIFF, file_name + '.tiff')
         
         # Check if the output file already exists
-        if not Path(bg_out_path).exists():
-            logging.info(f"Processing file {index} of {total_files} ({(index/total_files)*100:.2f}%)")
-            convert_mrxs_to_tiff(bg_in_path, bg_out_path)
+        if Path(bg_out_path).exists():
+            # Check the file size of the existing TIFF
+            file_size = os.path.getsize(bg_out_path)
+            if file_size > SIZE_THRESHOLD_MB:
+                logging.info(f"File {bg_out_path} already exists and is larger than 500 MB. Skipping conversion. ({(index/total_files)*100:.2f}%)")
+                continue
+            else:
+                logging.info(f"File {bg_out_path} already exists but is smaller than 500 MB. Proceeding with conversion.")
         else:
-            logging.info(f"File {bg_out_path} already exists. Skipping conversion. ({(index/total_files)*100:.2f}%)")
+            logging.info(f"Processing file {index} of {total_files} ({(index/total_files)*100:.2f}%)")
+        
+        # Convert the MRXS to TIFF if the conditions are met
+        convert_mrxs_to_tiff(bg_in_path, bg_out_path)
 
 if __name__ == '__main__':
     main()
