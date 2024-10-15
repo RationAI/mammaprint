@@ -1,2 +1,2 @@
 _target_: mammaprint.modeling.backbone.vgg16
-weights: null
+weights: IMAGENET1K_V1
