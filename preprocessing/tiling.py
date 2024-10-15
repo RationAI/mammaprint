@@ -11,8 +11,8 @@ from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
 
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
-TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff/"
+TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
 ANNOTATION_MASKS_PATH = ""
 
 
