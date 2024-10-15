@@ -79,4 +79,4 @@ class MammaprintModel(LightningModule):
         return self(inputs)
 
     def configure_optimizers(self) -> Optimizer:
-        return AdamW(self.parameters(), lr=0.0001)
+        return AdamW(self.parameters(), lr=0.00001)
