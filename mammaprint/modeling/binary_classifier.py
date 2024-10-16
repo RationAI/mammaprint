@@ -6,7 +6,7 @@ class BinaryClassifier(nn.Module):
         super().__init__()
         self.global_pool = nn.AdaptiveAvgPool2d(1)
         self.dropout = nn.Dropout(p=0.5)
-        self.proj = nn.Linear(2048, 1)
+        self.proj = nn.Linear(512, 1)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.global_pool(x)  # (B, C, 1, 1)
