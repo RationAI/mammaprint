@@ -1,0 +1,3 @@
+slide_prediction_optimizer:
+  _target_: mammaprint.trainer.callbacks.SlidePredictionOptimizer
+  save_dir: ???

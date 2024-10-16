@@ -19,10 +19,16 @@ trainer:
   limit_train_batches: 0.0125
   limit_val_batches: 0.0125
   callbacks:
-    - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-      save_top_k: 1
-      monitor: validation/loss
-      mode: min
+    # - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    #   save_top_k: 1
+    #   monitor: validation/loss
+    #   mode: min
+    slide_prediction_optimizer:
+      _target_: mammaprint.trainer.callbacks.SlidePredictionOptimizer
+      save_dir: slide_predictions
+      mask_size_min: 1
+      mask_size_max: 100
+      ground_truth_col: cancer_percentage
 
 data:
   batch_size: 32
@@ -30,6 +36,12 @@ data:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: 🏋️‍♂️ Luminal-type training
+  run_name: 📏 Luminal-type testing - optimizer
   description: Training a model on the luminal-type dataset
   hyperparams: {}
+
+# metadata:
+#   experiment_name: Mamma-print
+#   run_name: 🏋️‍♂️ Luminal-type training
+#   description: Training a model on the luminal-type dataset
+#   hyperparams: {}
