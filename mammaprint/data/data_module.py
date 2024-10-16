@@ -39,6 +39,7 @@ class DataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+             pin_memory=True,
         )
 
     def val_dataloader(self) -> Iterable[Input]:
@@ -47,6 +48,7 @@ class DataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=True,
         )
 
     def test_dataloader(self) -> Iterable[Input]:
