@@ -16,8 +16,8 @@ trainer:
   enable_checkpointing: True
   max_epochs: 30
   log_every_n_steps: 5
-  limit_train_batches: 0.2
-  limit_val_batches: 0.2
+  limit_train_batches: 0.05
+  limit_val_batches: 0.05
   callbacks:
     - _target_: lightning.pytorch.callbacks.ModelCheckpoint
       save_top_k: 1
@@ -31,5 +31,5 @@ data:
 metadata:
   experiment_name: Mamma-print
   run_name: Luminal-type training
-  description: Training a model on the luminal-type dataset
+  description: Training a model on the luminal-type dataset, level 0, source Another WSI dataset
   hyperparams: {}

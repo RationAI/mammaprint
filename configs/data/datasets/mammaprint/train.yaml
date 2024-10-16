@@ -2,5 +2,5 @@ defaults:
   - /data/transforms@transforms: train
 
 _target_: mammaprint.data.datasets.Mammaprint
-uris: ["mlflow-artifacts:/17/b27fe3df1db94920ac79b6071a035f27/artifacts/dataset"]
+uris: ["mlflow-artifacts:/17/90742ae371cd4bf5b22c2d1d1ddc0767/artifacts/dataset"]
 cancer_threshold: 0.1
