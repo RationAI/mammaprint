@@ -1,2 +1,2 @@
 _target_: mammaprint.modeling.backbone.resnet152
-weights: null
+weights: DEFAULT
