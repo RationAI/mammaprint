@@ -30,6 +30,6 @@ data:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Luminal-type training
-  description: Training a model on the luminal-type dataset, level 0, source Another WSI dataset
+  run_name: 🏋️‍♂️ Luminal-type training
+  description: Training a model on the luminal-type dataset
   hyperparams: {}
