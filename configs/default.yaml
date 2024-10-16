@@ -23,8 +23,7 @@ trainer:
     #   save_top_k: 1
     #   monitor: validation/loss
     #   mode: min
-    slide_prediction_optimizer:
-      _target_: mammaprint.trainer.callbacks.SlidePredictionOptimizer
+    - _target_: mammaprint.trainer.callbacks.SlidePredictionOptimizer
       save_dir: slide_predictions
       mask_size_min: 1
       mask_size_max: 100
