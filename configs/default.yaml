@@ -30,7 +30,7 @@ trainer:
       ground_truth_col: cancer_percentage
 
 data:
-  batch_size: 64
+  batch_size: 32
   num_workers: 12
 
 metadata:
