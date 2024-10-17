@@ -24,8 +24,12 @@ class DataloaderAgnosticCallback(Callback, ABC):
     def _extract_dataloader_metadata(batch: Any, outputs: dict) -> dict:
         """Extracts metadata from the batch and outputs.
 
-        Metadata are assumed to be the same for all batches in a dataloader (slide)
+        Metadata are assumed to be the same for all batches in a dataloader (slide).
+        This method assumes outputs contain key 'outputs' with the shape information.
         """
+        if outputs is None or "outputs" not in outputs:
+            raise ValueError("Expected non-None 'outputs' with a key 'outputs' in the outputs dictionary.")
+
         excluded_keys = ["coord_x", "coord_y"]
         metadata = {
             key: val[0] for key, val in batch[2].items() if key not in excluded_keys
@@ -73,8 +77,16 @@ class DataloaderAgnosticCallback(Callback, ABC):
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
+        if outputs is None or "outputs" not in outputs:
+            print(f"Warning: Outputs are None or missing 'outputs' key for batch {batch_idx}. Skipping.")
+            return
+
         if dataloader_idx != self._current_dataloader_idx:
-            metadata = self._extract_dataloader_metadata(batch=batch, outputs=outputs)
+            try:
+                metadata = self._extract_dataloader_metadata(batch=batch, outputs=outputs)
+            except ValueError as e:
+                print(f"Error extracting dataloader metadata: {e}. Skipping batch {batch_idx}.")
+                return
 
             self.on_test_dataloader_start(
                 trainer=trainer,
@@ -91,11 +103,13 @@ class DataloaderAgnosticCallback(Callback, ABC):
         pl_module: lightning.LightningModule,
         metadata: dict,
         dataloader_idx: int,
-    ) -> None: ...
+    ) -> None:
+        pass
 
     def on_test_dataloader_end(
         self,
         trainer: lightning.Trainer,
         pl_module: lightning.LightningModule,
         dataloader_idx: int,
-    ) -> None: ...
+    ) -> None:
+        pass
