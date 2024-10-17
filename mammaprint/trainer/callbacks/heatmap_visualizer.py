@@ -61,8 +61,28 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
+        # Call the parent method to manage dataloader start/end handling
         super().on_test_batch_end(
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
-        _, _, metadata = batch
+
+        # Ensure outputs and metadata are valid before proceeding
+        if outputs is None or "outputs" not in outputs:
+            logger.warning(f"Invalid outputs for batch {batch_idx}. Skipping.")
+            return
+
+        try:
+            _, _, metadata = batch  # Extract metadata from batch
+        except (ValueError, KeyError) as e:
+            logger.error(f"Error extracting metadata for batch {batch_idx}: {e}")
+            return
+
+        # Ensure image_builder is initialized
+        if self.image_builder is None:
+            logger.error("Image builder is not initialized. Skipping update.")
+            return
+
+        # Update the image builder with the outputs and metadata
         self.image_builder.update(data=outputs["outputs"], metadata=metadata)
+        logger.debug(f"Updated image builder for batch {batch_idx}.")
+
