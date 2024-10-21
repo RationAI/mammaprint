@@ -22,7 +22,7 @@ dependencies = [
     "mlflow>=2.9.2",
     "humanize>=4.9.0",
     "scikit-image>=0.22.0",
-    "SlideLip @ file:///${PROJECT_ROOT}/libs/slidelip",
+    "SlideLip @ git+ssh://git@gitlab.ics.muni.cz/rationai/digital-pathology/pipeline/slidelip",
     "report @ git+ssh://git@gitlab.ics.muni.cz/rationai/digital-pathology/pipeline/report.git",
 ]
 
