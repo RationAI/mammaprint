@@ -1,0 +1,7 @@
+features:
+  _target_: mammaprint.ml.nets.ResNet101
+global_max_pooling:
+  _target_: mammaprint.ml.nets.GMaxPool
+classifier:
+  _target_: mammaprint.ml.nets.BinaryClassifier
+  input_dim: 2048

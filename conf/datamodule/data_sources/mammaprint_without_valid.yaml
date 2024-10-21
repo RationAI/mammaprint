@@ -1,0 +1,9 @@
+mammaprint:
+  _target_: mammaprint.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    - ???
+  stratified_keys:
+    - xlA
+  splits:
+    train: ??

@@ -1,0 +1,4 @@
+slide_predictor:
+  _target_: mammaprint.trainer.callbacks.SlidePredictor
+  save_dir: ???
+    

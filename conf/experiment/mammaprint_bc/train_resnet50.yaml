@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: train
+  - override /ml/net: resnet50
+  - _self_
+
+ml:
+  net:
+    features:
+      weights: DEFAULT
+
+trainer:
+  callbacks:
+    log_best_model:
+      filename: resnet50_mammaprint_best
+
+metadata:
+  run_name: ResNet50 training
+  description: |
+    Luminal binary classification.
+    The goal is to train the ResNet50 model.
