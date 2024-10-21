@@ -42,14 +42,14 @@ datamodule:
       sampler:
         epoch_size: 20_000
         index_levels:
-          - class_id
+          - luminal_id
           - slide_name
 
     valid:
       sampler:
         epoch_size: 5_000
         index_levels:
-          - class_id
+          - luminal_id
           - slide_name
 
   dataloaders_kwargs:
