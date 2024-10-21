@@ -3,7 +3,7 @@
 import mlflow
 import torch
 from torch import nn
-from torchvision.models import resnet50
+from torchvision.models import resnet50, resnet101, resnet152
 
 
 class ResNet50:
@@ -14,5 +14,27 @@ class ResNet50:
             donor = mlflow.pytorch.load_model(model_uri)
         else:
             donor = resnet50(weights=weights)
+            donor = nn.Sequential(*list(donor.children())[:-2])
+        return donor
+
+class ResNet101:
+    def __new__(cls, weights=None, model_uri=None) -> torch.nn.Module:
+        if weights is not None and model_uri is not None:
+            raise ValueError("Only one of weights or model_uri can be specified")
+        if model_uri:
+            donor = mlflow.pytorch.load_model(model_uri)
+        else:
+            donor = resnet101(weights=weights)
+            donor = nn.Sequential(*list(donor.children())[:-2])
+        return donor
+
+class ResNet152:
+    def __new__(cls, weights=None, model_uri=None) -> torch.nn.Module:
+        if weights is not None and model_uri is not None:
+            raise ValueError("Only one of weights or model_uri can be specified")
+        if model_uri:
+            donor = mlflow.pytorch.load_model(model_uri)
+        else:
+            donor = resnet152(weights=weights)
             donor = nn.Sequential(*list(donor.children())[:-2])
         return donor
