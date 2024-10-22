@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - /datamodule: wsi
-  - /datamodule/data_sources: ???
+  - /datamodule/data_sources: mammaprint_test
   - /datamodule/datasets@datamodule.datasets.test: base_classification
   - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
