@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - mammaprint/mammaprint_bc: test
+  - /experiment/mammaprint_bc: test
   - /datamodule/data_sources: mammaprint_validation
   - /trainer/callbacks:
     - slide_prediction_optimizer
