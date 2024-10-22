@@ -2,7 +2,7 @@
 
 import random
 from pathlib import Path
-from PIL import Image
+import torchvision.transforms.functional as F
 
 import albumentations
 import torch
@@ -27,7 +27,6 @@ class ClassificationDataset(BaseDataset):
         self.preprocess = transforms.Compose([
             transforms.Resize(232, interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.CenterCrop(224),
-            transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
@@ -46,11 +45,7 @@ class ClassificationDataset(BaseDataset):
             random.seed(int(self._rng.integers(0, 2**63 - 1)))
             image = self.transforms(image=image)["image"]
 
-        # Convert numpy array to PIL Image before applying torchvision transforms
-        image = Image.fromarray(image)
-        # Apply transforms for preprocessing (resize, crop, normalization)
+        image = F.to_tensor(image)
         image = self.preprocess(image)
-        # permute to (channels, height, width)
-        image = torch.from_numpy(image).permute(2, 0, 1)
         label = torch.FloatTensor([sample["class_id"]])
         return image, label, sample
