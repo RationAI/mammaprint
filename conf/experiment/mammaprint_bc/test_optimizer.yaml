@@ -27,12 +27,12 @@ trainer:
       save_dir: slide_predictions
       mask_size_min: 1
       mask_size_max: 100
-      ground_truth_col: luminal_id
+      ground_truth_col: class_id
 
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Luminal-type ResNet152 Testing optimizer
+  run_name: Luminal-type VGG16 Testing optimizer
   description: |
     Luminal binary classification test with finding best threshold and mask size for whole slide predictions.
   hyperparameters:
