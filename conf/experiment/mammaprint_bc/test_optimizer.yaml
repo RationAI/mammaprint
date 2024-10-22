@@ -32,7 +32,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Luminal-type ResNet101 Testing optimizer
+  run_name: Luminal-type ResNet152 Testing optimizer
   description: |
     Luminal binary classification test with finding best threshold and mask size for whole slide predictions.
   hyperparameters:
