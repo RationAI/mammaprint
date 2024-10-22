@@ -4,7 +4,6 @@ defaults:
   - /trainer/callbacks:
     - slide_predictor
     - heatmap_visualizer
-    - cropped_heatmaps
   - _self_
 
 
