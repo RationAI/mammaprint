@@ -15,7 +15,7 @@ trainer:
       filename: resnet152_mammaprint_best
 
 metadata:
-  run_name: ResNet152 training
+  run_name: ResNet152 training after segmentation
   description: |
     Luminal binary classification.
     The goal is to train the ResNet152 model.
