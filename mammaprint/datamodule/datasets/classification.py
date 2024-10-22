@@ -2,11 +2,9 @@
 
 import random
 from pathlib import Path
-import torchvision.transforms.functional as F
 
 import albumentations
 import torch
-from torchvision import transforms
 
 from mammaprint.datamodule.datasets.base_wsi import BaseDataset, extract_tile
 from mammaprint.datamodule.samplers import BaseSampler
@@ -24,12 +22,6 @@ class ClassificationDataset(BaseDataset):
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
 
-        self.preprocess = transforms.Compose([
-            transforms.Resize(232, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(224),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]
 
@@ -45,7 +37,6 @@ class ClassificationDataset(BaseDataset):
             random.seed(int(self._rng.integers(0, 2**63 - 1)))
             image = self.transforms(image=image)["image"]
 
-        image = F.to_tensor(image)
-        image = self.preprocess(image)
+        image = torch.from_numpy(image).permute(2, 0, 1)
         label = torch.FloatTensor([sample["class_id"]])
         return image, label, sample
