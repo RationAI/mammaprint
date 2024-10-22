@@ -2,6 +2,7 @@
 
 import random
 from pathlib import Path
+from PIL import Image
 
 import albumentations
 import torch
@@ -45,6 +46,8 @@ class ClassificationDataset(BaseDataset):
             random.seed(int(self._rng.integers(0, 2**63 - 1)))
             image = self.transforms(image=image)["image"]
 
+        # Convert numpy array to PIL Image before applying torchvision transforms
+        image = Image.fromarray(image)
         # Apply transforms for preprocessing (resize, crop, normalization)
         image = self.preprocess(image)
         # permute to (channels, height, width)
