@@ -1,7 +1,8 @@
 # @package _global_
 defaults:
   - /experiment/mammaprint_bc: test
-  - override /datamodule/data_sources: mammaprint_validation
+  - override /datamodule/data_sources/data_uris:
+    - mlflow-artifacts:/17/72f3aa5e957f4994a654fa9baec5fcb9/artifacts/dataset
   - /trainer/callbacks:
     - slide_prediction_optimizer
   - _self_
