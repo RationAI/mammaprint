@@ -4,7 +4,7 @@ mammaprint:
   data_uris:
     - mlflow-artifacts:/17/528e3553ae3a4bea8a926f78602c9d35/artifacts/dataset
   stratified_keys:
-    - class_id
+    - luminal_id
   splits:
     train: ??
     valid: ??
