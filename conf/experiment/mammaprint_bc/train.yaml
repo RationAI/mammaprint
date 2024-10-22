@@ -2,7 +2,7 @@
 defaults:
   - /datamodule: wsi
   - /datamodule/data_sources:
-    - mammaprint
+    - luminal_segmentation
     - mammaprint_test
   # Train dataset
   - /datamodule/datasets@datamodule.datasets.train: base_classification
@@ -40,16 +40,16 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 10_000
+        epoch_size: 20_000
         index_levels:
-          - luminal_id
+          - class_id
           - slide_name
 
     valid:
       sampler:
         epoch_size: 5_000
         index_levels:
-          - luminal_id
+          - class_id
           - slide_name
 
   dataloaders_kwargs:
@@ -65,8 +65,8 @@ ml:
     features:
       weights: IMAGENET1K_V1
   optimizer:
-    lr: 1e-5
-    weight_decay: 1e-05
+    lr: 5e-5
+    weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
