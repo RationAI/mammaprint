@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 retraining
+  run_name: VGG16 training after segmentation
   description: |
     Luminal binary classification.
   hyperparameters:
