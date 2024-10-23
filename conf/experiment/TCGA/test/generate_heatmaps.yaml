@@ -28,7 +28,7 @@ trainer:
     reporter:
       background:
         _target_: report.masks.DriveMasksRetriever
-        dir_name: /mnt/data/IIPImage/matejg/TCGA/svs/test/
+        dir_name: rationai/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff
         layer_name: "WSI Tissue"
       masks:
         - _target_: report.masks.RunIDMlflowMaskRetriever
@@ -37,18 +37,18 @@ trainer:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/22/3e72ddd7aea746348d8544a7a61bdedd/artifacts/model/MLFlowModelCheckpoint/last
+    model_uri: mlflow-artifacts:/22/33bd1146fd894a76b16c837ec5cc7a25/artifacts/model/MLFlowModelCheckpoint/vgg16_20_0.8958
 
 datamodule:
   dataloaders_kwargs:
     test:
-      num_workers: 5
-      batch_size: 5
+      num_workers: 8
+      batch_size: 32
   datasets:
     test:
       sampler:
         strict: false
-        target_label: null
+        target_label: neoplastic
         index_levels:
           - slide_name
 
