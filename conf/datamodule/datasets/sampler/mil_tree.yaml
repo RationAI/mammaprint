@@ -1,0 +1,4 @@
+_target_: mammaprint.datamodule.samplers.MILRandomTreeSampler
+seed: ${seed}
+epoch_size: ???
+index_levels: ???

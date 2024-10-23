@@ -318,3 +318,75 @@ class SequentialTreeSampler(TreeSampler):
             raise StopIteration
         else:
             self.active_node = self.active_node.next
+
+class MILRandomTreeSampler(TreeSampler):
+    active_node: Node
+    epoch_size: int | None
+    seed: int
+    _rng: np.random.Generator
+    label_column: str
+    categories: dict[object, Node]
+    sample_index: int = 0
+    
+    def __init__(self, index_levels: list[str], seed: int, epoch_size: int, label_column: str = "is_cancer",):
+        super().__init__(index_levels)
+        self.seed = seed
+        self._rng = np.random.default_rng(seed)
+        self.num_slides = epoch_size  # Number of slides to sample each epoch
+        self.tiles_per_bag = 4000  # Fixed number of tiles per bag
+        self.active_node = None  # Start at the first node
+        self.label_column = label_column
+
+    def build_inner_structure(self, data_source: BaseDataSource) -> None:
+        """Builds the sampling tree, sets the active node to the left-most leaf and assigns nodes to categories.
+
+        Args:
+            data_source (BaseDataSource): Data source.
+        """
+        tiles = data_source.get_table()
+        dataset = data_source.get_metadata(tiles)
+        labels_as_categories = pandas.Categorical(dataset[self.label_column])
+        dataset[self.label_column] = labels_as_categories
+        self.categories = {category: [] for category in labels_as_categories.categories}
+
+        super().build_inner_structure(data_source)
+        self.active_node = self.sampling_tree.leftmost_leaf
+
+        cur_node = self.active_node
+        while cur_node is not None:
+            self.categories[cur_node.data[self.label_column].iloc[0]].append(cur_node)
+            cur_node = cur_node.next
+
+    def get_sample(self) -> list[dict]:
+        samples = []
+        for _ in range(self.num_slides):
+            if self.active_node is None:  # If there are no more nodes, break the loop
+                break
+            if self.active_node.data is None:
+                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
+
+            slide_tiles = self.active_node.data  # Assuming data is a DataFrame
+            if len(slide_tiles) > self.tiles_per_bag:
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=False, random_state=self.seed)
+            else:
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
+            samples.append(chosen_tiles.to_dict("records"))
+
+            self.next()  # Move to the next node
+        total_tiles = sum(len(slide) for slide in samples)
+        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
+
+        return samples
+
+    def next(self) -> None:
+        """Sets next leaf as an active node."""
+        if self.active_node is None:
+            raise StopIteration
+        else:
+            """Sets random leaf of another class (looping classes) as an active node."""
+            self.sample_index += 1
+            self.sample_index %= 2
+            log.info(f"sample_index {self.sample_index}")
+            next_key = list(self.categories.keys())[self.sample_index]
+            log.info(f"Next key {next_key}")
+            self.active_node = self._rng.choice(a=self.categories[next_key])

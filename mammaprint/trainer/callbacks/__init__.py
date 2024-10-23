@@ -16,7 +16,7 @@ from mammaprint.trainer.callbacks.slide_aggregation import (
     SlidePredictionOptimizer,
     SlidePredictor,
 )
-
+from mammaprint.trainer.callbacks.prediction_saver import ParquetPredictionSaver
 
 __all__ = [
     "DataloaderAgnosticCallback",
@@ -27,4 +27,5 @@ __all__ = [
     "CroppedHeatmaps",
     "SlidePredictor",
     "SlidePredictionOptimizer",
+    "ParquetPredictionSaver",
 ]

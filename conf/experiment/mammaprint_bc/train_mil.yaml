@@ -9,7 +9,7 @@ defaults:
   - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
-  - /ml: histopipe
+  - /ml: mammaprint
   - /ml/optimizer: adam
   - /ml/net: attmil
   - /ml/output_activation: sigmoid
@@ -29,7 +29,7 @@ defaults:
 datamodule:
   data_sources:
     blue-print:
-      _target_: histopipe.datamodule.datasources.WSIDataSource
+      _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
       - mlflow-artifacts:/17/4dd464804bf944a8acf66c6854a26a0e/artifacts/activations
