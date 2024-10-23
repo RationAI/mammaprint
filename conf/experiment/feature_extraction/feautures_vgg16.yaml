@@ -18,7 +18,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-        -  mlflow-artifacts:/17/888562b2d4b04d6e9b41be8c8685f1b3/artifacts/dataset  # mammaprint test dataset
+        -  mlflow-artifacts:/17/528e3553ae3a4bea8a926f78602c9d35/artifacts/dataset  # mammaprint test dataset
       splits:
         test: 1.0
   datasets:
@@ -32,10 +32,6 @@ datamodule:
       num_workers: 8
       batch_size: 40
 
-ml:
-  net:
-    features:
-      model_uri: mlflow-artifacts:/5/1f40fa1d82574ad8a4c18aa62ac52764/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
 trainer:
   callbacks:
     prediction_saver:
