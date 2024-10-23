@@ -48,7 +48,7 @@ datamodule:
     test:
       sampler:
         strict: false
-        target_label: neoplastic
+        target_label: null
         index_levels:
           - slide_name
 
