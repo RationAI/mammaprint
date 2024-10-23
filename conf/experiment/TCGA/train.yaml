@@ -1,0 +1,104 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - TCGA_train
+  # Train dataset
+  - /datamodule/datasets@datamodule.datasets.train: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
+  # Valid dataset
+  - /datamodule/datasets@datamodule.datasets.valid: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
+  - /ml: histopipe
+  - /ml/optimizer: adam
+  - /ml/net: vgg16
+  - /ml/output_activation: sigmoid
+  - /ml/loss: bce
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+    - binary_precision
+    - binary_f1
+  - /ml/lr_scheduler: cosine
+  - /trainer/callbacks:
+    - log_best_model
+    - lr_monitor
+  - _self_
+
+
+datamodule:
+  data_sources:
+    prostate:
+      splits:
+        train: 0.8
+        valid: 0.2
+
+  datasets:
+    train:
+      sampler:
+        target_label: muscle # connective-tissue; fat, muscle, nerve, epithelium
+        strict: true
+        epoch_size: 1_000
+        index_levels:
+          - class_id
+          - slide_name
+    valid:
+      sampler:
+        target_label: muscle
+        strict: true
+        epoch_size: 5_000
+        index_levels:
+          - class_id
+          - slide_name
+
+  dataloaders_kwargs:
+    train:
+      num_workers: 8
+      batch_size: 32
+    valid:
+      num_workers: 8
+      batch_size: 32
+
+ml:
+  net:
+    features:
+      weights: IMAGENET1K_V1
+  optimizer:
+    lr: 5e-5
+    weight_decay: 5e-05
+  lr_scheduler:
+    monitor: valid/loss
+
+trainer:
+  max_epochs: 250
+  log_every_n_steps: 20
+  logger:
+    log_model: all
+  callbacks:
+    log_best_model:
+      monitor: valid/binary_f1
+      mode: max
+      filename: vgg16_{epoch:02d}_{valid/binary_f1:.4f}
+      save_top_k: 3
+      auto_insert_metric_name: false
+
+
+
+metadata:
+  experiment_name: Tissue Classification
+  run_name: VGG16 - Muscle
+  description: |
+    Training VGG16 (pretrained on IMAGENET) on strictly muscle tiles.
+  hyperparameters:
+    max_epochs: ${trainer.max_epochs}
+    train_epoch_size: ${datamodule.datasets.train.sampler.epoch_size}
+    valid_epoch_size: ${datamodule.datasets.valid.sampler.epoch_size}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}
+    strict: ${datamodule.datasets.train.sampler.strict}
+    target_label: ${datamodule.datasets.train.sampler.target_label}

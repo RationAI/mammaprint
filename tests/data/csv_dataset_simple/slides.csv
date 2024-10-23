@@ -1,0 +1,5 @@
+slide_name,patient_id,block,year,is_cancer,tissue_type,test_col,slide_fp,tile_size,sample_level
+2016_0059-05-1,P0059,5,2016,1,"prostate",A,A:\Adam\Projekty\RationAI_diplomka\test_slides\P-2016_0057-01-0.mrxs,512,5
+2016_0059-04-1,P0059,4,2016,1,"prostate",B,A:\Adam\Projekty\RationAI_diplomka\test_slides\P-2016_0057-01-0.mrxs,512,5
+"2019_0001-01-0",P0001,1,2019,0,"prostate",A,A:\Adam\Projekty\RationAI_diplomka\test_slides\P-2016_0057-01-0.mrxs,512,5
+"2019_0001-02-0",P0001,2,2019,0,"prostate",B,A:\Adam\Projekty\RationAI_diplomka\test_slides\P-2016_0057-01-0.mrxs,512,5

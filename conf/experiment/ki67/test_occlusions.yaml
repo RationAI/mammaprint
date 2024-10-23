@@ -1,0 +1,42 @@
+# @package _global_
+defaults:
+  - /datamodule: ki67
+  - /datamodule/data_sources: ki67_test
+  - /datamodule/datasets/augmentations@datamodule.transform: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: identity
+  - /trainer/callbacks: occlusion_explainer
+  - /image_builder: jpeg_image_builder
+  - _self_
+
+
+datamodule:
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 4
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/13/97b71448101342a5bca6675888591d6d/artifacts/model/MLFlowModelCheckpoint/vgg16_regression_best
+
+trainer:
+  callbacks:
+    base_explainer:
+      save_dir: test_occlusion
+      sliding_window_shapes: [ 3,55,55 ]
+      strides: 27
+      baselines: -1.0
+      target: 0
+      show_progress: false
+      image_builder: ${image_builder}
+
+metadata:
+  experiment_name: Ki67
+  run_name: VGG16_regression_test_occlusions
+  description: Attempting to estimate Ki67 positivity in breast carcinomas IHC
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
+    num_workers: ${datamodule.dataloaders_kwargs.test.num_workers}
+    test_split: ${datamodule.data_sources.splits.test}

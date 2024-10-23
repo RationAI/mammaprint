@@ -1,0 +1,2 @@
+r2_score:
+  _target_: torchmetrics.regression.R2Score

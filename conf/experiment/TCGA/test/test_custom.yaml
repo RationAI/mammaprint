@@ -1,0 +1,43 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: TCGA_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_recall
+    - binary_precision
+    - binary_f1
+  - _self_
+
+trainer:
+  inference_mode: true
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/22/c7b844f79cf1432fb5c50b54d01930e6/artifacts/model/MLFlowModelCheckpoint/vgg16_200_0.9471
+
+datamodule:
+  dataloaders_kwargs:
+    test:
+      num_workers: 5
+      batch_size: 100
+  datasets:
+    test:
+      sampler:
+        strict: false
+        target_label: null # Specify target label here
+        index_levels:
+          - slide_name
+
+metadata:
+  experiment_name: Tissue Classification
+  run_name: VGG16 - Test ${datamodule.datasets.test.sampler.target_label} - Predictions
+  description: Tissue classification predictions on TCGA dataset and a VGG16 model trained on ${datamodule.datasets.test.sampler.target_label} class.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

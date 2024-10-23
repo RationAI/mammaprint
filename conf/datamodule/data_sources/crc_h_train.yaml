@@ -1,0 +1,8 @@
+crc_h_train:
+  _target_: histopipe.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    - mlflow-artifacts:/10/323c93c4eab449609937e59e1f4f8bb8/artifacts/train
+  splits:
+    train: ??
+    valid: ??

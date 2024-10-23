@@ -1,0 +1,13 @@
+prostate:
+  _target_: histopipe.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    - mlflow-artifacts:/4/6fa69d4e93bc4001911c3445823d4874/artifacts/dataset  # Archive negative cases
+    - mlflow-artifacts:/4/a51f32dae178463b813103615670c515/artifacts/dataset  # Archive tumor cases
+    - mlflow-artifacts:/4/812b38626c614dfaac7536a7d1a46e3e/artifacts/dataset  # Negative cases
+    - mlflow-artifacts:/4/dd8e6c4b8ec44bbdb9f0975acb278673/artifacts/dataset  # Tumor cases
+  stratified_keys:
+    - is_cancer
+  splits:
+    train: ??
+    valid: ??

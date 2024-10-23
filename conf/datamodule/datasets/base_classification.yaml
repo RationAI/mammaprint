@@ -1,0 +1,4 @@
+_target_: histopipe.datamodule.datasets.ClassificationDataset
+sampler: ???
+augmentations: ???
+seed: ${seed}

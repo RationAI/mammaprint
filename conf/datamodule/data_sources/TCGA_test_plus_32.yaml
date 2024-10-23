@@ -1,0 +1,7 @@
+prostate:
+  _target_: histopipe.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    - mlflow-artifacts:/22/da1d5d83008a4a80a7f635e1308da695/artifacts/dataset
+  splits:
+    test: 1.0

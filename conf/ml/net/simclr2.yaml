@@ -1,0 +1,4 @@
+_target_: histopipe.ml.nets.SimCLR2Extraction
+extractor_uri: ???
+projection_uri: ???
+    

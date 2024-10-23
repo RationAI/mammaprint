@@ -1,0 +1,5 @@
+_target_: histopipe.datamodule.datasources.JpgDataSource
+seed: ${seed}
+data_uri: mlflow-artifacts:/13/7ef3e91386c84625b3a1efc986938bee/artifacts/dataset/test
+splits:
+  test: 1.0

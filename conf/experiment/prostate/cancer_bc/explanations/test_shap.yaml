@@ -1,0 +1,26 @@
+# @package _global_
+defaults:
+  - prostate/cancer_bc: test
+  - /trainer/callbacks: shap_explainer
+  - _self_
+
+datamodule:
+  dataloaders_kwargs:
+    test:
+      num_workers: 5
+      batch_size: 8
+
+trainer:
+  callbacks:
+    base_explainer:
+      save_dir: test_shap
+      target: 0
+  inference_mode: false
+
+
+metadata:
+  run_name: VGG16 SHAP explain test
+  description: Prostate cancer binary classification test with SHAP explanations generation.
+  hyperparameters:
+    num_workers: ${datamodule.dataloaders_kwargs.test.num_workers}
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

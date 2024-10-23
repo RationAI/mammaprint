@@ -1,0 +1,105 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - TCGA_train_256
+  - /datamodule/datasets@datamodule.datasets.train: base_contrastive
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: contrastive
+  - /datamodule/datasets@datamodule.datasets.valid: base_contrastive
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: contrastive
+  - /ml: contrastive
+  - /ml/optimizer: sgd
+  - /ml/net: feature_extractor
+  - /ml/metrics@ml.metrics.top1_accuracy: topk_accuracy
+  - /ml/metrics@ml.metrics.top5_accuracy: topk_accuracy
+  - /ml/loss: contrastive_loss
+  - /ml/lr_scheduler: reduce_lr_on_plateau
+  - /trainer/callbacks:
+    - log_best_model
+    - early_stopping
+    - lr_monitor
+  - _self_
+
+
+datamodule:
+  data_sources:
+    prostate:
+      splits:
+        train: 0.8
+        valid: 0.2
+
+  datasets:
+    train:
+      seed: ${seed}
+      extended_selection: false
+      sampler:
+        strict: false
+        target_label: muscle # we don't really care about what class is here, we want to avoid label of type object
+        epoch_size: 5_000
+        index_levels: []
+    valid:
+      extended_selection: false
+      sampler:
+        strict: false
+        target_label: muscle # we don't really care about what class is here, we want to avoid label of type object
+        epoch_size: 5_000
+        index_levels: []
+
+  dataloaders_kwargs:
+    train:
+      num_workers: 8
+      batch_size: 128
+    valid:
+      num_workers: 8
+      batch_size: 128
+
+ml:
+  loss:
+    temperature: 1.0
+  optimizer:
+    lr: 5e-5
+    weight_decay: 5e-05
+  lr_scheduler:
+    monitor: valid/loss
+    scheduler:
+      mode: min
+      factor: 0.5
+      patience: 3
+  metrics:
+    top1_accuracy:
+      _target_: histopipe.ml.metrics.ContrastiveTopK
+      k: 1
+    top5_accuracy:
+      _target_: histopipe.ml.metrics.ContrastiveTopK
+      k: 5
+
+trainer:
+  max_epochs: 100
+  log_every_n_steps: 20
+  logger:
+    log_model: all
+  callbacks:
+    early_stopping:
+      monitor: valid/loss
+      mode: min
+      patience: 5
+    log_best_model:
+      monitor: valid/loss
+      mode: min
+      filename: vgg16_prostate_contrastive_best
+
+
+
+metadata:
+  experiment_name: SimCLR Fine tunning
+  run_name: SimCLR Fine tunning - 128@SGD - tile size 256
+  description: SimCLR unsupervised contrastive learning on TCGA data for tissue classifcation clustering
+  hyperparameters:
+    max_epochs: ${trainer.max_epochs}
+    train_epoch_size: ${datamodule.datasets.train.sampler.epoch_size}
+    valid_epoch_size: ${datamodule.datasets.valid.sampler.epoch_size}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}

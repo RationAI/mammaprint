@@ -1,0 +1,11 @@
+_target_: histopipe.trainer.Trainer
+reload_dataloaders_every_n_epochs: 1
+logger:
+  _target_: lightning.pytorch.loggers.MLFlowLogger
+  experiment_name: Testing
+  run_name: VGG16 version 1 heatmap test
+  tracking_uri: file:./mlflow_store
+  tags:
+    mlflow.user: Test Execution
+    mlflow.note.content: 'This is a default config from tests.'
+callbacks: []

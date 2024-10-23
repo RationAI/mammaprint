@@ -1,0 +1,6 @@
+_target_: histopipe.datamodule.samplers.RandomFilterTreeSampler
+seed: ${seed}
+epoch_size: ???
+index_levels: ???
+target_label: ???
+strict: ???

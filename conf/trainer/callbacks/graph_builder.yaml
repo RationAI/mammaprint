@@ -1,0 +1,3 @@
+graph_builder:
+  _target_: histopipe.trainer.callbacks.GraphBuilder
+  save_dir: ???

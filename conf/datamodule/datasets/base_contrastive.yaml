@@ -1,0 +1,8 @@
+# @package datamodule.datasets.train
+_target_: histopipe.datamodule.datasets.ContrastiveDataset
+sampler: ???
+augmentations: ???
+extended_selection: false
+override_level: null
+override_tile_size: null
+seed: ${seed}

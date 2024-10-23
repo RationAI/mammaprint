@@ -1,0 +1,3 @@
+ki67_precision:
+  _target_: histopipe.ml.metrics.Ki67Precision
+  thresholds: ???

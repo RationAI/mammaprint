@@ -1,0 +1,3 @@
+ki67_recall:
+  _target_: histopipe.ml.metrics.Ki67Recall
+  thresholds: ???

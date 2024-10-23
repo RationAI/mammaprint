@@ -1,0 +1,4 @@
+slide_prediction_optimizer:
+  _target_: histopipe.trainer.callbacks.SlidePredictionOptimizer
+  save_dir: ???
+    

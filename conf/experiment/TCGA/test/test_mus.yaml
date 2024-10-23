@@ -1,0 +1,58 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: TCGA_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+  - /trainer/callbacks:
+    - heatmap_visualizer
+    - reporter
+  - _self_
+
+trainer:
+  inference_mode: true
+  callbacks:
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+    reporter:
+      background:
+        _target_: report.masks.DriveMasksRetriever
+        dir_name: /mnt/data/IIPImage/matejg/TCGA/svs/test/
+        layer_name: "WSI Tissue"
+      masks:
+        - _target_: report.masks.RunIDMlflowMaskRetriever
+          run_id: null
+          dir_name: ${trainer.callbacks.heatmap_visualizer.save_dir}
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/22/f8a1bcb1b435441fa808426e3b7b5f2c/artifacts/model/MLFlowModelCheckpoint/vgg16_24_0.9746
+
+datamodule:
+  dataloaders_kwargs:
+    test:
+      num_workers: 5
+      batch_size: 100
+  datasets:
+    test:
+      sampler:
+        strict: false
+        target_label: null
+        index_levels:
+          - slide_name
+
+metadata:
+  experiment_name: Tissue Classification
+  run_name: VGG16 - Muscle - Predictions
+  description: Tissue classification predictions on TCGA dataset and a VGG16 model trained on Muscle class.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

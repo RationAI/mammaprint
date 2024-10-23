@@ -1,0 +1,64 @@
+# @package _global_
+defaults:
+  - prostate/cancer_bc: test
+  - /trainer/callbacks:
+    - slide_predictor
+    - heatmap_visualizer
+    - cropped_heatmaps
+    - reporter
+  - _self_
+
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 40
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/4/328d2c4f75a74b8288896a864c84507a/artifacts/model/MLFlowModelCheckpoint/last
+
+trainer:
+  callbacks:
+    slide_predictor:
+      save_dir: slide_predictions
+      mask_size: 7
+      threshold: 0.855
+      ground_truth_col: is_cancer
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+    cropped_heatmaps:
+      save_dir: cropped_heatmaps
+      masks:
+        "mlflow-artifacts:/5/b585b0911e8a443dabb5a1f677bd9895/artifacts/masks/background_masks": 0
+        "mlflow-artifacts:/4/afabfbce213d4c1fad2bff8fb6392cfc/artifacts/epithelium_masks": 0
+    reporter:
+      background:
+        _target_: report.masks.TylerMLFlowMaskRetriever
+        #artifact_uris: ${task.datamodule.data_sources.prostate.data_uris}
+        artifact_uris: ${datamodule.data_sources.prostate_test.data_uris}
+        background_masks_directory: /rationai/rationai/data/Prostata/slide_tif
+        item_name_col: slide_name
+        layer_name: Tiled source image
+        ground_truth_col: is_cancer
+      masks:
+        - _target_: report.masks.RunIDMlflowMaskRetriever
+          dir_name: ${trainer.callbacks.heatmap_visualizer.save_dir}
+          #dir_name: ${trainer.callbacks.occlusion_explainer.save_dir}
+
+
+metadata:
+  experiment_name: Prostate
+  run_name: Test for Prostate Heatmaps
+  description: |
+    Prostate cancer binary classification test with prediction heatmap generation.
+    The goal is to evaluate the retrained VGG16 model on the same data in the new pipeline to verify analogous performance.
+  hyperparameters:
+    # tested with ~ 8 GiB Memory, 8 cpus
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

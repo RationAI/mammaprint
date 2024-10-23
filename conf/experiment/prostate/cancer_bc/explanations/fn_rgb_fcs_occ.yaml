@@ -1,0 +1,67 @@
+# @package _global_
+defaults:
+  - prostate/cancer_bc: predict
+  - /trainer/callbacks:
+    - heatmap_visualizer
+    - occlusion_explainer
+    - reporter
+  - /image_builder: dist_mapped_patch_assembler
+  - override /datamodule/data_sources: fnbrno_fcs
+  - _self_
+
+datamodule:
+  datasets:
+      predict:
+        sampler:
+          index_levels:
+            - slide_name
+  dataloaders_kwargs:
+    predict:
+      num_workers: 5
+      batch_size: 4
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/5/694c3c001cc14a2c9442da2c82dc275c/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_random_41
+
+trainer:
+  callbacks:
+    heatmap_visualizer:
+        save_dir: test_heatmaps
+    base_explainer:
+      save_dir: test_occlusion
+      sliding_window_shapes: [ 3,55,55 ]
+      strides: 27
+      baselines: -1.0
+      target: 0
+      perturbations_per_eval: 16
+      show_progress: false
+    reporter:
+      background:
+        _target_: report.masks.DriveMasksRetriever
+        dir_name: /mnt/data/IIPImage/matejg/FNBrno/Prostata/Vlazny_contrast_stretched
+        layer_name: "WSI Tissue"
+      masks:
+        - _target_: report.masks.RunIDMlflowMaskRetriever
+          run_id: -1
+          dir_name: ${trainer.callbacks.heatmap_visualizer.save_dir}
+          layer_name: Predictions
+          shader_conf:
+            type: heatmap
+        - _target_: report.masks.RunIDMlflowMaskRetriever
+          run_id: -1
+          dir_name: ${trainer.callbacks.base_explainer.save_dir}
+          layer_name: Explanations
+          shader_conf:
+            type: bipolar-heatmap
+  inference_mode: false
+
+
+metadata:
+  experiment_name: Prostate
+  run_name: FN Brno - FCS - OSA (Black Element)
+  description: FNBrno prostate detection with occlusion explanations generation.
+  hyperparameters:
+    num_workers: ${datamodule.dataloaders_kwargs.predict.num_workers}
+    batch_size: ${datamodule.dataloaders_kwargs.predict.batch_size}
+    xai_batch_size: ${trainer.callbacks.base_explainer.perturbations_per_eval}

@@ -1,0 +1,49 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - crc_h_test
+  - /datamodule/datasets@datamodule.datasets.test: base_segmentation
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_jaccard
+    - binary_recall
+    - binary_specificity
+  - /trainer/callbacks: heatmap_visualizer
+  - _self_
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      grayscale: true
+
+  dataloaders_kwargs:
+    test:
+      num_workers: 4
+      batch_size: 2
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/10/4e793f756def44b6bd56ffaaec9eb5d0/artifacts/model/MLFlowModelCheckpoint/unet_colorectal_best
+
+trainer:
+  callbacks:
+    heatmap_visualizer:
+      save_dir: epithelium_masks
+      image_builder:
+        _target_: histopipe.trainer.callbacks.image_builders.DiskMappedPatchAssembler
+
+
+metadata:
+  experiment_name: Epithelium segmentation
+  run_name: "UNet++ test"
+  description: Generating UNet epithelium masks
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

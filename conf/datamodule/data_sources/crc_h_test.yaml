@@ -1,0 +1,7 @@
+crc_h_test:
+  _target_: histopipe.datamodule.datasources.WSIDataSource
+  seed: ${common_seed:}
+  data_uris:
+    - mlflow-artifacts:/10/7e1afb8f8b504fb3adcd7000bdb0e12a/artifacts/test
+  splits:
+    test: 1.0

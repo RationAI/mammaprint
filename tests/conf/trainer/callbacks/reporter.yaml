@@ -1,0 +1,10 @@
+reporter:
+  _target_: histopipe.trainer.callbacks.reporting_callback.Reporter
+  background:
+    _target_: report.masks.DriveMasksRetriever
+    dir_name: tests/data/test_slide
+    layer_name: Tiled source image
+  template_asset_path: report_template.html
+  title: Run summary report
+  save_dir: report/
+  template_path: report_template.html

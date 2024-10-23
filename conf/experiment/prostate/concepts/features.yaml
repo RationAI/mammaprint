@@ -1,0 +1,50 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - prostate_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: vgg16_feature_extractor
+  - /ml/output_activation: identity
+  - /trainer/callbacks:
+    - prediction_saver
+  - _self_
+
+datamodule:
+  data_sources:
+    prostate_test:
+      data_uris:
+        -  mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset  # Test cases overlap
+        #- mlflow-artifacts:/4/0502dcdf33da455c8cc5baa83e1e9b9d/artifacts/dataset #Test no overlap
+
+
+  datasets:
+    test:
+      sampler:
+        index_levels: []
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 16
+
+ml:
+  net:
+    features:
+        model_uri: mlflow-artifacts:/4/f53c31f5389b44b681b768d5fda5009c/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
+task:
+  trainer:
+    callbacks:
+      prediction_saver:
+        save_dir: activations
+
+metadata:
+  experiment_name: Concepts
+  run_name: VGG16 clasif test features
+  description: |
+    Compute features using  VGG16 model trained on prostate.
+  hyperparameters:
+    # tested with ~ 8 GiB Memory, 8 cpus
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

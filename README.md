@@ -1,12 +1,30 @@
-# MammaPrint
+#  HistoPipe
 
+RationAI's machine learning pipeline for histopathology image analysis.
+
+
+# Introduction
+
+This project contains a machine learning pipeline implementation.
+It consists of modular part called "components" that can be combined to form a pipeline.
+To abstract away the component configuration, a [our own config library](https://gitlab.ics.muni.cz/rationai/hyperconfig) **was** used.
+
+
+Nowadays, [Hydra config library](https://hydra.cc/) is used instead to configure the pipeline.
+Run it with your agreed upon username as one of the following:
+
+```bash
+pdm train prostate/cancer_bc/train user=<user>
+pdm train prostate/cancer_bc/train user=<user> mlflow=kubas_external
+```
+
+To get a grasp of how the configuration is prepared, look at the [entry config file](conf/experiment/prostate/cancer_bc/train.yaml) in the conf/experiment directory.
+
+# How to contribute
 
 
 ## Getting started
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
 
 ## Add your files
 
@@ -15,14 +33,14 @@ Already a pro? Just edit this README.md and make it your own. Want to make it ea
 
 ```
 cd existing_repo
-git remote add origin https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint.git
+git remote add origin https://gitlab.ics.muni.cz/rationai/histopipe.git
 git branch -M master
 git push -uf origin master
 ```
 
 ## Integrate with your tools
 
-- [ ] [Set up project integrations](https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint/-/settings/integrations)
+- [ ] [Set up project integrations](https://gitlab.ics.muni.cz/rationai/histopipe/-/settings/integrations)
 
 ## Collaborate with your team
 
@@ -30,14 +48,14 @@ git push -uf origin master
 - [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
 - [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
 - [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
 
 ## Test and Deploy
 
 Use the built-in continuous integration in GitLab.
 
 - [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
+- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
 - [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
 - [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
 - [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
@@ -46,10 +64,9 @@ Use the built-in continuous integration in GitLab.
 
 # Editing this README
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
 
 ## Suggestions for a good README
-
 Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
 ## Name
@@ -74,7 +91,12 @@ Use examples liberally, and show the expected output if you can. It's helpful to
 Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+
+Maybe consider using [Sphinx](https://www.sphinx-doc.org/en/master/) for documentation generation.
+To avoid the need to use reStructuredText, use [MyST-Parser](https://www.sphinx-doc.org/en/master/usage/markdown.html) to parse Markdown files.
+To allow automatic documentation of the code, use [autodoc](https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html) and [napoleon](https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html) extensions.
+To support the Google-style docstrings, use [napoleon](https://www.sphinx-doc.org/en/master/usage/extensions/napoleon.html) extension.
+
 
 ## Contributing
 State if you are open to contributions and what your requirements are for accepting them.

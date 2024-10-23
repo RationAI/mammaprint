@@ -1,0 +1,43 @@
+import numpy as np
+from numpy.typing import NDArray
+from skimage.color import separate_stains
+
+from histopipe.datamodule.augmentations.her_separation import HERSeparation
+
+
+class ResidualSeparation(HERSeparation):
+    """Custom image augmentation performing Residual channel staining separation on given HE image."""
+
+    def __init__(
+        self,
+        h_vector: list[float],
+        e_vector: list[float],
+        r_vector: list[float],
+        always_apply: bool = False,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(
+            h_vector=h_vector,
+            e_vector=e_vector,
+            r_vector=r_vector,
+            p=p,
+            always_apply=always_apply,
+        )
+
+    def _get_residual(self, her: NDArray) -> NDArray:
+        residual_channel = her[:, :, 2]
+        r_img = np.stack(
+            (
+                np.zeros_like(residual_channel),
+                np.zeros_like(residual_channel),
+                residual_channel,
+            ),
+            axis=-1,
+        )
+
+        return r_img
+
+    def apply(self, img: NDArray, **params) -> NDArray:
+        her_img = separate_stains(rgb=img, conv_matrix=self.her_from_rgb)
+        r_img = self._get_residual(her_img)
+        return self.convert_to_rgb(r_img)

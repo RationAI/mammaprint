@@ -1,0 +1,47 @@
+# @package _global_
+defaults:
+  - prostate/cancer_bc: test_fnbrno
+  - /trainer/callbacks:
+    - heatmap_visualizer
+    - reporter
+  - override /datamodule/data_sources: fnbrno
+  - _self_
+
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 40
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/5/694c3c001cc14a2c9442da2c82dc275c/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_random_41
+
+trainer:
+  callbacks:
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+    reporter:
+      background:
+        _target_: report.masks.DriveMasksRetriever
+        dir_name: /mnt/data/IIPImage/matejg/FNBrno/Prostata/Vlazny
+        layer_name: "WSI Tissue"
+      masks:
+        - _target_: report.masks.RunIDMlflowMaskRetriever
+          run_id: -1
+          dir_name: ${trainer.callbacks.heatmap_visualizer.save_dir}
+
+
+metadata:
+  experiment_name: Prostate
+  run_name: FN Brno - Level 2 - RGB
+  description: VGG16 applied on converted FN Brno WSIs
+  hyperparameters:
+    # tested with ~ 8 GiB Memory, 8 cpus
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

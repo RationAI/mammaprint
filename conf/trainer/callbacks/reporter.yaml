@@ -1,0 +1,7 @@
+reporter:
+  _target_: histopipe.trainer.callbacks.Reporter
+  background: ???
+  masks: ???
+  template_asset_path: report_template.html
+  title: Run summary report
+  save_dir: report/

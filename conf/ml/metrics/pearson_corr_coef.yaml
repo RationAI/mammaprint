@@ -1,0 +1,2 @@
+pearson_corr_coef:
+  _target_: torchmetrics.regression.PearsonCorrCoef

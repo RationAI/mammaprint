@@ -1,0 +1,16 @@
+feature_extractor:
+  _target_: torch.nn.Sequential
+  _args_:
+    - _target_: histopipe.ml.nets.VGG16Features
+      weights: IMAGENET1K_V1
+    - _target_: histopipe.ml.nets.GMaxPool
+projection_head:
+  _target_: torch.nn.Sequential
+  _args_:
+    - _target_: torch.nn.Linear
+      in_features: 512
+      out_features: 512
+    - _target_: torch.nn.ReLU
+    - _target_: torch.nn.Linear
+      in_features: 512
+      out_features: 128

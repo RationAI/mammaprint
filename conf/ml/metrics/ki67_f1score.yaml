@@ -1,0 +1,3 @@
+ki67_f1score:
+  _target_: histopipe.ml.metrics.Ki67F1Score
+  thresholds: ???

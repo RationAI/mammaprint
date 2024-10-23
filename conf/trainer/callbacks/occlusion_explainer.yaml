@@ -1,0 +1,10 @@
+defaults:
+  - base_explainer
+  - _self_
+
+base_explainer:
+  _target_: histopipe.trainer.callbacks.OcclusionExplainer
+  sliding_window_shapes: ???
+  strides: ???
+  baselines: ???
+  target: ???

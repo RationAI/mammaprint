@@ -1,0 +1,9 @@
+prostate:
+  _target_: histopipe.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    #- mlflow-artifacts:/55/0ecfa0714f09455b870098f8d45a26c5/artifacts/dataset # MMCI neoplastic
+    - mlflow-artifacts:/55/7ae614f02287444bbbc2ee53a70c75cc/artifacts/dataset # TCGA neoplastic
+    - mlflow-artifacts:/55/f3b2f5019fcd42c1a41720cfa0c1e55a/artifacts/dataset # TCGA tissue types
+  splits:
+    test: 1.0

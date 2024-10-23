@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - override /task : concept_discovery
+  - _self_
+
+task:
+  activations_mlflow_uris:
+    - mlflow-artifacts:/22/c740c8ce0b1a443893dd712d4b8c1040/artifacts/activations/predicitons.parquet
+  metadata_mlflow_uris:
+    - mlflow-artifacts:/22/ef86183328a24430959fe6c7ac94a2ff/artifacts/dataset/slides.parquet
+  max_cluster: 10
+  cluster_cnt : null
+
+  image_builder:
+    _target_: histopipe.trainer.callbacks.image_builders.InMemoryHeatmapAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.IdentityMode
+    interpolation: nearest
+    compress_accumulator_array: true
+
+metadata:
+  experiment_name: Tissue Classification
+  hyperparameters:
+    n_clusters: ${task.max_cluster}
+  run_name: VGG16 - Muscle - Concept discovery
+  description: |
+    Clustering of activations from VGG16 TCGA muscle binary classification model to find concept candidates.
+
+

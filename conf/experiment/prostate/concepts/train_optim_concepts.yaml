@@ -1,0 +1,118 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - prostate
+    - prostate_test
+  # Train dataset
+  - /datamodule/datasets@datamodule.datasets.train: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
+  # Valid dataset
+  - /datamodule/datasets@datamodule.datasets.valid: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
+  - /ml: histopipe
+  - /ml/optimizer: adam
+  - /ml/net: vgg_16_concept_model
+  - /ml/output_activation: sigmoid
+  - /ml/loss: bce
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+  - /ml/lr_scheduler: reduce_lr_on_plateau
+  - /trainer/callbacks:
+    - log_best_model
+    - early_stopping
+    - lr_monitor
+  - _self_
+
+datamodule:
+  data_sources:
+    prostate:
+      splits:
+        train: 0.8
+        valid: 0.2
+
+  datasets:
+    train:
+      sampler:
+        epoch_size: 20_000
+        index_levels:
+          - is_cancer
+          - slide_name
+    valid:
+      sampler:
+        epoch_size: 5_000
+        index_levels:
+          - is_cancer
+          - slide_name
+
+  dataloaders_kwargs:
+    train:
+      num_workers: 8
+      batch_size: 32
+    valid:
+      num_workers: 8
+      batch_size: 32
+
+ml:
+  net:
+    features:
+      trainable: false
+      model_uri: mlflow-artifacts:/5/ca1c7adc7f2f48638e6d61c7bb98a39d/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
+    
+    concept_head:
+      n_concepts: 6
+      classif_head:
+        _target_: torch.nn.Sequential
+        _args_:
+          - _target_: torch.nn.Linear
+            in_features: 6
+            out_features: 1
+
+  optimizer:
+    lr: 5e-5
+    weight_decay: 5e-05
+  lr_scheduler:
+    monitor: valid/loss
+    scheduler:
+      mode: min
+      factor: 0.5
+      patience: 3
+
+trainer:
+  max_epochs: 20
+  log_every_n_steps: 20
+  logger:
+    log_model: all
+  callbacks:
+    early_stopping:
+      monitor: valid/binary_auroc
+      mode: max
+      patience: 5
+    log_best_model:
+      monitor: valid/binary_auroc
+      mode: max
+      filename: vgg16_concept_model_prostate_best
+
+metadata:
+  experiment_name: Concepts
+  run_name: VGG16 concept model acuracy only
+  description: |
+   Training concept model on top of vgg16 feature extractor trained for
+   prostate cancer classification. VGG16 weights are locked. Concepts vectors
+   are optimized based on log loss only.
+  hyperparameters:
+    # Scaled for V40 GPU
+    # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)
+    # Expect around 50tiles/s
+    # most time is spent in reading WSI regions (tiles) from disk
+    max_epochs: ${trainer.max_epochs}
+    train_epoch_size: ${datamodule.datasets.train.sampler.epoch_size}
+    valid_epoch_size: ${datamodule.datasets.valid.sampler.epoch_size}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}

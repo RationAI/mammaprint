@@ -1,0 +1,10 @@
+_target_: tests.test_datasource_balanced_partition.CSVDataSource
+data_fp: data/csv_dataset_simple/
+seed: 123
+splits:
+    train: 0.5
+    val: 0.375
+    test: 0.125
+stratified_keys:
+    - is_cancer
+    - patient_id

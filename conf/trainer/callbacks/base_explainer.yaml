@@ -1,0 +1,10 @@
+base_explainer:
+  _target_: ???
+  target: ???
+  save_dir: ???
+  image_builder:
+    _target_: histopipe.trainer.callbacks.DiskMappedPatchAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.BipolarMode
+    interpolation: nearest

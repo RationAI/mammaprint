@@ -1,0 +1,2 @@
+_target_: histopipe.ml.nets.SavedModel
+model_uri: ???

@@ -1,0 +1,43 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: prostate_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - override /task : concept_evaluation
+  - _self_
+
+task:
+  expl_model_activations_mlflow_uri: mlflow-artifacts:/15/bcbf9edcc6c04e7ebb5ed6bd84dc5eec/artifacts/cluster_assigned_acts.parquet
+  concept_discovery_activations_mlflow_uri: mlflow-artifacts:/15/bcbf9edcc6c04e7ebb5ed6bd84dc5eec/artifacts/cluster_assigned_acts.parquet
+  metadata_mlflow_uri: mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset/slides.parquet
+  classif_labels_mlflow_uri: mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset/tiles.parquet
+  concept_vectors_mlflow_uri: null
+  layer_idx: -2
+ml:
+  net:
+    model_uri: mlflow-artifacts:/4/f53c31f5389b44b681b768d5fda5009c/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
+
+datamodule:
+  data_sources:
+    prostate_test:
+      data_uris:
+        -  mlflow-artifacts:/4/0502dcdf33da455c8cc5baa83e1e9b9d/artifacts/dataset  # Test cases no overlap
+  datasets:
+    test:
+      sampler:
+        index_levels: []
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 1
+
+metadata:
+  experiment_name: Concepts
+  run_name: TCAV VGG16 prostate classifier completeness k=auto
+  description: TCAV explanation for VGG16 binary classifier. Classifiers reports revealing completness of concepts are writen in log file.
+  hyperparameters: {}

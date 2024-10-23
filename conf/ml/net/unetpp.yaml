@@ -1,0 +1,4 @@
+segmenter:
+  _target_: histopipe.ml.nets.UNetPlusPlus
+  in_channels: ???
+  out_classes: ???

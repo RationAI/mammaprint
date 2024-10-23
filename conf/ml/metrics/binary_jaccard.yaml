@@ -1,0 +1,2 @@
+binary_jaccard:
+  _target_: torchmetrics.classification.BinaryJaccardIndex

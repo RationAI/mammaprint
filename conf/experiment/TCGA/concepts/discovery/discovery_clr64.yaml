@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - override /task : concept_discovery
+  - _self_
+
+task:
+  activations_mlflow_uris:
+    - mlflow-artifacts:/22/a39f661e2bf34cdf9704b64f340d3bcf/artifacts/activations/predicitons.parquet
+  metadata_mlflow_uris:
+    - mlflow-artifacts:/22/710d91d766d943c58958cb5f61e9fe28/artifacts/dataset/slides.parquet
+  max_cluster: 10
+  cluster_cnt : null
+
+  image_builder:
+    _target_: histopipe.trainer.callbacks.image_builders.InMemoryHeatmapAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.IdentityMode
+    interpolation: nearest
+    compress_accumulator_array: true
+
+metadata:
+  experiment_name: Tissue Classification
+  hyperparameters:
+    n_clusters: ${task.max_cluster}
+  run_name: VGG16 - TCGA - Concept discovery @64
+  description: |
+    Clustering of activations from VGG16 TCGA CLR model to find concept candidates.
+
+

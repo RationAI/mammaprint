@@ -1,0 +1,98 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources:
+    - crc_h_train
+  # Train dataset
+  - /datamodule/datasets@datamodule.datasets.train: base_segmentation
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
+  # Valid dataset
+  - /datamodule/datasets@datamodule.datasets.valid: base_segmentation
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
+
+  - /ml: histopipe
+  - /ml/optimizer: adam
+  - /ml/net: unetpp
+  - /ml/output_activation: sigmoid
+  - /ml/loss: bce
+  - /ml/metrics:
+    - binary_jaccard
+    - binary_recall
+    - binary_specificity
+  - /ml/lr_scheduler: reduce_lr_on_plateau
+  - /trainer/callbacks:
+    - log_best_model
+    - early_stopping
+    - lr_monitor
+  - _self_
+
+datamodule:
+  data_sources:
+    crc_h_train:
+      splits:
+        train: 0.8
+        valid: 0.2
+
+  datasets:
+    train:
+      sampler:
+        index_levels: []
+        advance_to_next: false
+
+    valid:
+      sampler:
+        index_levels: []
+        advance_to_next: false
+
+  dataloaders_kwargs:
+    train:
+      num_workers: 4
+      batch_size: 2
+      shuffle: true
+    valid:
+      num_workers: 4
+      batch_size: 2
+
+ml:
+  net:
+    segmenter:
+      in_channels: 3
+      out_classes: 1
+  optimizer:
+    lr: 3e-5
+    weight_decay: 1e-05
+  lr_scheduler:
+    monitor: valid/binary_jaccard
+    scheduler:
+      mode: max
+      factor: 0.5
+      patience: 3
+
+trainer:
+  max_epochs: 20
+  log_every_n_steps: 1
+  logger:
+    log_model: all
+  callbacks:
+    early_stopping:
+      monitor: valid/binary_jaccard
+      mode: max
+      patience: 5
+    log_best_model:
+      monitor: valid/binary_jaccard
+      mode: max
+      filename: unet_colorectal_best
+
+metadata:
+  experiment_name: Epithelium segmentation
+  run_name: "Training: UNet++ h-opt-sat"
+  description: UNet++ training on saturation nuclei masks from hematoxylin
+  hyperparameters:
+    max_epochs: ${trainer.max_epochs}
+    model: UNet++
+    loss: ${ml.loss}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}

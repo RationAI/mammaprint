@@ -1,0 +1,77 @@
+# @package _global_
+defaults:
+  - /datamodule: ki67
+  - /datamodule/data_sources: ki67
+  - /datamodule/datasets/augmentations@datamodule.transform: ki67
+  - /ml: histopipe
+  - /ml/optimizer: adam
+  - /ml/net: vgg16_regression
+  - /ml/output_activation: identity
+  - /ml/loss: mse
+  - /ml/metrics: 
+    - r2_score
+    - pearson_corr_coef
+    - spearman_corr_coef
+    - mse
+    - mae
+    - ki67_accuracy
+    - ki67_f1score
+    - ki67_precision
+    - ki67_recall
+    - ki67_specificity
+  - /trainer/callbacks: log_best_model
+  - _self_
+
+
+datamodule:
+  dataloaders_kwargs:
+    train:
+      num_workers: 8
+      batch_size: 16
+    valid:
+      num_workers: 8
+      batch_size: 16
+
+ml:
+  net:
+    regression:
+      width: 1440
+      height: 1024
+      weights: IMAGENET1K_V1
+  optimizer:
+    lr: 5e-7
+  metrics:
+    ki67_accuracy:
+      thresholds: [2, 20]
+    ki67_f1score:
+      thresholds: ${..ki67_accuracy.thresholds}
+    ki67_precision:
+      thresholds: ${..ki67_accuracy.thresholds}
+    ki67_recall:
+      thresholds: ${..ki67_accuracy.thresholds}
+    ki67_specificity:
+      thresholds: ${..ki67_accuracy.thresholds}
+
+trainer:
+  max_epochs: 30
+  log_every_n_steps: 20
+  reload_dataloaders_every_n_epochs: False
+  logger:
+    log_model: all
+  callbacks:
+    log_best_model:
+      monitor: valid/loss
+      mode: min
+      filename: vgg16_regression_best
+
+metadata:
+  experiment_name: Ki67
+  run_name: VGG16_regression
+  description: Attempting to estimate Ki67 positivity in breast carcinomas IHC
+  hyperparameters:
+    max_epochs: ${trainer.max_epochs}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}
+    num_workers: ${datamodule.dataloaders_kwargs.train.num_workers}
+    train_split: ${datamodule.data_sources.splits.train}
+    val_split: ${datamodule.data_sources.splits.valid}

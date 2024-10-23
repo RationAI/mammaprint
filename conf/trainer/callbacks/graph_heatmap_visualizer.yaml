@@ -1,0 +1,10 @@
+graph_heatmap_visualizer:
+  _target_: histopipe.trainer.callbacks.GraphHeatmapVisualizer
+  save_dir: ???
+  image_builder:
+    _target_: histopipe.trainer.callbacks.image_builders.InMemoryHeatmapAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.IdentityMode
+    interpolation: nearest
+    compress_accumulator_array: false

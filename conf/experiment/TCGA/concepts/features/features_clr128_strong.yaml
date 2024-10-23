@@ -1,0 +1,45 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: TCGA_test_plus_128
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: vgg16_custom_feature_extractor
+  - /ml/output_activation: identity
+  - /trainer/callbacks:
+    - prediction_saver
+  - _self_
+
+ml:
+  net:
+    features:
+      model_uri: mlflow-artifacts:/22/8be89998ad9b40ee9773cb61fa619ab3/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_contrastive_best
+      layer_idx : -3
+
+task:
+  trainer:
+    callbacks:
+      prediction_saver:
+        save_dir: activations
+
+datamodule:
+  multi_dataloaders: false
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 256
+  datasets:
+    test:
+      sampler:
+        strict: false
+        target_label: null
+        index_levels: []
+
+metadata:
+  experiment_name: Tissue Classification
+  run_name: VGG16 - TCGA - Feature classification @128 - strong augmentations
+  description: Compute features using  VGG16 model trained on TCGA CLR
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

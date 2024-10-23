@@ -1,0 +1,3 @@
+_target_: histopipe.datamodule.samplers.SequentialTreeSampler
+index_levels: ???
+advance_to_next: true

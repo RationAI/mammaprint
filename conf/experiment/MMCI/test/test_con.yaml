@@ -1,0 +1,50 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: MMCI_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_filter_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+    - binary_precision
+    - binary_f1
+  - /trainer/callbacks:
+    - heatmap_visualizer
+  - _self_
+
+trainer:
+  inference_mode: true
+  callbacks:
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/22/8af68da33e974e13925a55b97f0597f7/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
+
+datamodule:
+  dataloaders_kwargs:
+    test:
+      num_workers: 5
+      batch_size: 100
+  datasets:
+    test:
+      sampler:
+        strict: false
+        target_label: null
+        index_levels:
+          - slide_name
+
+metadata:
+  experiment_name: Tissue Classification
+  run_name: VGG16 - MMCI Connective Tissue - Predictions
+  description: Tissue classification predictions on TCGA dataset and a VGG16 model trained on Connective Tissue class.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

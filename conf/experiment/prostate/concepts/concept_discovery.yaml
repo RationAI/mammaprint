@@ -1,0 +1,31 @@
+# @package _global_
+defaults:
+  - override /task : concept_discovery
+  - _self_
+
+task:
+  activations_mlflow_uris: 
+    - mlflow-artifacts:/4/6d71edc235644c8cbd56603149df9119/artifacts/activations/predicitons.parquet
+    #- mlflow-artifacts:/15/8d499e2f3e974e35a6c5224b086e57d1/artifacts/activations/predicitons.parquet #without overlap
+  metadata_mlflow_uris:
+    - mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset/slides.parquet
+    #- mlflow-artifacts:/4/0502dcdf33da455c8cc5baa83e1e9b9d/artifacts/dataset/slides.parquet # Test cases no overlap
+  max_cluster: 10
+  cluster_cnt : null
+
+  image_builder:
+    _target_: histopipe.trainer.callbacks.image_builders.InMemoryHeatmapAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.IdentityMode
+    interpolation: nearest
+    compress_accumulator_array: true
+
+metadata:
+  experiment_name: Concepts
+  hyperparameters: {}
+  run_name: Discovery VGG16 contrastive k=auto overlap
+  description: |
+    Clustering of activations from VGG16 prostate cancer binary classification model to find concept candidates.
+
+

@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - override /task : concept_discovery
+  - _self_
+
+task:
+  activations_mlflow_uris:
+    - mlflow-artifacts:/55/a6dc0e7f126844debd959ef0f4afc3a7/artifacts/activations/predicitons.parquet
+  metadata_mlflow_uris:
+    - mlflow-artifacts:/22/ee42d38d260641e68070bc19748fd016/artifacts/dataset/slides.parquet
+  max_cluster: 10
+  cluster_cnt : 4
+
+  image_builder:
+    _target_: histopipe.trainer.callbacks.image_builders.InMemoryHeatmapAssembler
+    _partial_: true
+    vis_mode:
+      _target_: histopipe.trainer.callbacks.vis_mode.IdentityMode
+    interpolation: nearest
+    compress_accumulator_array: true
+
+metadata:
+  experiment_name: SimCLR Fine tunning
+  hyperparameters:
+    n_clusters: ${task.max_cluster}
+  run_name: VGG16 - TCGA - Concept discovery (n_clusters=4)
+  description: |
+    Clustering of activations from VGG16 TCGA CLR model to find concept candidates.
+
+

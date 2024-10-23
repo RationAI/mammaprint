@@ -1,0 +1,20 @@
+_target_: histopipe.tasks.ConceptEvaluation
+hyperparameters: ${metadata.hyperparameters}
+experiment_name: ${metadata.experiment_name}
+run_name: ${metadata.run_name}
+ml: ${ml}
+datamodule: ${datamodule}
+activation_col: 'model_output'
+concept_label_col: 'label'
+class_label_col: 'class_id'
+join_columns: ['slide_name', 'coord_x', 'coord_y']
+number_of_random_sets: 10
+compute_tcav: true
+compute_completness: true
+classif_labels_mlflow_uri: null
+expl_model_activations_mlflow_uri: ???
+concept_discovery_activations_mlflow_uri: ???
+metadata_mlflow_uri: ???
+concept_vectors_mlflow_uri: ???
+layer_idx: ??? 
+stage: ???

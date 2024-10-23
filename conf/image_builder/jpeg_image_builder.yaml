@@ -1,0 +1,4 @@
+_target_: histopipe.trainer.callbacks.JpegImageBuilder
+_partial_: true
+vis_mode:
+  _target_: histopipe.trainer.callbacks.vis_mode.BipolarMode

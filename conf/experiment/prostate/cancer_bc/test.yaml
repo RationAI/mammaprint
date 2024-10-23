@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: prostate_test
+  - /datamodule/datasets@datamodule.datasets.test: base_classification
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: histopipe
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+  - _self_
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/5/ca1c7adc7f2f48638e6d61c7bb98a39d/artifacts/model/MLFlowModelCheckpoint/vgg16_prostate_best
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+
+metadata:
+  experiment_name: Prostate

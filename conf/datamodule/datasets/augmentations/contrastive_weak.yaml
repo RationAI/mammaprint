@@ -1,0 +1,37 @@
+_target_: albumentations.Compose
+p: 1.0 
+transforms:
+  - _target_: albumentations.Rotate
+    limit: 90
+    border_mode: 0
+    p: 0.25
+  - _target_: albumentations.Flip
+    p: 0.5  
+  #- _target_: albumentations.CenterCrop
+  #  height: 128
+  #  width: 128
+  #  p: 0.05
+  - _target_: albumentations.RandomRotate90
+    p: 0.75
+  - _target_: albumentations.RandomCrop # Do random croping of the sample
+    height: 100
+    width: 100
+    p: 0.05
+  - _target_: albumentations.Resize # Resize back to original tile size
+    height: 128
+    width: 128
+  - _target_: albumentations.ColorJitter
+    brightness: 0.4
+    contrast: 0.4
+    saturation: 0.4
+    hue: 0.2
+    p: 0.8
+  - _target_: albumentations.GaussianBlur
+    blur_limit: 1
+    sigma_limit: [0.1, 2.0]
+    p: 0.5
+  - _target_: albumentations.Normalize
+    mean: 0.5
+    std: 0.5
+    max_pixel_value: 255
+    p: 1.0  # default

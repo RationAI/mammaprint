@@ -1,0 +1,4 @@
+ki67_specificity:
+  _target_: histopipe.ml.metrics.Ki67Specificity
+  thresholds: ???
+  

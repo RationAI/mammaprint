@@ -1,0 +1,11 @@
+_target_: histopipe.tasks.ConceptDiscoveryTask
+hyperparameters: ${metadata.hyperparameters}
+experiment_name: ${metadata.experiment_name}
+run_name: ${metadata.run_name}
+cluster_cnt : null
+activations_column: 'model_output'
+max_cluster: 10
+image_builder: ???
+activations_mlflow_uris: ???
+metadata_mlflow_uris: ???
+stage: ???
