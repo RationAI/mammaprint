@@ -25,6 +25,10 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 40
 
 metadata:
   experiment_name: mammaprint
