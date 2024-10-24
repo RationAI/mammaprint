@@ -40,12 +40,12 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 40
+        epoch_size: 48
         index_levels:
           - slide_name
     valid:
       sampler:
-        epoch_size: 10
+        epoch_size: 12
         index_levels:
           - slide_name
 
@@ -59,14 +59,14 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 1e-3
+    lr: 5e-5
     weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
       mode: min
       factor: 0.5
-      patience: 20
+      patience: 3
 
 trainer:
   max_epochs: 300
@@ -77,7 +77,7 @@ trainer:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 20
+      patience: 5
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
