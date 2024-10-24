@@ -2,8 +2,8 @@ _target_: albumentations.Compose
 p: 1.0 # default
 transforms:
   - _target_: albumentations.Resize
-    height: 128
-    width: 128
+    height: 64
+    width: 64
     interpolation: 0 #cv2.INTER_NEAREST
     p: 1.0
   - _target_: albumentations.Normalize
