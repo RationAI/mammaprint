@@ -40,12 +40,12 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 64
+        epoch_size: 40
         index_levels:
           - slide_name
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 10
         index_levels:
           - slide_name
 
