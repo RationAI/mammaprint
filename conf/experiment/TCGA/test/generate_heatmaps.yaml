@@ -4,7 +4,7 @@ defaults:
   - /datamodule/data_sources: test_heatmaps
   - /datamodule/datasets@datamodule.datasets.test: base_classification
   - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_filter_tree
-  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize_resize
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
   - /ml: histopipe
   - /ml/net: saved_model
   - /ml/output_activation: sigmoid
