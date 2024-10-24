@@ -1,13 +1,57 @@
 import torch
 from torch import nn
 import logging
-import torchvision.models as models
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, dim, num_heads=8, dropout=0.1):
+        super(MultiHeadSelfAttention, self).__init__()
+        self.num_heads = num_heads
+        self.dim = dim
+
+        self.qkv = nn.Linear(dim, dim * 3)
+        self.attn_drop = nn.Dropout(dropout)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(dropout)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
+        qkv = qkv.permute(2, 0, 3, 1, 4)  # [3, B, num_heads, N, C // num_heads]
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        attn = (q @ k.transpose(-2, -1)) * (1.0 / (k.shape[-1] ** 0.5))
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+class TransformerEncoderLayer(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4., dropout=0.1):
+        super(TransformerEncoderLayer, self).__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = MultiHeadSelfAttention(dim, num_heads=num_heads, dropout=dropout)
+        self.norm2 = nn.LayerNorm(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, mlp_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(mlp_hidden_dim, dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
 class GatedAttention(nn.Module):
-    def __init__(self, feature_dim, attention_dim=512):
+    def __init__(self, feature_dim, attention_dim=256):
         super(GatedAttention, self).__init__()
         self.attention_V = nn.Linear(feature_dim, attention_dim)
         self.attention_U = nn.Linear(feature_dim, attention_dim)
@@ -15,48 +59,48 @@ class GatedAttention(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # x shape: [batch_size * num_tiles, features]
-        A_V = self.attention_V(x)  # Shape: [batch_size * num_tiles, attention_dim]
-        A_U = self.attention_U(x)  # Shape: [batch_size * num_tiles, attention_dim]
-        A = torch.tanh(A_V) * self.sigmoid(A_U)  # Shape: [batch_size * num_tiles, attention_dim]
-        A = self.attention_weights(A)  # Shape: [batch_size * num_tiles, 1]
+        A_V = self.attention_V(x)
+        A_U = self.attention_U(x)
+        A = torch.tanh(A_V) * self.sigmoid(A_U)
+        A = self.attention_weights(A)
         return A
 
 class AttMILModel(nn.Module):
-    def __init__(self):
+    def __init__(self, feature_dim=512, num_heads=8, num_layers=2):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.attention = GatedAttention(512)
+
+        self.transformer_layers = nn.ModuleList([
+            TransformerEncoderLayer(feature_dim, num_heads) for _ in range(num_layers)
+        ])
+
+        self.attention = GatedAttention(feature_dim)
         self.classifier = nn.Sequential(
-            nn.Linear(512, 1),
-            nn.Dropout(p=0.5)
+            nn.Linear(feature_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1)
         )
 
     def forward(self, x):
         self.logger.debug(f'Original input to classifier: {x.shape}')
         batch_size, num_tiles, features = x.shape
-        
-        # Flatten to process each tile individually
-        x_flat = x.view(batch_size * num_tiles, features)  # Shape: [batch_size * num_tiles, features]
-        
-        # Get attention weights
-        attention_weights = self.attention(x_flat)  # Shape: [batch_size * num_tiles, 1]
-        attention_weights = attention_weights.view(batch_size, num_tiles)  # Shape: [batch_size, num_tiles]
+
+        for layer in self.transformer_layers:
+            x = layer(x)
+
+        x_flat = x.view(batch_size * num_tiles, features)
+        attention_weights = self.attention(x_flat)
+        attention_weights = attention_weights.view(batch_size, num_tiles)
         self.logger.debug(f'Attention weights shape: {attention_weights.shape}')
-        
-        # Normalize attention weights
-        attention_weights = torch.softmax(attention_weights, dim=1)  # Shape: [batch_size, num_tiles]
-        
-        # Reshape weights to apply to each feature vector
-        weights = attention_weights.view(batch_size, num_tiles, 1)  # Shape: [batch_size, num_tiles, 1]
+
+        attention_weights = torch.softmax(attention_weights, dim=1)
+        weights = attention_weights.view(batch_size, num_tiles, 1)
         self.logger.debug(f'Attention weights after unsqueeze: {weights.shape}')
-        
-        # Weighted sum of features across the tiles
-        weighted_features = torch.sum(x * weights, dim=1)  # Shape: [batch_size, features]
+
+        weighted_features = torch.sum(x * weights, dim=1)
         self.logger.debug(f'Weighted features shape: {weighted_features.shape}')
-        
-        # Final classification
-        output = self.classifier(weighted_features)  # Shape: [batch_size, 1]
+
+        output = self.classifier(weighted_features)
         self.logger.debug(f'Bag-level predictions: {output.shape}')
         self.logger.debug(f'Prediction: {output}')
         return output
