@@ -28,3 +28,6 @@ datamodule:
 
 metadata:
   experiment_name: mammaprint
+  run_name: VGG16 test whole slide images
+  description: |
+    Luminal binary classification.
