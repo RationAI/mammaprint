@@ -3,6 +3,6 @@ prostate:
   seed: ${seed}
   data_uris:
     #- mlflow-artifacts:/55/4b1c6112d43345fda2ff90fca70abb57/artifacts/dataset # MMCI strict_mode=False
-    - mlflow-artifacts:/17/af5339b67ae74e8ca3388c5e3373f47e/artifacts/dataset # mammaprint small validation dataset
+    - mlflow-artifacts:/17/ca1d141103de4a8a9d406ed33ffdf85c/artifacts/dataset # mammaprint small validation dataset
   splits:
     test: 1.0
