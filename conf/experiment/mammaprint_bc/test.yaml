@@ -31,3 +31,6 @@ metadata:
   run_name: VGG16 test whole slide images
   description: |
     Luminal binary classification.
+  hyperparameters:
+    num_workers: 8
+    batch_size: 32
