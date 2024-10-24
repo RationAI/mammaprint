@@ -59,14 +59,14 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 1e-5
+    lr: 5e-5
     weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
       mode: min
       factor: 0.5
-      patience: 3
+      patience: 5
 
 trainer:
   max_epochs: 300
