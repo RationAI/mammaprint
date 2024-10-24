@@ -31,7 +31,7 @@ class MILDataset(BaseDataset):
 
         images_tensor = torch.stack(images)
         logging.debug(f"Torch stack of images: {images_tensor.shape}")
-        label = torch.tensor([float(sample[0]['is_cancer'])])  # Encapsulate the float in a list
+        label = torch.tensor([float(sample[0]['luminal_id'])])  # Encapsulate the float in a list
         logging.debug(f"Label: {label}")
 
         return images_tensor, label, sample
