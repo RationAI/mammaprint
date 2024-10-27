@@ -42,8 +42,8 @@ ml:
 datamodule:
   dataloaders_kwargs:
     test:
-      num_workers: 8
-      batch_size: 32
+      num_workers: 10
+      batch_size: 40
   datasets:
     test:
       sampler:
@@ -54,7 +54,7 @@ datamodule:
 
 metadata:
   experiment_name: Tissue Classification
-  run_name: VGG16 - ${datamodule.datasets.test.sampler.target_label} - Predictions
+  run_name: VGG16 - tumor masks - Predictions, Train dataset
   description: Tissue classification predictions on TCGA dataset and a VGG16 model trained on ${datamodule.datasets.test.sampler.target_label} class.
   hyperparameters:
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
