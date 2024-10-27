@@ -18,7 +18,8 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-        -  mlflow-artifacts:/17/528e3553ae3a4bea8a926f78602c9d35/artifacts/dataset  # mammaprint test dataset
+        - mlflow-artifacts:/17/34960f7abb55464cb8d9266cacb62836/artifacts/dataset  # mammaprint train dataset
+        - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint test dataset
       splits:
         test: 1.0
   datasets:
@@ -39,8 +40,8 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Test features extraction
+  run_name: Train and Another set features extraction using VGG16
   description: |
-    Compute features using VGG16 model trained on prostate.
+    Compute features using VGG16 model using large tiles from train and another set.
   hyperparameters:
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
