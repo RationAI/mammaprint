@@ -57,19 +57,12 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
 
     @staticmethod
-    def _preprocess_data(data: Any) -> Any:
-        """
-        Recursively preprocess data, moving all tensors to CPU and converting to numpy arrays.
-        Handles nested lists and dictionaries that may contain tensors.
-        """
+    def _preprocess_data(data: torch.Tensor) -> list[NDArray]:
         if isinstance(data, torch.Tensor):
-            return data.detach().cpu().numpy()
-        elif isinstance(data, list):
-            return [ParquetPredictionSaver._preprocess_data(d) for d in data]
-        elif isinstance(data, dict):
-            return {k: ParquetPredictionSaver._preprocess_data(v) for k, v in data.items()}
-        return data  # Return as-is if not a tensor, list, or dict
-
+            data = data.detach().cpu().numpy()
+        if len(data.shape) > 2:
+            data = data.reshape(data.shape[0], -1)
+        return list(data)
         
     def on_test_end(
         self,
