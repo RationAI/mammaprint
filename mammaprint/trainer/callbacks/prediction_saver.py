@@ -12,6 +12,7 @@ from pyarrow.parquet import read_table, write_table
 import torch
 from nptyping import NDArray
 import pandas as pd
+import numpy as np
 
 # Local Imports
 from mammaprint.trainer.callbacks import DataloaderAgnosticCallback
