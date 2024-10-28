@@ -12,7 +12,6 @@ from pyarrow.parquet import read_table, write_table
 import torch
 from nptyping import NDArray
 import pandas as pd
-import numpy as np
 
 # Local Imports
 from mammaprint.trainer.callbacks import DataloaderAgnosticCallback
@@ -58,15 +57,13 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
 
     @staticmethod
-    def _preprocess_data(data: Any) -> list[NDArray]:
+    def _preprocess_data(data: torch.Tensor) -> list[NDArray]:
         if isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
-        elif isinstance(data, list):
-            data = [d.detach().cpu().numpy() if isinstance(d, torch.Tensor) else d for d in data]
-        if isinstance(data, np.ndarray) and len(data.shape) > 2:
+        if len(data.shape) > 2:
             data = data.reshape(data.shape[0], -1)
         return list(data)
-
+        
     def on_test_end(
         self,
         trainer: lightning.Trainer,
