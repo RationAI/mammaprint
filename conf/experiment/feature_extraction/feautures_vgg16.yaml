@@ -30,8 +30,8 @@ datamodule:
 
   dataloaders_kwargs:
     test:
-      num_workers: 8
-      batch_size: 40
+      num_workers: 10
+      batch_size: 32
 
 trainer:
   callbacks:
