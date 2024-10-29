@@ -2,7 +2,7 @@
 defaults:
   - /datamodule: wsi
   - /datamodule/data_sources:
-    - luminal_segmentation
+    - mammaprint
     - mammaprint_test
   # Train dataset
   - /datamodule/datasets@datamodule.datasets.train: base_classification
@@ -40,14 +40,14 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 20_000
+        epoch_size: 80_000
         index_levels:
           - luminal_id
           - slide_name
 
     valid:
       sampler:
-        epoch_size: 5_000
+        epoch_size: 20_000
         index_levels:
           - luminal_id
           - slide_name
