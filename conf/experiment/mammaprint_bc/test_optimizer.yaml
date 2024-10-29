@@ -19,7 +19,7 @@ datamodule:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/76440d4335964988b7f53e489e838231/artifacts/model/MLFlowModelCheckpoint/resnet101_mammaprint_best
+    model_uri: mlflow-artifacts:/17/5958b0dfd0cd45bcaee1252014dc235e/artifacts/model/MLFlowModelCheckpoint/vgg16_luminaltype_best
 
 trainer:
   callbacks:
@@ -32,7 +32,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Luminal-type After segmentation ResNet101 Testing optimizer
+  run_name: Luminal-type After segmentation VGG16 Testing optimizer
   description: |
     Luminal binary classification test with finding best threshold and mask size for whole slide predictions.
   hyperparameters:
