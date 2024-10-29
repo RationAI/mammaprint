@@ -34,7 +34,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_x", pa.int64()),
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
-                ("class_id", pa.int64()),
+                ("class_id", pa.float64()),
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
@@ -73,6 +73,9 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             self.writer.close()
         if self.writer2:
             self.writer2.close()
+
+        # Handling pooled features
+        self.pool_features_by_slide("mean")
 
         # Clean up duplicate slides
         slides_file_path = os.path.join(self.save_dir, "slides_batch.parquet")
@@ -131,3 +134,41 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
         logger.info("Batch data and slide metadata successfully written.")
+
+    def pool_features_by_slide(self, aggregation_function="mean"):
+        """
+        Reads data from a Parquet file, pools features by slide name using the specified aggregation function,
+        and saves the pooled data back to a new Parquet file.
+        :param aggregation_function: str or dict, aggregation function to use ('mean', 'max', 'min', or a dictionary for custom aggregation).
+        """
+        # Read the input Parquet file into a DataFrame
+        df = pd.read_parquet(self.save_dir + "/tiles.parquet")
+
+        # Check the aggregation function
+        if isinstance(aggregation_function, str):
+            if aggregation_function == "mean":
+                # Group by slide name and compute the mean of numeric columns
+                pooled_df = df.groupby("slide_name").mean()
+            elif aggregation_function == "max":
+                pooled_df = df.groupby("slide_name").max()
+            elif aggregation_function == "min":
+                pooled_df = df.groupby("slide_name").min()
+            else:
+                raise ValueError(f"Unsupported aggregation function: {aggregation_function}")
+        elif isinstance(aggregation_function, dict):
+            # Group by slide name and apply the custom aggregation
+            pooled_df = df.groupby("slide_name").agg(aggregation_function)
+        else:
+            raise ValueError("Aggregation function must be a string or dictionary.")
+        # Reset the index to make 'slide_name' a regular column
+
+        # Reset the index to make 'slide_name' a regular column
+        pooled_df = pooled_df.reset_index()
+
+        # Ensure the output file path is correct
+        pooled_file_path = os.path.join(self.save_dir, "pooled_predictions.parquet")
+
+        # Save the pooled DataFrame to the output Parquet file
+        pooled_df.to_parquet(pooled_file_path)
+
+        print(f"Pooled data saved to: {pooled_file_path}")
