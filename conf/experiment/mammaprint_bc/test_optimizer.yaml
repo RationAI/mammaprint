@@ -19,8 +19,7 @@ datamodule:
 
 ml:
   net:
-    model_uri: 
-      - mlflow-artifacts:/17/c48f8be77a694d82bc7a6da5065bea81/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
+    model_uri: mlflow-artifacts:/17/c48f8be77a694d82bc7a6da5065bea81/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
 
 trainer:
   callbacks:
