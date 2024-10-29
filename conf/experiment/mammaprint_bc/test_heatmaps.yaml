@@ -26,15 +26,15 @@ trainer:
   callbacks:
     slide_predictor:
       save_dir: slide_predictions
-      mask_size: 38
-      threshold: 0.6381
+      mask_size: 35
+      threshold: 0.475217
       ground_truth_col: class_id
     heatmap_visualizer:
       save_dir: test_heatmaps
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Test Luminal-type VGG16 Testing slide prediction with Heatmaps
+  run_name: Test Luminal-type ResNet101 after segmentation Testing slide prediction with Heatmaps
   description: |
     Luminal binary classification test VGG16, Mask 38 with prediction heatmap generation.
   hyperparameters:

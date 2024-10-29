@@ -2,6 +2,6 @@ mammaprint_test:
   _target_: mammaprint.datamodule.datasources.WSIDataSource
   seed: ${seed}
   data_uris: 
-    - mlflow-artifacts:/17/84c5c40d98234c388e5fbbe2785f73d5/artifacts/dataset
+    - mlflow-artifacts:/17/9635fb69d6e749cb8566eeca6d66c4a8/artifacts/dataset
   splits:
     test: 1.0
