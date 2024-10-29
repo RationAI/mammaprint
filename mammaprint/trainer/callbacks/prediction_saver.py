@@ -57,7 +57,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
 
     @staticmethod
-    def _preprocess_data(data: torch.Tensor) -> list[NDArray]:
+    def _preprocess_data(data: torch.Tensor) -> list:
         if isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
         if len(data.shape) > 2:
@@ -119,17 +119,17 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer.write(batch)
         # Prepare DataFrame for new slide metadata
         new_slide_record = pd.DataFrame({
-            "slide_name": metadata["slide_name"],
+            "slide_name": self._preprocess_data(metadata["slide_name"]),
             "slide_width": self._preprocess_data(metadata["slide_width"]),
             "slide_height": self._preprocess_data(metadata["slide_height"]),
             "sample_level": self._preprocess_data(metadata["sample_level"]),
-            "slide_fp": metadata["slide_fp"],
+            "slide_fp": self._preprocess_data(["slide_fp"]),
             "tile_size": self._preprocess_data(metadata["tile_size"]),
             "step_size": self._preprocess_data(metadata["step_size"]),
             "center_size": self._preprocess_data(metadata["center_size"]),
-            "year": metadata["year"],
-            "patient_id": metadata["patient_id"],
-            "luminal_id": metadata["luminal_id"],
+            "year": self._preprocess_data([metadata["year"]]),
+            "patient_id": self._preprocess_data([metadata["patient_id"]]),
+            "luminal_id": self._preprocess_data([metadata["luminal_id"]]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
