@@ -20,7 +20,7 @@ datamodule:
 
 ml:
   net:
-    model_uri: ???
+    model_uri: mlflow-artifacts:/17/76440d4335964988b7f53e489e838231/artifacts/model/MLFlowModelCheckpoint/resnet101_mammaprint_best
 
 trainer:
   callbacks:
