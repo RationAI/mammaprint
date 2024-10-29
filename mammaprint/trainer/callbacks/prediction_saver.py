@@ -127,7 +127,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "tile_size": self._preprocess_data(metadata["tile_size"]),
             "step_size": self._preprocess_data(metadata["step_size"]),
             "center_size": self._preprocess_data(metadata["center_size"]),
-            "year": self._preprocess_data(metadata["year"]),
+            "year": metadata["year"],
             "patient_id": self._preprocess_data(metadata["patient_id"]),
             "luminal_id": self._preprocess_data(metadata["luminal_id"]),
         })
