@@ -128,7 +128,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "step_size": self._preprocess_data(metadata["step_size"]),
             "center_size": self._preprocess_data(metadata["center_size"]),
             "year": metadata["year"],
-            "patient_id": self._preprocess_data(metadata["patient_id"]),
+            "patient_id": metadata["patient_id"],
             "luminal_id": self._preprocess_data(metadata["luminal_id"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
