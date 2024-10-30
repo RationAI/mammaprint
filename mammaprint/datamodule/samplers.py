@@ -334,10 +334,9 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 3000  # Fixed number of tiles per bag
+        self.tiles_per_bag = 4000  # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
-        self.categories = {}
 
     def build_inner_structure(self, data_source: BaseDataSource) -> None:
         """Builds the sampling tree, sets the active node to the left-most leaf and assigns nodes to categories.
@@ -361,50 +360,34 @@ class MILRandomTreeSampler(TreeSampler):
 
     def get_sample(self) -> list[dict]:
         samples = []
-        available_categories = list(self.categories.keys())
-
-        # Shuffle categories at the beginning of each epoch
-        self._rng.shuffle(available_categories)
-        
         for _ in range(self.num_slides):
-            if not available_categories:  # If no more categories, break the loop
+            if self.active_node is None:  # If there are no more nodes, break the loop
                 break
-
-            # Randomly pick a category (class)
-            random_category = self._rng.choice(available_categories)
-            available_nodes = self.categories[random_category]
-
-            # Randomly pick a node from that category
-            self.active_node = self._rng.choice(available_nodes)
-            
             if self.active_node.data is None:
-                self.active_node.load_data()  # Load data if necessary
+                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
 
             slide_tiles = self.active_node.data  # Assuming data is a DataFrame
-            # Selecting top tiles based on feature norms if more than the required number of tiles is available
             if len(slide_tiles) > self.tiles_per_bag:
-                # Assuming `tile_features` column contains VGG16 embeddings
-                tile_embeddings = torch.tensor(list(slide_tiles["model_output"]))
-                norms = torch.norm(tile_embeddings, dim=1)
-                top_indices = torch.topk(norms, k=self.tiles_per_bag, largest=True).indices
-                chosen_tiles = slide_tiles.iloc[top_indices.numpy()]
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=False, random_state=self.seed)
             else:
-                chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
-
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
             samples.append(chosen_tiles.to_dict("records"))
 
-        # total_tiles = sum(len(slide) for slide in samples)
-        # log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
+            self.next()  # Move to the next node
+        total_tiles = sum(len(slide) for slide in samples)
+        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
 
         return samples
 
     def next(self) -> None:
-        """Sets a new random leaf of any class as the active node."""
+        """Sets next leaf as an active node."""
         if self.active_node is None:
             raise StopIteration
         else:
-            available_categories = list(self.categories.keys())
-            # Randomly pick a category and node
-            random_category = self._rng.choice(available_categories)
-            available_nodes = self.categories[random_category]
-            self.active_node = self._rng.choice(available_nodes)
+            """Sets random leaf of another class (looping classes) as an active node."""
+            self.sample_index += 1
+            self.sample_index %= 2
+            log.info(f"sample_index {self.sample_index}")
+            next_key = list(self.categories.keys())[self.sample_index]
+            log.info(f"Next key {next_key}")
+            self.active_node = self._rng.choice(a=self.categories[next_key])
