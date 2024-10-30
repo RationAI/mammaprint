@@ -40,12 +40,12 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 48
+        epoch_size: 80
         index_levels:
           - slide_name
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 20
         index_levels:
           - slide_name
 
@@ -59,7 +59,7 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 1e-4
+    lr: 5e-5
     weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
