@@ -21,6 +21,9 @@ class MILDataset(BaseDataset):
         # Debug to check what's actually in sample
         images = []
         for s in sample:
+            slide_name = s.get("slide_name", "Unknown Slide")
+            logging.debug(f"Processing slide_name: {slide_name}")
+            
             model_output = s['model_output']
             model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
             images.append(model_output_tensor)
