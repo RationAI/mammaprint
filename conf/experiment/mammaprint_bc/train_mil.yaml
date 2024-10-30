@@ -32,7 +32,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-      - mlflow-artifacts:/17/734fb8d27df7422eb0e13b6dfd36034d/artifacts/dataset
+      - mlflow-artifacts:/17/beba84b0eb1640de94577eec70c62e7e/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
