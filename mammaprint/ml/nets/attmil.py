@@ -32,7 +32,7 @@ class GatedAttention(nn.Module):
         attention_weights = torch.softmax(A, dim=0)  # Shape: [batch_size * num_tiles, 1]
         
         # Calculate entropy for regularization monitoring (optional)
-        self.attention_entropy = -torch.sum(attention_weights * torch.log(attention_weights + 1e-8)).item()
+        self.attention_entropy = -torch.sum(attention_weights * torch.log(torch.clamp(attention_weights, min=1e-8))).item()
         
         return attention_weights
 
@@ -44,12 +44,13 @@ class AttMILModel(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.5),
             nn.Linear(256, 1)
         )
+
 
     def forward(self, x):
         batch_size, num_tiles, features = x.shape
