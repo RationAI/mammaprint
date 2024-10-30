@@ -3,6 +3,7 @@ mammaprint:
   seed: ${seed}
   data_uris:
     - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset
+    - mlflow-artifacts:/17/29498aa547514d0c969d8e2646b31e7c/artifacts/dataset
   stratified_keys:
     - luminal_id
   splits:
