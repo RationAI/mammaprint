@@ -40,14 +40,14 @@ class AttMILModel(nn.Module):
     def __init__(self):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.attention = GatedAttention(512, temperature=0.5, lambda_reg=1e-3)
+        self.attention = GatedAttention(512, temperature=0.3, lambda_reg=1e-3)
         self.classifier = nn.Sequential(
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.3),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.3),
             nn.Linear(256, 1)
         )
 
