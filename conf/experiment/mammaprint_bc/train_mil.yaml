@@ -32,10 +32,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-      - mlflow-artifacts:/17/da9f024af5ec48d0a41c8e2f43a5529a/artifacts/activations
-      - mlflow-artifacts:/17/854fc86cef41492784a04ff54f358e02/artifacts/activations
-      - mlflow-artifacts:/17/c8826a9fe46c4c349a30e222b523314f/artifacts/activations
-      - mlflow-artifacts:/17/10467994f85b4a118efb446ee5ae3852/artifacts/activations
+      - mlflow-artifacts:/17/beba84b0eb1640de94577eec70c62e7e/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -89,9 +86,9 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL Prostate binary classification.
+  run_name: MIL Luminal binary classification.
   description: |
-   Prostate binary classification. MIL approach
+   Luminal binary classification. MIL approach
   hyperparameters:
     # Scaled for V40 GPU
     # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)
