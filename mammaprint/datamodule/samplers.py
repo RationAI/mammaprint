@@ -13,6 +13,7 @@ from typing import Self
 
 import numpy as np
 import pandas
+import torch
 
 from mammaprint.datamodule.datasources import BaseDataSource
 
@@ -380,8 +381,13 @@ class MILRandomTreeSampler(TreeSampler):
                 self.active_node.load_data()  # Load data if necessary
 
             slide_tiles = self.active_node.data  # Assuming data is a DataFrame
+            # Selecting top tiles based on feature norms if more than the required number of tiles is available
             if len(slide_tiles) > self.tiles_per_bag:
-                chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=False, random_state=self.seed)
+                # Assuming `tile_features` column contains VGG16 embeddings
+                tile_embeddings = torch.tensor(list(slide_tiles["model_output"]))
+                norms = torch.norm(tile_embeddings, dim=1)
+                top_indices = torch.topk(norms, k=self.tiles_per_bag, largest=True).indices
+                chosen_tiles = slide_tiles.iloc[top_indices.numpy()]
             else:
                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
 
