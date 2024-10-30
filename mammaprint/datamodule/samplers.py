@@ -333,7 +333,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 4000  # Fixed number of tiles per bag
+        self.tiles_per_bag = 3000  # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
         self.categories = {}
@@ -387,8 +387,8 @@ class MILRandomTreeSampler(TreeSampler):
 
             samples.append(chosen_tiles.to_dict("records"))
 
-        total_tiles = sum(len(slide) for slide in samples)
-        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
+        # total_tiles = sum(len(slide) for slide in samples)
+        # log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
 
         return samples
 

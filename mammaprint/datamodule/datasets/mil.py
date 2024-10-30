@@ -17,13 +17,10 @@ class MILDataset(BaseDataset):
     
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]
-        logging.debug(f"Prepared samples{len(sample)}")
+        # logging.debug(f"Prepared samples{len(sample)}")
         # Debug to check what's actually in sample
         images = []
-        for s in sample:
-            slide_name = s.get("slide_name", "Unknown Slide")
-            logging.debug(f"Processing slide_name: {slide_name}")
-            
+        for s in sample:            
             model_output = s['model_output']
             model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
             images.append(model_output_tensor)
@@ -33,8 +30,8 @@ class MILDataset(BaseDataset):
             return None
 
         images_tensor = torch.stack(images)
-        logging.debug(f"Torch stack of images: {images_tensor.shape}")
+        # logging.debug(f"Torch stack of images: {images_tensor.shape}")
         label = torch.tensor([float(sample[0]['luminal_id'])])  # Encapsulate the float in a list
-        logging.debug(f"Label: {label}")
+        # logging.debug(f"Label: {label}")
 
         return images_tensor, label, sample
