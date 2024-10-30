@@ -43,26 +43,26 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 80
+        epoch_size: 64
         index_levels:
           - slide_name
     valid:
       sampler:
-        epoch_size: 20
+        epoch_size: 16
         index_levels:
           - slide_name
 
   dataloaders_kwargs:
     train:
-      num_workers: 6
-      batch_size: 6
+      num_workers: 8
+      batch_size: 8
     valid:
-      num_workers: 6
-      batch_size: 6
+      num_workers: 8
+      batch_size: 8
 
 ml:
   optimizer:
-    lr: 1e-5
+    lr: 5e-5
     weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
