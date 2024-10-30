@@ -40,24 +40,24 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 80_000
+        epoch_size: 160_000
         index_levels:
           - luminal_id
           - slide_name
 
     valid:
       sampler:
-        epoch_size: 20_000
+        epoch_size: 40_000
         index_levels:
           - luminal_id
           - slide_name
 
   dataloaders_kwargs:
     train:
-      num_workers: 8
+      num_workers: 12
       batch_size: 32
     valid:
-      num_workers: 8
+      num_workers: 12
       batch_size: 32
 
 ml:
@@ -65,8 +65,8 @@ ml:
     features:
       weights: IMAGENET1K_V1
   optimizer:
-    lr: 5e-5
-    weight_decay: 5e-05
+    lr: 1e-5
+    weight_decay: 1e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
