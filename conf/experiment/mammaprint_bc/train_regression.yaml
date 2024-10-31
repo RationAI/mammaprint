@@ -63,7 +63,7 @@ datamodule:
 
 ml:
   net:
-    regeression:
+    regression:
       width: 512
       height: 512
       weights: IMAGENET1K_V1
