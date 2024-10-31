@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 training after segmentation
+  run_name: VGG16 training after using tissue classification model on tiles
   description: |
     Luminal binary classification.
   hyperparameters:
