@@ -34,7 +34,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_x", pa.int64()),
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
-                ("class_id", pa.int64()),
+                ("class_id", pa.float64()),
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
