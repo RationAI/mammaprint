@@ -18,7 +18,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-        - mlflow-artifacts:/17/b48c210c5b64484992ca164559ecf7a2/artifacts/dataset  # segmentation mammaprint train dataset
+        - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
       splits:
         test: 1.0
@@ -40,8 +40,8 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: After segmentation Train set features extraction using VGG16
+  run_name: After segmentation Test set features extraction using VGG16
   description: |
-    Compute features using VGG16 model using large tiles from train and another set.
+    Compute features using VGG16 model.
   hyperparameters:
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
