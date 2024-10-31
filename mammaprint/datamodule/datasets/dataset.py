@@ -10,7 +10,7 @@ from mammaprint.datamodule.datasets.base_wsi import BaseDataset, extract_tile
 from mammaprint.datamodule.samplers import BaseSampler
 
 
-class ClassificationDataset(BaseDataset):
+class Dataset(BaseDataset):
     transforms: albumentations.TemplateTransform | None
 
     def __init__(
@@ -18,8 +18,9 @@ class ClassificationDataset(BaseDataset):
         sampler: BaseSampler,
         seed: int,
         augmentations: albumentations.TemplateTransform | None = None,
+        label: str = "class_id",
     ) -> None:
-        super().__init__(sampler=sampler, seed=seed)
+        super().__init__(sampler=sampler, seed=seed, label=label)
         self.transforms = augmentations
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
@@ -38,5 +39,5 @@ class ClassificationDataset(BaseDataset):
             image = self.transforms(image=image)["image"]
 
         image = torch.from_numpy(image).permute(2, 0, 1)
-        label = torch.FloatTensor([sample["class_id"]])
+        label = torch.FloatTensor([sample[self.label]])
         return image, label, sample

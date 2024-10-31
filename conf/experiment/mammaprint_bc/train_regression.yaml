@@ -5,11 +5,11 @@ defaults:
     - mammaprint_segmentation
     - mammaprint_test
   # Train dataset
-  - /datamodule/datasets@datamodule.datasets.train: base_regression
+  - /datamodule/datasets@datamodule.datasets.train: base_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: her_transforms
   # Valid dataset
-  - /datamodule/datasets@datamodule.datasets.valid: base_regression
+  - /datamodule/datasets@datamodule.datasets.valid: base_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
   - /ml: mammaprint
@@ -45,6 +45,7 @@ datamodule:
         index_levels:
           - luminal_id
           - slide_name
+      label: "mammaprint_value"
 
     valid:
       sampler:
@@ -52,6 +53,7 @@ datamodule:
         index_levels:
           - luminal_id
           - slide_name
+      label: "mammaprint_value"
 
   dataloaders_kwargs:
     train:

@@ -1,4 +1,4 @@
-_target_: mammaprint.datamodule.datasets.MILDataset
+_target_: mammaprint.datamodule.datasets.Dataset
 sampler: ???
 augmentations: ???
 seed: ${seed}

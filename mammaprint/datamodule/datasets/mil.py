@@ -10,8 +10,8 @@ import torch
 import pyarrow as pa
 
 class MILDataset(BaseDataset):
-    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None):
-        super().__init__(sampler=sampler, seed=seed)
+    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "class_id") -> None:
+        super().__init__(sampler=sampler, seed=seed, label=label)
         self.transforms = augmentations
         self.slide_groups = defaultdict(list)
     
@@ -31,7 +31,7 @@ class MILDataset(BaseDataset):
 
         images_tensor = torch.stack(images)
         # logging.debug(f"Torch stack of images: {images_tensor.shape}")
-        label = torch.tensor([float(sample[0]['luminal_id'])])  # Encapsulate the float in a list
+        label = torch.tensor([float(sample[0][self.label])])  # Encapsulate the float in a list
         # logging.debug(f"Label: {label}")
 
         return images_tensor, label, sample

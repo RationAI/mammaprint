@@ -1,27 +1,25 @@
 # @package _global_
 defaults:
   - /datamodule: wsi
-  - /datamodule/data_sources:
-    - mammaprint
-    - mammaprint_test
   # Train dataset
-  - /datamodule/datasets@datamodule.datasets.train: base_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_tree
-  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: her_transforms
+  - /datamodule/datasets@datamodule.datasets.train: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: mil_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
   # Valid dataset
-  - /datamodule/datasets@datamodule.datasets.valid: base_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_tree
+  - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
   - /ml: mammaprint
   - /ml/optimizer: adam
-  - /ml/net: vgg16
-  - /ml/output_activation: sigmoid
-  - /ml/loss: bce
+  - /ml/net: attmil
+  - /ml/output_activation: identity
+  - /ml/loss: mse
   - /ml/metrics:
-    - binary_accuracy
-    - binary_auroc
-    - binary_recall
-    - binary_specificity
+    - r2_score
+    - pearson_corr_coef
+    - spearman_corr_coef
+    - mse
+    - mae
   - /ml/lr_scheduler: reduce_lr_on_plateau
   - /trainer/callbacks:
     - log_best_model
@@ -29,10 +27,13 @@ defaults:
     - lr_monitor
   - _self_
 
-
 datamodule:
   data_sources:
-    mammaprint:
+    blue-print:
+      _target_: mammaprint.datamodule.datasources.WSIDataSource
+      seed: ${seed}
+      data_uris:
+      - mlflow-artifacts:/17/4d41e293e40f44d7bc5b28934b1226dd/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -40,32 +41,26 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 80_000
+        epoch_size: 40
         index_levels:
-          - luminal_id
           - slide_name
-      label: "class_id"
-
+      label: "mammaprint_value"
     valid:
       sampler:
-        epoch_size: 20_000
+        epoch_size: 10
         index_levels:
-          - luminal_id
           - slide_name
-      label: "class_id"
+      label: "mammaprint_value"
 
   dataloaders_kwargs:
     train:
-      num_workers: 8
-      batch_size: 32
+      num_workers: 12
+      batch_size: 8
     valid:
-      num_workers: 8
-      batch_size: 32
+      num_workers: 12
+      batch_size: 8
 
 ml:
-  net:
-    features:
-      weights: IMAGENET1K_V1
   optimizer:
     lr: 5e-5
     weight_decay: 5e-05
@@ -77,27 +72,26 @@ ml:
       patience: 3
 
 trainer:
-  max_epochs: 20
-  log_every_n_steps: 20
+  max_epochs: 300
+  log_every_n_steps: 1
   logger:
     log_model: all
   callbacks:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 5
+      patience: 20
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
-      filename: vgg16_mammaprint_best
-
+      filename: MIL_Mammaprint_value_best
 
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 training level 0 luminal-type classification
+  run_name: MIL Regression training
   description: |
-    Luminal binary classification.
+   MIL Regression training. MIL approach
   hyperparameters:
     # Scaled for V40 GPU
     # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)

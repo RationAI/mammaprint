@@ -1,4 +1,0 @@
-_target_: mammaprint.datamodule.datasets.RegressionDataset
-sampler: ???
-augmentations: ???
-seed: ${seed}

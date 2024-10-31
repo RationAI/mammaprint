@@ -1,8 +1,7 @@
 # Copyright (c) The RationAI team.
 
-from mammaprint.datamodule.datasets.classification import ClassificationDataset
+from mammaprint.datamodule.datasets.dataset import Dataset
 from mammaprint.datamodule.datasets.mil import MILDataset
-from mammaprint.datamodule.datasets.regression import RegressionDataset
 
 
-__all__ = ["ClassificationDataset", "MILDataset", "RegressionDataset"]
+__all__ = ["Dataset", "MILDataset"]

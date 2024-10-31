@@ -1,4 +1,0 @@
-_target_: mammaprint.datamodule.datasets.ClassificationDataset
-sampler: ???
-augmentations: ???
-seed: ${seed}

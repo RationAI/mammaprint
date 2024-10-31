@@ -43,11 +43,13 @@ datamodule:
         epoch_size: 40
         index_levels:
           - slide_name
+      label: "class_id"
     valid:
       sampler:
         epoch_size: 10
         index_levels:
           - slide_name
+      label: "class_id"
 
   dataloaders_kwargs:
     train:
