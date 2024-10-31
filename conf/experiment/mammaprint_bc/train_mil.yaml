@@ -32,7 +32,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-      - mlflow-artifacts:/17/73454a84f7614e6d8386fc06a6cfa7a6/artifacts/dataset
+      - mlflow-artifacts:/17/4d41e293e40f44d7bc5b28934b1226dd/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -86,7 +86,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL Luminal binary classification.
+  run_name: MIL Luminal binary classification after segmentation.
   description: |
    Luminal binary classification. MIL approach
   hyperparameters:
