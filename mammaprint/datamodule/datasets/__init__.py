@@ -2,6 +2,7 @@
 
 from mammaprint.datamodule.datasets.classification import ClassificationDataset
 from mammaprint.datamodule.datasets.mil import MILDataset
+from mammaprint.datamodule.datasets.regression import RegressionDataset
 
 
-__all__ = ["ClassificationDataset", "MILDataset"]
+__all__ = ["ClassificationDataset", "MILDataset", "RegressionDataset"]

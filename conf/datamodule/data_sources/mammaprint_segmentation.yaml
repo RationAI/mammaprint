@@ -2,7 +2,7 @@ mammaprint:
   _target_: mammaprint.datamodule.datasources.WSIDataSource
   seed: ${seed}
   data_uris:
-    - mlflow-artifacts:/17/528e3553ae3a4bea8a926f78602c9d35/artifacts/dataset
+    - mlflow-artifacts:/17/fff42ed3df074a8898fd5e0842e98766/artifacts/dataset
   stratified_keys:
     - luminal_id
   splits:
