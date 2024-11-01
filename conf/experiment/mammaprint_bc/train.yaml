@@ -44,7 +44,6 @@ datamodule:
         index_levels:
           - luminal_id
           - slide_name
-      label: "class_id"
 
     valid:
       sampler:
@@ -52,7 +51,6 @@ datamodule:
         index_levels:
           - luminal_id
           - slide_name
-      label: "class_id"
 
   dataloaders_kwargs:
     train:
@@ -90,8 +88,6 @@ trainer:
       monitor: valid/binary_auroc
       mode: max
       filename: vgg16_mammaprint_best
-
-
 
 metadata:
   experiment_name: Mamma-print
