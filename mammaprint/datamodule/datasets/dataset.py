@@ -20,8 +20,9 @@ class Dataset(BaseDataset):
         augmentations: albumentations.TemplateTransform | None = None,
         label: str = "class_id",
     ) -> None:
-        super().__init__(sampler=sampler, seed=seed, label=label)
+        super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
+        self.label = label
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]

@@ -11,8 +11,9 @@ import pyarrow as pa
 
 class MILDataset(BaseDataset):
     def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "class_id") -> None:
-        super().__init__(sampler=sampler, seed=seed, label=label)
+        super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
+        self.label = label
         self.slide_groups = defaultdict(list)
     
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
