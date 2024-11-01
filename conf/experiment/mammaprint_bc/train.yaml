@@ -39,6 +39,7 @@ datamodule:
 
   datasets:
     train:
+      label: "class_id"
       sampler:
         epoch_size: 40_000
         index_levels:
@@ -46,6 +47,7 @@ datamodule:
           - slide_name
 
     valid:
+      label: "class_id"
       sampler:
         epoch_size: 10_000
         index_levels:
