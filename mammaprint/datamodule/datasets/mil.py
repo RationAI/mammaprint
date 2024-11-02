@@ -21,10 +21,14 @@ class MILDataset(BaseDataset):
         # logging.debug(f"Prepared samples{len(sample)}")
         # Debug to check what's actually in sample
         images = []
+        default_tensor = torch.zeros(512, dtype=torch.float32)
         for s in sample:            
-            model_output = s['model_output']
-            model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
-            images.append(model_output_tensor)
+            model_output = s.get('model_output')
+            if isinstance(model_output, list) and model_output:
+                model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
+                images.append(model_output_tensor if model_output_tensor.shape == 512 else default_tensor)
+            else:
+                images.append(default_tensor)  # Use default zero tensor if model_output is invalid
 
         if not images:
             logging.error("No valid images to process.")
