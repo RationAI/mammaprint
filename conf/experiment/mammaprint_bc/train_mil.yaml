@@ -3,11 +3,11 @@ defaults:
   - /datamodule: wsi
   # Train dataset
   - /datamodule/datasets@datamodule.datasets.train: mil_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: sequential_tree
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: mil_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
   # Valid dataset
   - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: sequential_tree
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
   - /ml: mammaprint
   - /ml/optimizer: adam
@@ -40,23 +40,23 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 40
+        epoch_size: 20
         index_levels:
           - slide_name
       label: "class_id"
     valid:
       sampler:
-        epoch_size: 10
+        epoch_size: 5
         index_levels:
           - slide_name
       label: "class_id"
 
   dataloaders_kwargs:
     train:
-      num_workers: 12
+      num_workers: 2
       batch_size: 2
     valid:
-      num_workers: 12
+      num_workers: 2
       batch_size: 2
 
 ml:
