@@ -68,7 +68,7 @@ class GatedAttention(nn.Module):
         return A
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=512, num_heads=8, num_layers=2):
+    def __init__(self, feature_dim=2048, num_heads=8, num_layers=2):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
 
