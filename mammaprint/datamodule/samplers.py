@@ -333,8 +333,8 @@ class MILRandomTreeSampler(TreeSampler):
         super().__init__(index_levels)
         self.seed = seed
         self._rng = np.random.default_rng(seed)
-        self.epoch_size = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 3000  # Fixed number of tiles per bag
+        self.num_slides = epoch_size  # Number of slides to sample each epoch
+        self.tiles_per_bag = 2000  # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
@@ -360,49 +360,22 @@ class MILRandomTreeSampler(TreeSampler):
 
     def get_sample(self) -> list[dict]:
         samples = []
-        for _ in range(self.epoch_size):
-            if self.active_node is None:
+        for _ in range(self.num_slides):
+            if self.active_node is None:  # If there are no more nodes, break the loop
                 break
             if self.active_node.data is None:
-                self.active_node.load_data()
+                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
 
-            slide_tiles = self.active_node.data  # Assuming data is a DataFrame with all tiles for the slide
-            
-            # Log initial structure of slide_tiles
-            logging.info(f"Initial slide_tiles columns: {slide_tiles.columns}")
-            logging.info(f"Initial slide_tiles dtypes:\n{slide_tiles.dtypes}")
-            logging.info(f"Initial number of tiles: {len(slide_tiles)}")
-
-            # Separate numeric columns for model data and non-numeric metadata
-            numeric_slide_tiles = slide_tiles.select_dtypes(include=[np.number])
-            non_numeric_slide_tiles = slide_tiles.select_dtypes(exclude=[np.number])
-
-            num_tiles = len(numeric_slide_tiles)
-
-            # Log which columns are numeric and which are non-numeric
-            logging.info(f"Numeric columns for padding: {numeric_slide_tiles.columns}")
-            logging.info(f"Non-numeric columns (excluded from padding): {non_numeric_slide_tiles.columns}")
-
-            # If fewer tiles than `tiles_per_bag`, pad with zeroed rows
-            if num_tiles < self.tiles_per_bag:
-                # Pad only numeric columns with zeros to meet `tiles_per_bag`
-                pad_tiles = pd.DataFrame(0, index=range(self.tiles_per_bag - num_tiles), columns=numeric_slide_tiles.columns)
-                padded_numeric_slide_tiles = pd.concat([numeric_slide_tiles, pad_tiles], ignore_index=True)
-
-                # Combine padded numeric columns with non-numeric columns
-                chosen_tiles = pd.concat([padded_numeric_slide_tiles, non_numeric_slide_tiles], axis=1)
-                logging.info(f"Padded chosen_tiles with zeros for numeric columns. Final shape: {chosen_tiles.shape}")
+            slide_tiles = self.active_node.data  # Assuming data is a DataFrame
+            if len(slide_tiles) > self.tiles_per_bag:
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=False, random_state=self.seed)
             else:
-                # Use only the required number of tiles if sufficient tiles are present
-                chosen_tiles = numeric_slide_tiles.iloc[:self.tiles_per_bag]
-                logging.info(f"No padding applied. Truncated chosen_tiles to tiles_per_bag: {self.tiles_per_bag}")
-
-            # Convert to dict format required for the model
+                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
             samples.append(chosen_tiles.to_dict("records"))
-            self.next()  # Proceed to the next slide
 
+            self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
-        logging.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
+        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
 
         return samples
 
