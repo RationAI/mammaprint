@@ -360,34 +360,41 @@ class MILRandomTreeSampler(TreeSampler):
 
     def get_sample(self) -> list[dict]:
         samples = []
-        for _ in range(self.num_slides):
-            if self.active_node is None:  # If there are no more nodes, break the loop
+        for _ in range(self.epoch_size):
+            if self.active_node is None:
                 break
             if self.active_node.data is None:
-                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
+                self.active_node.load_data()
 
-            slide_tiles = self.active_node.data  # Assuming data is a DataFrame
-            if len(slide_tiles) > self.tiles_per_bag:
-                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=False, random_state=self.seed)
+            slide_tiles = self.active_node.data  # Assuming data is a DataFrame with all tiles for the slide
+            num_tiles = len(slide_tiles)
+
+            # If fewer tiles than the max, pad with zeros; otherwise, use all tiles
+            if num_tiles < self.tiles_per_bag:
+                # Padding with zeroed rows to meet tiles_per_bag
+                pad_tiles = pandas.DataFrame(0, index=range(self.tiles_per_bag - num_tiles), columns=slide_tiles.columns)
+                chosen_tiles = pandas.concat([slide_tiles, pad_tiles], ignore_index=True)
             else:
-                 chosen_tiles = slide_tiles.sample(n=self.tiles_per_bag, replace=True, random_state=self.seed)
-            samples.append(chosen_tiles.to_dict("records"))
+                # Use all tiles if they meet or exceed tiles_per_bag
+                chosen_tiles = slide_tiles
 
-            self.next()  # Move to the next node
+            # Convert to dict format required for the model
+            samples.append(chosen_tiles.to_dict("records"))
+            self.next()  # Proceed to the next slide
+
         total_tiles = sum(len(slide) for slide in samples)
-        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
+        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
 
         return samples
 
     def next(self) -> None:
-        """Sets next leaf as an active node."""
+        """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
         if self.active_node is None:
-            raise StopIteration
+            raise StopIteration("Reached the end of available nodes.")
         else:
-            """Sets random leaf of another class (looping classes) as an active node."""
-            self.sample_index += 1
-            self.sample_index %= 2
-            log.info(f"sample_index {self.sample_index}")
-            next_key = list(self.categories.keys())[self.sample_index]
-            log.info(f"Next key {next_key}")
-            self.active_node = self._rng.choice(a=self.categories[next_key])
+            # Randomly select a category
+            random_category = self._rng.choice(list(self.categories.keys()))
+            
+            # Randomly select a node from the chosen category
+            self.active_node = self._rng.choice(self.categories[random_category])
+            log.info(f"Randomly selected new active node from category '{random_category}'.")
