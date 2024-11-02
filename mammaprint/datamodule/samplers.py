@@ -334,7 +334,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.epoch_size = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 3000  # Fixed number of tiles per bag
+        self.tiles_per_bag = 6000  # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
