@@ -376,7 +376,7 @@ class MILRandomTreeSampler(TreeSampler):
                 chosen_tiles = pandas.concat([slide_tiles, pad_tiles], ignore_index=True)
             else:
                 # Use all tiles if they meet or exceed tiles_per_bag
-                chosen_tiles = slide_tiles
+                chosen_tiles = slide_tiles[:self.tiles_per_bag]
 
             # Convert to dict format required for the model
             samples.append(chosen_tiles.to_dict("records"))
