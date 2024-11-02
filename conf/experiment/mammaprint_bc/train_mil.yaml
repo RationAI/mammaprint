@@ -3,11 +3,11 @@ defaults:
   - /datamodule: wsi
   # Train dataset
   - /datamodule/datasets@datamodule.datasets.train: mil_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: mil_tree
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: sequential_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
   # Valid dataset
   - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: sequential_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
   - /ml: mammaprint
   - /ml/optimizer: adam
