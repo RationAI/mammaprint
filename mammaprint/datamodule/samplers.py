@@ -367,25 +367,45 @@ class MILRandomTreeSampler(TreeSampler):
                 self.active_node.load_data()
 
             slide_tiles = self.active_node.data  # Assuming data is a DataFrame with all tiles for the slide
-            num_tiles = len(slide_tiles)
+            
+            # Log initial structure of slide_tiles
+            logging.info(f"Initial slide_tiles columns: {slide_tiles.columns}")
+            logging.info(f"Initial slide_tiles dtypes:\n{slide_tiles.dtypes}")
+            logging.info(f"Initial number of tiles: {len(slide_tiles)}")
 
-            # If fewer tiles than the max, pad with zeros; otherwise, use all tiles
+            # Separate numeric columns for model data and non-numeric metadata
+            numeric_slide_tiles = slide_tiles.select_dtypes(include=[np.number])
+            non_numeric_slide_tiles = slide_tiles.select_dtypes(exclude=[np.number])
+
+            num_tiles = len(numeric_slide_tiles)
+
+            # Log which columns are numeric and which are non-numeric
+            logging.info(f"Numeric columns for padding: {numeric_slide_tiles.columns}")
+            logging.info(f"Non-numeric columns (excluded from padding): {non_numeric_slide_tiles.columns}")
+
+            # If fewer tiles than `tiles_per_bag`, pad with zeroed rows
             if num_tiles < self.tiles_per_bag:
-                # Padding with zeroed rows to meet tiles_per_bag
-                pad_tiles = pandas.DataFrame(0, index=range(self.tiles_per_bag - num_tiles), columns=slide_tiles.columns)
-                chosen_tiles = pandas.concat([slide_tiles, pad_tiles], ignore_index=True)
+                # Pad only numeric columns with zeros to meet `tiles_per_bag`
+                pad_tiles = pd.DataFrame(0, index=range(self.tiles_per_bag - num_tiles), columns=numeric_slide_tiles.columns)
+                padded_numeric_slide_tiles = pd.concat([numeric_slide_tiles, pad_tiles], ignore_index=True)
+
+                # Combine padded numeric columns with non-numeric columns
+                chosen_tiles = pd.concat([padded_numeric_slide_tiles, non_numeric_slide_tiles], axis=1)
+                logging.info(f"Padded chosen_tiles with zeros for numeric columns. Final shape: {chosen_tiles.shape}")
             else:
-                # Use all tiles if they meet or exceed tiles_per_bag
-                chosen_tiles = slide_tiles[:self.tiles_per_bag]
+                # Use only the required number of tiles if sufficient tiles are present
+                chosen_tiles = numeric_slide_tiles.iloc[:self.tiles_per_bag]
+                logging.info(f"No padding applied. Truncated chosen_tiles to tiles_per_bag: {self.tiles_per_bag}")
 
             # Convert to dict format required for the model
             samples.append(chosen_tiles.to_dict("records"))
             self.next()  # Proceed to the next slide
 
         total_tiles = sum(len(slide) for slide in samples)
-        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
+        logging.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
 
         return samples
+
 
     def next(self) -> None:
         """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
