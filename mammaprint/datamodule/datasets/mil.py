@@ -21,32 +21,32 @@ class MILDataset(BaseDataset):
         sample = self._epoch_samples[index]
         images = []
 
-        # Find the first valid model_output to determine shape for default_tensor
+        # Find the shape of the first valid model_output to create default_tensor with the correct shape
         sample_shape = None
         for s in sample:
             model_output = s.get('model_output', None)
-            if isinstance(model_output, (list, tuple)) and len(model_output) > 0:
-                sample_shape = len(model_output)  # Get the shape (length) of the first valid model_output
+            if isinstance(model_output, (list, tuple, torch.Tensor)) and hasattr(model_output, 'shape'):
+                sample_shape = model_output.shape  # Use full shape, not just length
                 break
 
         # If we couldn't determine a valid shape, log an error and exit
         if sample_shape is None:
             logging.error(f"Could not determine a valid shape for 'model_output' in sample at index {index}")
             return None
-        
-        # Create default tensor of the determined shape
+
+        # Create default tensor with the determined shape
         default_tensor = torch.zeros(sample_shape, dtype=torch.float32)
 
         for s in sample:
             model_output = s.get('model_output', None)
             
-            # Check if model_output is iterable and non-empty
-            if isinstance(model_output, (list, tuple)) and len(model_output) > 0:
+            # Check if model_output has a shape attribute and is non-empty
+            if isinstance(model_output, (list, tuple, torch.Tensor)) and hasattr(model_output, 'shape') and model_output.shape == sample_shape:
                 model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
                 images.append(model_output_tensor)
             else:
-                # Log any non-iterable or empty model outputs and add the default tensor as padding
-                logging.warning(f"Invalid or empty model_output in sample at index {index}, adding default tensor as padding.")
+                # Log any invalid or mismatched model outputs and add the default tensor as padding
+                logging.warning(f"Invalid or mismatched model_output in sample at index {index}, adding default tensor as padding.")
                 images.append(default_tensor)
 
         # Ensure exactly `tiles_per_bag` tiles by padding or truncating
