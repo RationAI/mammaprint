@@ -21,22 +21,32 @@ class MILDataset(BaseDataset):
         sample = self._epoch_samples[index]
         images = []
 
-        # Determine the shape of the first model_output tensor to create a default tensor of matching shape
-        if 'model_output' in sample[0]:
-            sample_shape = len(sample[0]['model_output'])  # Assuming model_output is a 1D array
-            default_tensor = torch.zeros(sample_shape, dtype=torch.float32)
-        else:
-            logging.error(f"No 'model_output' key found in sample at index {index}")
+        # Find the first valid model_output to determine shape for default_tensor
+        sample_shape = None
+        for s in sample:
+            model_output = s.get('model_output', None)
+            if isinstance(model_output, (list, tuple)) and len(model_output) > 0:
+                sample_shape = len(model_output)  # Get the shape (length) of the first valid model_output
+                break
+
+        # If we couldn't determine a valid shape, log an error and exit
+        if sample_shape is None:
+            logging.error(f"Could not determine a valid shape for 'model_output' in sample at index {index}")
             return None
+        
+        # Create default tensor of the determined shape
+        default_tensor = torch.zeros(sample_shape, dtype=torch.float32)
 
         for s in sample:
             model_output = s.get('model_output', None)
-            if model_output is not None:
+            
+            # Check if model_output is iterable and non-empty
+            if isinstance(model_output, (list, tuple)) and len(model_output) > 0:
                 model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
                 images.append(model_output_tensor)
             else:
-                # Log any missing or empty model outputs in samples
-                logging.warning(f"Empty or None model_output in sample at index {index}, adding default tensor as padding.")
+                # Log any non-iterable or empty model outputs and add the default tensor as padding
+                logging.warning(f"Invalid or empty model_output in sample at index {index}, adding default tensor as padding.")
                 images.append(default_tensor)
 
         # Ensure exactly `tiles_per_bag` tiles by padding or truncating
@@ -48,9 +58,11 @@ class MILDataset(BaseDataset):
             images = images[:self.tiles_per_bag]
             logging.info(f"Truncated images to {self.tiles_per_bag} tiles at index {index}.")
 
-        if not images:
-            logging.error("No valid images to process.")
-            return None
+        # Verify that all tensors in `images` have the correct shape before stacking
+        for i, img in enumerate(images):
+            if img.shape != default_tensor.shape:
+                logging.error(f"Image at position {i} has shape {img.shape} which does not match expected shape {default_tensor.shape}.")
+                return None  # Optionally handle this more gracefully if needed
 
         # Stack images into a tensor
         images_tensor = torch.stack(images)
