@@ -167,18 +167,28 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
 
     def _add_padding(self, slide_name: str, padding_needed: int) -> None:
         logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
+
+        # Define an empty tile with model_output explicitly as float32
         empty_tile = {
             "slide_name": slide_name,
             "coord_x": np.int64(0),
             "coord_y": np.int64(0),
-            "model_output": [np.float32(0.0)] * 512,  # Adjust for float32
+            "model_output": np.array([0.0] * 512, dtype=np.float32).tolist(),  # Ensure model_output is float32
             "class_id": np.int64(0),
         }
-        # Write each empty tile individually
-        for _ in range(padding_needed):
-            single_tile_df = pd.DataFrame([empty_tile])
-            single_tile_batch = pa.Table.from_pandas(single_tile_df)
-            self.writer.write(single_tile_batch)
+
+        # Create a DataFrame with repeated empty tiles
+        empty_tiles_df = pd.DataFrame([empty_tile] * padding_needed)
+
+        # Check and enforce float32 dtype for model_output
+        empty_tiles_df['model_output'] = empty_tiles_df['model_output'].apply(
+            lambda x: [np.float32(i) for i in x]
+        )
+
+        # Convert the DataFrame to PyArrow Table with correct schema alignment
+        batch = pa.Table.from_pandas(empty_tiles_df, schema=self.writer.schema)
+        self.writer.write(batch)
+        
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
 
