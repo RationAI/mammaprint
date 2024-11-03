@@ -22,11 +22,13 @@ logger = logging.getLogger("callbacks/prediction_saver")
 class ParquetPredictionSaver(DataloaderAgnosticCallback):
     writer: ParquetWriter
     writer2: ParquetWriter
+    min_tiles_per_slide: int = 3000  # Minimum number of tiles per slide
 
     def __init__(self, save_dir: str) -> None:
         super().__init__()
         self.save_dir = save_dir
         os.makedirs(save_dir)
+        self.tile_counts = {}  # Track tile counts per slide
 
         schema = pa.schema(
             [
@@ -35,7 +37,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
-                ("mammaprint_value", pa.float64()),
+                # ("mammaprint_value", pa.float64()), for mammaprint dataset
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
@@ -52,12 +54,13 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.int64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("luminal_id", pa.int64()),
-                ("mammaprint", pa.float64()),
+                ("is_cancer", pa.int64()),
+                # ("luminal_id", pa.int64()),
+                # ("mammaprint", pa.float64()),
             ]
         )
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
-
+    
     @staticmethod
     def _preprocess_data(data: torch.Tensor) -> list[NDArray]:
         if isinstance(data, torch.Tensor):
@@ -65,7 +68,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         if len(data.shape) > 2:
             data = data.reshape(data.shape[0], -1)
         return list(data)
-        
+
     def on_test_end(
         self,
         trainer: lightning.Trainer,
@@ -108,6 +111,13 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         )
         _, _, metadata = batch
 
+        slide_name = metadata["slide_name"][0]
+        # Update tile count for the current slide
+        tile_count = self.tile_counts.get(slide_name, 0)
+        new_tile_count = tile_count + len(metadata["coord_x"])
+        self.tile_counts[slide_name] = new_tile_count
+
+        # Write actual tiles
         batch = pa.record_batch(
             [
                 metadata["slide_name"],
@@ -115,12 +125,17 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 self._preprocess_data(metadata["coord_y"]),
                 self._preprocess_data(outputs["outputs"]),
                 self._preprocess_data(metadata["class_id"]),
-                self._preprocess_data(metadata["mammaprint_value"]),
+                # self._preprocess_data(metadata["mammaprint_value"]),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
         self.writer.write(batch)
-        # Prepare DataFrame for new slide metadata
+        
+        # If the slide has reached its final batch, add padding if necessary
+        if new_tile_count < self.min_tiles_per_slide:
+            self._add_padding(slide_name, self.min_tiles_per_slide - new_tile_count)
+
+        # Save slide metadata
         new_slide_record = pd.DataFrame({
             "slide_name": metadata["slide_name"],
             "slide_width": self._preprocess_data(metadata["slide_width"]),
@@ -132,12 +147,35 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "center_size": self._preprocess_data(metadata["center_size"]),
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
-            "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            "mammaprint": self._preprocess_data(metadata["mammaprint"]),
+            "is_cancer": self._preprocess_data(metadata["is_cancer"]),
+            # "luminal_id": self._preprocess_data(metadata["luminal_id"]),
+            # "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
         logger.info("Batch data and slide metadata successfully written.")
+
+    def _add_padding(self, slide_name: str, padding_needed: int) -> None:
+        """Add empty tiles to reach the minimum tile count."""
+        logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
+
+        # Create an empty tile with the same structure as regular data entries
+        empty_tile = {
+            "slide_name": slide_name,
+            "coord_x": 0,
+            "coord_y": 0,
+            "model_output": [0.0] * 512,  # Adjust the size as per model_output length
+            "class_id": 0,
+            # "mammaprint_value": 0.0,
+        }
+
+        # Convert to a list of empty tiles
+        empty_tiles = [empty_tile] * padding_needed
+
+        # Convert to PyArrow format
+        batch = pa.Table.from_pandas(pd.DataFrame(empty_tiles))
+        self.writer.write(batch)
+        logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
     def pool_features_by_slide(self, aggregation_function="mean"):
         """
