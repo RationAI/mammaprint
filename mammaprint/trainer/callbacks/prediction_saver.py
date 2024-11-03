@@ -157,26 +157,20 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         logger.info("Batch data and slide metadata successfully written.")
 
     def _add_padding(self, slide_name: str, padding_needed: int) -> None:
-        """Add empty tiles to reach the minimum tile count."""
         logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
-
-        # Create an empty tile with the same structure as regular data entries
         empty_tile = {
             "slide_name": slide_name,
             "coord_x": 0,
             "coord_y": 0,
-            "model_output": np.array([0.0] * 512, dtype=np.float32).tolist(),  # Adjust the size as per model_output length
+            "model_output": [0.0] * 512,  # Ensure this is 1D
             "class_id": 0,
-            # "mammaprint_value": 0.0,
+            # "mammaprint_value": 0.0,  # Uncomment if required
         }
-
-        # Convert to a list of empty tiles
-        empty_tiles = [empty_tile] * padding_needed
-
-        # Convert to PyArrow format
-        batch = pa.Table.from_pandas(pd.DataFrame(empty_tiles))
+        empty_tiles = pd.DataFrame([empty_tile] * padding_needed)
+        batch = pa.Table.from_pandas(empty_tiles)
         self.writer.write(batch)
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
+
 
     def pool_features_by_slide(self, aggregation_function="max"):
         """
