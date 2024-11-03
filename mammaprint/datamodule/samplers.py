@@ -373,16 +373,16 @@ class MILRandomTreeSampler(TreeSampler):
                 
                 current_slide_name = self.active_node.node_name  # Set to the current slide name
 
-                # Dynamically create an empty tile template based on existing keys in chosen_tiles
+                # Use an example tile to create an empty tile with the same structure
                 example_tile = chosen_tiles.iloc[0].to_dict()  # Get an example tile structure from the real data
-                empty_tile = {key: 0 for key in example_tile}  # Initialize with zeros or default values
-                
-                # Customize certain fields for the empty tile
-                empty_tile["slide_name"] = current_slide_name
-                empty_tile["model_output"] = [0.0] * len(example_tile["model_output"])  # Zero vector of the correct length
+                empty_tile = example_tile.copy()  # Make a copy of example_tile to preserve structure
+
+                # Update specific fields to placeholders
+                empty_tile["slide_name"] = current_slide_name  # Use current slide name
+                empty_tile["coord_x"] = 0
+                empty_tile["coord_y"] = 0
+                empty_tile["model_output"] = [0.0] * len(example_tile["model_output"])  # Zero vector for model_output
                 empty_tile["class_id"] = 0  # Placeholder for class_id
-                if "mammaprint_value" in example_tile:
-                    empty_tile["mammaprint_value"] = 0.0  # Placeholder for mammaprint_value if it exists
 
                 padding_needed = self.tiles_per_bag - len(chosen_tiles)
                 
