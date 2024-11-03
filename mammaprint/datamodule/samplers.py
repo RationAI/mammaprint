@@ -311,7 +311,7 @@ class SequentialTreeSampler(TreeSampler):
             log.debug("Sampler advanced to next node...")
 
         res = res.to_dict("records")
-        return [res]
+        return res
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
