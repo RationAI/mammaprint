@@ -45,13 +45,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 64
+        epoch_size: 32
         index_levels:
           - slide_name
       label: "class_id"
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 8
         index_levels:
           - slide_name
       label: "class_id"
@@ -59,10 +59,10 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 8
-      batch_size: 8
+      batch_size: 6
     valid:
       num_workers: 8
-      batch_size: 8
+      batch_size: 6
 
 ml:
   optimizer:
