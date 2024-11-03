@@ -168,25 +168,20 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
     def _add_padding(self, slide_name: str, padding_needed: int) -> None:
         logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
 
-        # Define an empty tile with model_output explicitly as float32
-        empty_tile = {
-            "slide_name": slide_name,
-            "coord_x": np.int64(0),
-            "coord_y": np.int64(0),
-            "model_output": np.array([0.0] * 512, dtype=np.float32).tolist(),  # Ensure model_output is float32
-            "class_id": np.int64(0),
-        }
+        # Define arrays explicitly with correct types for each column
+        slide_names = pa.array([slide_name] * padding_needed, pa.string())
+        coord_x = pa.array([0] * padding_needed, pa.int64())
+        coord_y = pa.array([0] * padding_needed, pa.int64())
+        model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))
+        class_id = pa.array([0] * padding_needed, pa.int64())
 
-        # Create a DataFrame with repeated empty tiles
-        empty_tiles_df = pd.DataFrame([empty_tile] * padding_needed)
-
-        # Check and enforce float32 dtype for model_output
-        empty_tiles_df['model_output'] = empty_tiles_df['model_output'].apply(
-            lambda x: [np.float32(i) for i in x]
+        # Create the record batch directly from arrays
+        batch = pa.RecordBatch.from_arrays(
+            [slide_names, coord_x, coord_y, model_output, class_id],
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"]
         )
 
-        # Convert the DataFrame to PyArrow Table with correct schema alignment
-        batch = pa.Table.from_pandas(empty_tiles_df, schema=self.writer.schema)
+        # Write the batch directly to the Parquet writer
         self.writer.write(batch)
         
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
