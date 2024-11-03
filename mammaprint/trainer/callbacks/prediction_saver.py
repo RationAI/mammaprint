@@ -63,18 +63,12 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
     
     @staticmethod
-
-    def _preprocess_data(data: Any, target_dtype=None) -> list:
+    def _preprocess_data(data: Any, target_dtype=np.float32) -> list:
         if isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
         
-        # Reshape if necessary
-        if len(data.shape) > 1:
-            data = data.reshape(data.shape[0], -1)
-        
         # Ensure the target dtype
-        if target_dtype is not None:
-            data = data.astype(target_dtype)
+        data = data.astype(target_dtype)
         
         # Convert to list format expected by PyArrow
         return data.tolist()
