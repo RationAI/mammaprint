@@ -25,6 +25,9 @@ class MILDataset(BaseDataset):
         
         # Ensure label is provided correctly, fallback to zero if missing
         label_value = float(sample[0].get(self.label, 0.0))  # Default label if missing
+        # Check if any tile in `sample` has `self.label` set to 1
+        label_value = 1.0 if any(tile.get(self.label, 0) == 1 for tile in sample) else 0.0
+
         label = torch.tensor([label_value])
 
         return images_tensor, label, sample
