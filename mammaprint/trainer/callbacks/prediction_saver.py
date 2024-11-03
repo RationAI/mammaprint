@@ -35,7 +35,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("slide_name", pa.string()),
                 ("coord_x", pa.int64()),
                 ("coord_y", pa.int64()),
-                ("model_output", pa.list_(pa.float32())),
+                ("model_output", pa.list_(pa.float64())),
                 ("class_id", pa.int64()),
                 # ("mammaprint_value", pa.float64()), for mammaprint dataset
             ]
