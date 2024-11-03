@@ -381,10 +381,10 @@ class MILRandomTreeSampler(TreeSampler):
                 
                 log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
             else:
-                chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False)
+                # Sample exactly tiles_per_bag tiles without replacement
+                chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
             
-            samples.append(chosen_tiles.to_dict("records"))
-
+            samples.append(chosen_tiles)
             self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
         log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
