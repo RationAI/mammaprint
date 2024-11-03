@@ -12,6 +12,7 @@ from pyarrow.parquet import read_table, write_table
 import torch
 from nptyping import NDArray
 import pandas as pd
+import numpy as np
 
 # Local Imports
 from mammaprint.trainer.callbacks import DataloaderAgnosticCallback
@@ -35,7 +36,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("slide_name", pa.string()),
                 ("coord_x", pa.int64()),
                 ("coord_y", pa.int64()),
-                ("model_output", pa.list_(pa.float64())),
+                ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
                 # ("mammaprint_value", pa.float64()), for mammaprint dataset
             ]
@@ -164,7 +165,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "slide_name": slide_name,
             "coord_x": 0,
             "coord_y": 0,
-            "model_output": [0.0] * 512,  # Adjust the size as per model_output length
+            "model_output": np.array([0.0] * 512, dtype=np.float32).tolist(),  # Adjust the size as per model_output length
             "class_id": 0,
             # "mammaprint_value": 0.0,
         }
