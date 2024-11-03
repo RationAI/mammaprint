@@ -20,7 +20,7 @@ datamodule:
       data_uris:
         # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
-        - mlflow-artifacts:/4/5b7897d856964f04bd1fefe3e05d0981/artifacts/dataset #prostate dataset
+        - mlflow-artifacts:/4/271f5067346048eba64af3ae561863ba/artifacts/dataset #prostate dataset
       splits:
         test: 1.0
   datasets:
@@ -45,7 +45,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Prostate features extraction using VGG16, train set 1
+  run_name: Prostate features extraction using VGG16, tumor cases train set 2
   description: |
     Compute features using VGG16 model.
   hyperparameters:
