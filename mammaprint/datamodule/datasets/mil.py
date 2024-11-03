@@ -31,7 +31,7 @@ class MILDataset(BaseDataset):
 
         for s in sample:
             model_output = s.get('model_output', None)
-            if model_output is not None and len(model_output) > 0:
+            if model_output is not None:
                 model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
                 images.append(model_output_tensor)
             else:
