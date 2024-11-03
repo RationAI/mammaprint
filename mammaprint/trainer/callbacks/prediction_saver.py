@@ -63,12 +63,15 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
     
     @staticmethod
-    def _preprocess_data(data: torch.Tensor) -> list[NDArray]:
+    @staticmethod
+    def _preprocess_data(data: torch.Tensor) -> list:
         if isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
-        if len(data.shape) > 2:
-            data = data.reshape(data.shape[0], -1)
-        return [np.array(d, dtype=np.float32) for d in data]
+        if data.ndim > 1:
+            data = [np.array(d, dtype=np.float32).tolist() for d in data]  # Ensuring each is 1D
+        else:
+            data = np.array(data, dtype=np.float32).tolist()
+        return data
 
     def on_test_end(
         self,
