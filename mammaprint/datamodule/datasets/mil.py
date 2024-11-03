@@ -34,10 +34,12 @@ class MILDataset(BaseDataset):
             # Pad with default tensors if fewer than `tiles_per_bag`
             images += [default_tensor] * (self.tiles_per_bag - num_images)
             logging.info(f"Padded images to {self.tiles_per_bag} tiles at index {index}.")
+            logging.info(f"Number of tiles in slide {len(images)} tiles at index {index}.")
         elif num_images > self.tiles_per_bag:
             # Truncate if more than `tiles_per_bag`
             images = images[:self.tiles_per_bag]
             logging.info(f"Truncated images to {self.tiles_per_bag} tiles at index {index}.")
+            logging.info(f"Number of tiles in slide {len(images)} tiles at index {index}.")
 
 
         if not images:
