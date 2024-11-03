@@ -34,10 +34,7 @@ datamodule:
       data_uris:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
       # Prostate dataset
-      - mlflow-artifacts:/17/da9f024af5ec48d0a41c8e2f43a5529a/artifacts/activations
-      - mlflow-artifacts:/17/854fc86cef41492784a04ff54f358e02/artifacts/activations
-      - mlflow-artifacts:/17/c8826a9fe46c4c349a30e222b523314f/artifacts/activations
-      - mlflow-artifacts:/17/10467994f85b4a118efb446ee5ae3852/artifacts/activations
+      - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
