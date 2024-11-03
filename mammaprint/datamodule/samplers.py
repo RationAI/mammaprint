@@ -371,8 +371,19 @@ class MILRandomTreeSampler(TreeSampler):
             if len(chosen_tiles) < self.tiles_per_bag:
                 log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
                 
-                # Create an empty tile template with zeros or None values, matching chosen_tiles columns
-                empty_tile = {col: 0 for col in chosen_tiles.columns}  # Use None instead of 0 if more appropriate
+                # Retrieve the current slide name to use for all padded entries
+                current_slide_name = self.active_node.node_name  # or chosen_tiles.iloc[0]["slide_name"] if more appropriate
+
+                # Create an empty tile template with a consistent structure
+                empty_tile = {
+                    "slide_name": current_slide_name,  # Set to the current slide name
+                    "coord_x": 0,
+                    "coord_y": 0,
+                    "model_output": [0.0] * len(chosen_tiles.iloc[0]["model_output"]),  # Zero vector with correct length
+                    "class_id": 0,  # Placeholder class to identify padded entries
+                    "mammaprint_value": 0.0,  # Placeholder value to identify padded entries
+                }
+
                 padding_needed = self.tiles_per_bag - len(chosen_tiles)
                 
                 # Convert chosen tiles to list of dicts and add empty tiles as padding
