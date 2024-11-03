@@ -358,20 +358,23 @@ class MILRandomTreeSampler(TreeSampler):
             self.categories[cur_node.data[self.label_column].iloc[0]].append(cur_node)
             cur_node = cur_node.next
 
-    def get_sample(self) -> list[dict] | None:
-        """Returns the content of currently active SamplerTree node.
+    def get_sample(self) -> list[dict]:
+        samples = []
+        for _ in range(self.num_slides):
+            if self.active_node is None:  # If there are no more nodes, break the loop
+                break
+            if self.active_node.data is None:
+                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
 
-        Returns:
-            list[dict] | None: List of sampled entries.
-        """
-        res = None if self.active_node is None else self.active_node.data
+            chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
+            samples.append(chosen_tiles.to_dict("records"))
 
-        if self.advance_to_next:
-            self.next()
-            log.debug("Sampler advanced to next node...")
+            self.next()  # Move to the next node
+        total_tiles = sum(len(slide) for slide in samples)
+        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
 
-        res = res.to_dict("records")
-        return [res]
+        return samples
+
 
     def next(self) -> None:
         """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
