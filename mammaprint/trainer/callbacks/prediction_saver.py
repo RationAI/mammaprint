@@ -121,18 +121,22 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         new_tile_count = tile_count + len(metadata["coord_x"])
         self.tile_counts[slide_name] = new_tile_count
 
-        # Write actual tiles
+        # Write actual tiles with enforced float32 type for model_output
+        model_output_processed = self._preprocess_data(outputs["outputs"], target_dtype=np.float32)
+        
+        # Debug print statement to verify data type consistency
+        print("Data type of model_output_processed:", type(model_output_processed[0][0]))
+        
         batch = pa.record_batch(
             [
-                metadata["slide_name"],
-                self._preprocess_data(metadata["coord_x"], target_dtype=np.int64),
-                self._preprocess_data(metadata["coord_y"], target_dtype=np.int64),
-                self._preprocess_data(outputs["outputs"], target_dtype=np.float32),  # Ensure float32 for model_output
-                self._preprocess_data(metadata["class_id"], target_dtype=np.int64),
+                pa.array(metadata["slide_name"]),
+                pa.array(metadata["coord_x"], pa.int64()),
+                pa.array(metadata["coord_y"], pa.int64()),
+                pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
+                pa.array(metadata["class_id"], pa.int64()),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"],
         )
-
         self.writer.write(batch)
         
         # If the slide has reached its final batch, add padding if necessary
@@ -152,21 +156,19 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
             "is_cancer": self._preprocess_data(metadata["is_cancer"]),
-            # "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            # "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
         logger.info("Batch data and slide metadata successfully written.")
 
     def _add_padding(self, slide_name: str, padding_needed: int) -> None:
+        """Add empty tiles to reach the minimum tile count."""
         logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
 
-        # Define arrays explicitly with correct types for each column
         slide_names = pa.array([slide_name] * padding_needed, pa.string())
         coord_x = pa.array([0] * padding_needed, pa.int64())
         coord_y = pa.array([0] * padding_needed, pa.int64())
-        model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))
+        model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
         class_id = pa.array([0] * padding_needed, pa.int64())
 
         # Create the record batch directly from arrays
@@ -175,9 +177,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"]
         )
 
-        # Write the batch directly to the Parquet writer
         self.writer.write(batch)
-        
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
 
