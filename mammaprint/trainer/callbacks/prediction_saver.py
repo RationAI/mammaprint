@@ -127,7 +127,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 self._preprocess_data(metadata["class_id"]),
                 # self._preprocess_data(metadata["mammaprint_value"]),
             ],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"],
         )
         self.writer.write(batch)
         
