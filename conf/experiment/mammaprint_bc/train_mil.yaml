@@ -35,6 +35,7 @@ datamodule:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
       # Prostate dataset
       - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
+      - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -56,10 +57,10 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 8
-      batch_size: 4
+      batch_size: 6
     valid:
       num_workers: 8
-      batch_size: 4
+      batch_size: 6
 
 ml:
   optimizer:
