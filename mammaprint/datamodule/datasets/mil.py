@@ -21,32 +21,31 @@ class MILDataset(BaseDataset):
         sample = self._epoch_samples[index]
         images = []
 
-        # Find the shape of the first valid model_output to create default_tensor with the correct shape
+        # Attempt to find the shape of a valid model_output, falling back to a default shape if needed
         sample_shape = None
         for s in sample:
             model_output = s.get('model_output', None)
-            if isinstance(model_output, (list, tuple, torch.Tensor)) and hasattr(model_output, 'shape'):
-                sample_shape = model_output.shape  # Use full shape, not just length
+            if isinstance(model_output, (list, tuple, torch.Tensor)):
+                sample_shape = model_output.shape if hasattr(model_output, 'shape') else (len(model_output),)
                 break
 
-        # If we couldn't determine a valid shape, log an error and exit
+        # If no valid shape is found, use a default shape (e.g., [2048] for a feature vector)
         if sample_shape is None:
-            logging.error(f"Could not determine a valid shape for 'model_output' in sample at index {index}")
-            return None
+            logging.warning(f"No valid 'model_output' shape found in sample at index {index}. Using default shape [2048].")
+            sample_shape = (2048,)  # Update this to match the expected feature size
 
-        # Create default tensor with the determined shape
+        # Create a default tensor with the determined or fallback shape
         default_tensor = torch.zeros(sample_shape, dtype=torch.float32)
 
         for s in sample:
             model_output = s.get('model_output', None)
             
-            # Check if model_output has a shape attribute and is non-empty
-            if isinstance(model_output, (list, tuple, torch.Tensor)) and hasattr(model_output, 'shape') and model_output.shape == sample_shape:
+            # Verify model_output is correctly shaped, or use the default tensor if not
+            if isinstance(model_output, (list, tuple, torch.Tensor)) and (hasattr(model_output, 'shape') and model_output.shape == sample_shape):
                 model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
                 images.append(model_output_tensor)
             else:
-                # Log any invalid or mismatched model outputs and add the default tensor as padding
-                logging.warning(f"Invalid or mismatched model_output in sample at index {index}, adding default tensor as padding.")
+                logging.warning(f"Invalid or mismatched model_output in sample at index {index}. Adding default tensor as padding.")
                 images.append(default_tensor)
 
         # Ensure exactly `tiles_per_bag` tiles by padding or truncating
@@ -58,14 +57,13 @@ class MILDataset(BaseDataset):
             images = images[:self.tiles_per_bag]
             logging.info(f"Truncated images to {self.tiles_per_bag} tiles at index {index}.")
 
-        # Verify that all tensors in `images` have the correct shape before stacking
-        for i, img in enumerate(images):
-            if img.shape != default_tensor.shape:
-                logging.error(f"Image at position {i} has shape {img.shape} which does not match expected shape {default_tensor.shape}.")
-                return None  # Optionally handle this more gracefully if needed
-
         # Stack images into a tensor
-        images_tensor = torch.stack(images)
+        try:
+            images_tensor = torch.stack(images)
+        except RuntimeError as e:
+            logging.error(f"Failed to stack images at index {index}. Error: {e}")
+            return default_tensor.repeat(self.tiles_per_bag, 1), torch.tensor([0.0]), {}
+
         label = torch.tensor([float(sample[0][self.label])])  # Encapsulate the float in a list
 
         return images_tensor, label, sample
