@@ -64,7 +64,10 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
     
     @staticmethod
     def _preprocess_data(data: Any, target_dtype=np.float32) -> list:
-        if isinstance(data, torch.Tensor):
+        # Convert to numpy array if data is a list
+        if isinstance(data, list):
+            data = np.array(data)
+        elif isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
         
         # Ensure the target dtype
@@ -72,6 +75,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         
         # Convert to list format expected by PyArrow
         return data.tolist()
+
 
     def on_test_end(
         self,
