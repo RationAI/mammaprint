@@ -63,15 +63,21 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
     
     @staticmethod
-    @staticmethod
-    def _preprocess_data(data: torch.Tensor) -> list:
+
+    def _preprocess_data(data: Any, target_dtype=None) -> list:
         if isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
-        if data.ndim > 1:
-            data = [np.array(d, dtype=np.float32).tolist() for d in data]  # Ensuring each is 1D
-        else:
-            data = np.array(data, dtype=np.float32).tolist()
-        return data
+        
+        # Reshape if necessary
+        if len(data.shape) > 1:
+            data = data.reshape(data.shape[0], -1)
+        
+        # Ensure the target dtype
+        if target_dtype is not None:
+            data = data.astype(target_dtype)
+        
+        # Convert to list format expected by PyArrow
+        return data.tolist()
 
     def on_test_end(
         self,
@@ -125,14 +131,14 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         batch = pa.record_batch(
             [
                 metadata["slide_name"],
-                self._preprocess_data(metadata["coord_x"]),
-                self._preprocess_data(metadata["coord_y"]),
-                self._preprocess_data(outputs["outputs"]),
-                self._preprocess_data(metadata["class_id"]),
-                # self._preprocess_data(metadata["mammaprint_value"]),
+                self._preprocess_data(metadata["coord_x"], target_dtype=np.int64),
+                self._preprocess_data(metadata["coord_y"], target_dtype=np.int64),
+                self._preprocess_data(outputs["outputs"], target_dtype=np.float32),  # Ensure float32 for model_output
+                self._preprocess_data(metadata["class_id"], target_dtype=np.int64),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"],
         )
+
         self.writer.write(batch)
         
         # If the slide has reached its final batch, add padding if necessary
@@ -163,11 +169,10 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
         empty_tile = {
             "slide_name": slide_name,
-            "coord_x": 0,
-            "coord_y": 0,
-            "model_output": [0.0] * 512,  # Ensure this is 1D
-            "class_id": 0,
-            # "mammaprint_value": 0.0,  # Uncomment if required
+            "coord_x": np.int64(0),
+            "coord_y": np.int64(0),
+            "model_output": [np.float32(0.0)] * 512,  # Adjust for float32
+            "class_id": np.int64(0),
         }
         empty_tiles = pd.DataFrame([empty_tile] * padding_needed)
         batch = pa.Table.from_pandas(empty_tiles)
