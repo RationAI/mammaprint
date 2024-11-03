@@ -370,11 +370,6 @@ class MILRandomTreeSampler(TreeSampler):
             if len(chosen_tiles) > self.tiles_per_bag:
                 # Sample exactly tiles_per_bag tiles without replacement
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
-            # Retrieve the `is_cancer` label from the slide node and set it as `class_id`
-            class_id = self.active_node.is_cancer  # Assumes `is_cancer` is stored in `self.active_node`
-
-            # Assign `class_id` to all rows in chosen_tiles
-            chosen_tiles["class_id"] = class_id
             samples.append(chosen_tiles)
             self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
