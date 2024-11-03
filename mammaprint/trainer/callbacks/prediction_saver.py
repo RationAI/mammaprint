@@ -174,9 +174,11 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "model_output": [np.float32(0.0)] * 512,  # Adjust for float32
             "class_id": np.int64(0),
         }
-        empty_tiles = pd.DataFrame([empty_tile] * padding_needed)
-        batch = pa.Table.from_pandas(empty_tiles)
-        self.writer.write(batch)
+        # Write each empty tile individually
+        for _ in range(padding_needed):
+            single_tile_df = pd.DataFrame([empty_tile])
+            single_tile_batch = pa.Table.from_pandas(single_tile_df)
+            self.writer.write(single_tile_batch)
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
 
