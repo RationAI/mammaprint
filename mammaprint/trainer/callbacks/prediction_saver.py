@@ -36,7 +36,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("slide_name", pa.string()),
                 ("coord_x", pa.int64()),
                 ("coord_y", pa.int64()),
-                ("model_output", pa.list_(pa.float64())),
+                ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
                 # ("mammaprint_value", pa.float64()), for mammaprint dataset
             ]
@@ -68,7 +68,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             data = data.detach().cpu().numpy()
         if len(data.shape) > 2:
             data = data.reshape(data.shape[0], -1)
-        return list(data)
+        return [np.array(d, dtype=np.float32) for d in data]
 
     def on_test_end(
         self,
@@ -165,7 +165,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "slide_name": slide_name,
             "coord_x": 0,
             "coord_y": 0,
-            "model_output": np.array([0.0] * 512, dtype=np.float64).tolist(),  # Adjust the size as per model_output length
+            "model_output": np.array([0.0] * 512, dtype=np.float32).tolist(),  # Adjust the size as per model_output length
             "class_id": 0,
             # "mammaprint_value": 0.0,
         }
@@ -178,7 +178,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer.write(batch)
         logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
-    def pool_features_by_slide(self, aggregation_function="mean"):
+    def pool_features_by_slide(self, aggregation_function="max"):
         """
         Reads data from a Parquet file, pools features by slide name using the specified aggregation function,
         and saves the pooled data back to a new Parquet file.
