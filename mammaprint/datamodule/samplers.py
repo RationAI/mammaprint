@@ -381,7 +381,7 @@ class MILRandomTreeSampler(TreeSampler):
                     "coord_y": 0,
                     "model_output": [0.0] * len(chosen_tiles.iloc[0]["model_output"]),  # Zero vector with correct length
                     "class_id": 0,  # Placeholder class to identify padded entries
-                    "mammaprint_value": 0.0,  # Placeholder value to identify padded entries
+                    # "mammaprint_value": 0.0,  # Placeholder value to identify padded entries
                 }
 
                 padding_needed = self.tiles_per_bag - len(chosen_tiles)

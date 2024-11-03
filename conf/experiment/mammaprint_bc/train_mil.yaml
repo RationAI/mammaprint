@@ -32,7 +32,12 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-      - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
+      # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
+      # Prostate dataset
+      - mlflow-artifacts:/17/da9f024af5ec48d0a41c8e2f43a5529a/artifacts/activations
+      - mlflow-artifacts:/17/854fc86cef41492784a04ff54f358e02/artifacts/activations
+      - mlflow-artifacts:/17/c8826a9fe46c4c349a30e222b523314f/artifacts/activations
+      - mlflow-artifacts:/17/10467994f85b4a118efb446ee5ae3852/artifacts/activations
       splits:
         train: 0.8
         valid: 0.2
@@ -40,24 +45,24 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 8
+        epoch_size: 64
         index_levels:
           - slide_name
       label: "class_id"
     valid:
       sampler:
-        epoch_size: 2
+        epoch_size: 16
         index_levels:
           - slide_name
       label: "class_id"
 
   dataloaders_kwargs:
     train:
-      num_workers: 2
-      batch_size: 1
+      num_workers: 8
+      batch_size: 8
     valid:
-      num_workers: 2
-      batch_size: 1
+      num_workers: 8
+      batch_size: 8
 
 ml:
   optimizer:
@@ -88,9 +93,9 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL Luminal binary classification after segmentation.
+  run_name: MIL Prostate binary classification after segmentation.
   description: |
-   Luminal binary classification. MIL approach
+   Prostate binary classification. MIL approach
   hyperparameters:
     # Scaled for V40 GPU
     # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)
