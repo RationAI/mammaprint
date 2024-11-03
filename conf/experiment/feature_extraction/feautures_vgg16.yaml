@@ -18,8 +18,9 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-        - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
+        # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
+        - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset #another dataset no overlap
       splits:
         test: 1.0
   datasets:
@@ -33,7 +34,10 @@ datamodule:
     test:
       num_workers: 10
       batch_size: 40
-
+ml:
+  net:
+    features:
+      weights: DEFAULT
 trainer:
   callbacks:
     prediction_saver:
@@ -41,7 +45,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: After segmentation Test set features extraction using VGG16
+  run_name: features extraction using VGG16, Another set without overlap, 
   description: |
     Compute features using VGG16 model.
   hyperparameters:
