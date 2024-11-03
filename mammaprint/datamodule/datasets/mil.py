@@ -29,14 +29,14 @@ class MILDataset(BaseDataset):
             logging.error(f"No 'model_output' key found in sample at index {index}")
             return None
 
-        for s in sample:            
-            model_output = s.get('model_output', [])
-            if model_output:
+        for s in sample:
+            model_output = s.get('model_output', None)
+            if model_output is not None and len(model_output) > 0:
                 model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
                 images.append(model_output_tensor)
             else:
                 # Log any missing or empty model outputs in samples
-                logging.warning(f"Empty model_output in sample at index {index}, adding default tensor as padding.")
+                logging.warning(f"Empty or None model_output in sample at index {index}, adding default tensor as padding.")
                 images.append(default_tensor)
 
         # Ensure exactly `tiles_per_bag` tiles by padding or truncating
