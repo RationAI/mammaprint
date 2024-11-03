@@ -367,6 +367,22 @@ class MILRandomTreeSampler(TreeSampler):
                 self.active_node.load_data()  # Ensure this method exists or is correctly implemented
 
             chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
+             # Check if padding is needed
+            if len(chosen_tiles) < self.tiles_per_bag:
+                log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
+                
+                # Create an empty tile template with zeros or None values, matching chosen_tiles columns
+                empty_tile = {col: 0 for col in chosen_tiles.columns}  # Use None instead of 0 if more appropriate
+                padding_needed = self.tiles_per_bag - len(chosen_tiles)
+                
+                # Convert chosen tiles to list of dicts and add empty tiles as padding
+                chosen_tiles = chosen_tiles.to_dict("records")
+                chosen_tiles.extend([empty_tile] * padding_needed)
+                
+                log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
+            else:
+                chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False)
+            
             samples.append(chosen_tiles.to_dict("records"))
 
             self.next()  # Move to the next node
