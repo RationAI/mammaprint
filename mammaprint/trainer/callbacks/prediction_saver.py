@@ -46,16 +46,16 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         schema_slides = pa.schema(
             [
                 ("slide_name", pa.string()),
-                ("slide_width", pa.int64()),
-                ("slide_height", pa.int64()),
-                ("sample_level", pa.int64()),
+                ("slide_width", pa.float64()),
+                ("slide_height", pa.float64()),
+                ("sample_level", pa.float64()),
                 ("slide_fp", pa.string()),
-                ("tile_size", pa.int64()),
-                ("step_size", pa.int64()),
-                ("center_size", pa.int64()),
+                ("tile_size", pa.float64()),
+                ("step_size", pa.float64()),
+                ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("is_cancer", pa.int64()),
+                ("is_cancer", pa.float64()),
                 # ("luminal_id", pa.int64()),
                 # ("mammaprint", pa.float64()),
             ]
