@@ -371,18 +371,18 @@ class MILRandomTreeSampler(TreeSampler):
             if len(chosen_tiles) < self.tiles_per_bag:
                 log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
                 
-                # Retrieve the current slide name to use for all padded entries
-                current_slide_name = self.active_node.node_name  # or chosen_tiles.iloc[0]["slide_name"] if more appropriate
+                current_slide_name = self.active_node.node_name  # Set to the current slide name
 
-                # Create an empty tile template with a consistent structure
-                empty_tile = {
-                    "slide_name": current_slide_name,  # Set to the current slide name
-                    "coord_x": 0,
-                    "coord_y": 0,
-                    "model_output": [0.0] * len(chosen_tiles.iloc[0]["model_output"]),  # Zero vector with correct length
-                    "class_id": 0,  # Placeholder class to identify padded entries
-                    # "mammaprint_value": 0.0,  # Placeholder value to identify padded entries
-                }
+                # Dynamically create an empty tile template based on existing keys in chosen_tiles
+                example_tile = chosen_tiles.iloc[0].to_dict()  # Get an example tile structure from the real data
+                empty_tile = {key: 0 for key in example_tile}  # Initialize with zeros or default values
+                
+                # Customize certain fields for the empty tile
+                empty_tile["slide_name"] = current_slide_name
+                empty_tile["model_output"] = [0.0] * len(example_tile["model_output"])  # Zero vector of the correct length
+                empty_tile["class_id"] = 0  # Placeholder for class_id
+                if "mammaprint_value" in example_tile:
+                    empty_tile["mammaprint_value"] = 0.0  # Placeholder for mammaprint_value if it exists
 
                 padding_needed = self.tiles_per_bag - len(chosen_tiles)
                 
