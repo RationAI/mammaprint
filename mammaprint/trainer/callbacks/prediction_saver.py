@@ -84,7 +84,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             self.writer2.close()
 
         # Handling pooled features
-        self.pool_features_by_slide("mean")
+        #self.pool_features_by_slide("mean")
 
         # Clean up duplicate slides
         slides_file_path = os.path.join(self.save_dir, "slides_batch.parquet")
