@@ -88,7 +88,7 @@ trainer:
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
-      filename: MIL_Luminal_best
+      filename: MIL_binary_best
 
 
 metadata:
