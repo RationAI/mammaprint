@@ -422,21 +422,21 @@ class MILSequentialTreeSampler(TreeSampler):
         self.active_node = self.sampling_tree.leftmost_leaf
 
     def get_sample(self) -> list[dict] | None:
+        """Returns the content of currently active SamplerTree node.
+
+        Returns:
+            list[dict] | None: List of sampled entries.
+        """
+        res = None if self.active_node is None else self.active_node.data
         samples = []
-        for _ in range(87):
-            if self.active_node is None:  # If there are no more nodes, break the loop
-                break
-            if self.active_node.data is None:
-                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
-            
-            chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
-            if len(chosen_tiles) > 2000:
-                # Sample exactly tiles_per_bag tiles without replacement
-                chosen_tiles = chosen_tiles.sample(n=2000, replace=False).to_dict("records")
+        if len(res) >= 2000:
+            # Sample exactly tiles_per_bag tiles without replacement
+            chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
             samples.append(chosen_tiles)
-            self.next()  # Move to the next node
-        total_tiles = sum(len(slide) for slide in samples)
-        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.") 
+        if self.advance_to_next:
+            self.next()
+            log.debug("Sampler advanced to next node...")
+        return samples
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
