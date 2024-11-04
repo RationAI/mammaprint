@@ -137,7 +137,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 pa.array(metadata["coord_y"], pa.int64()),
                 pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
                 pa.array(metadata["class_id"], pa.int64()),
-                pa.array(metadata["mammaprint_value"], pa.float32()),
+                pa.array(metadata["mammaprint_value"], pa.float64()),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
@@ -175,7 +175,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         coord_y = pa.array([0] * padding_needed, pa.int64())
         model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
         class_id = pa.array([0] * padding_needed, pa.int64())
-        mammaprint_value = pa.array([0] * padding_needed, pa.float32())
+        mammaprint_value = pa.array([0] * padding_needed, pa.float64())
 
         # Create the record batch directly from arrays
         batch = pa.RecordBatch.from_arrays(
