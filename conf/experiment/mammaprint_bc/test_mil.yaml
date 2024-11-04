@@ -3,7 +3,7 @@ defaults:
   - /datamodule: wsi
   - /datamodule/data_sources: mil_luminal_test
   - /datamodule/datasets@datamodule.datasets.test: mil_dataset
-  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_tree
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
   - /ml: mammaprint
   - /ml/net: saved_model
