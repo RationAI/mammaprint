@@ -429,7 +429,7 @@ class MILSequentialTreeSampler(TreeSampler):
         """
         res = None if self.active_node is None else self.active_node.data
 
-        if self.active_node.data is None:
+        if res != None:
             self.active_node.load_data()  # Ensure this method exists or is correctly implemented
             
             res = self.active_node.data  # Assuming data is a DataFrame
@@ -442,7 +442,7 @@ class MILSequentialTreeSampler(TreeSampler):
            log.debug("Sampler advanced to next node...")
 
         res = res.to_dict("records")
-        return res
+        return [res]
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
