@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8088bebb4efb4672a60159cd2dbda91d/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/940a9b94ad91467396c6b048eac10bbf/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -29,7 +29,7 @@ datamodule:
   dataloaders_kwargs:
     test:
       num_workers: 15
-      batch_size: 8
+      batch_size: 16
 
 metadata:
   experiment_name: mammaprint
@@ -38,4 +38,4 @@ metadata:
     prostate binary classification.
   hyperparameters:
     num_workers: 15
-    batch_size: 8
+    batch_size: 16
