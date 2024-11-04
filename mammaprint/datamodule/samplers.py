@@ -432,8 +432,15 @@ class MILSequentialTreeSampler(TreeSampler):
         if self.advance_to_next:
             self.next()
             log.debug("Sampler advanced to next node...")
+
         if res is not None:
-            res = res.sample(n=2000, replace=False).to_dict("records")
+            samples = []
+            for slide in res:
+                if len(slide) > 2000:
+                    slide = slide.sample(n=2000, replace=False)
+                slide = slide.to_dict("records")
+                samples.append(slide)
+            return samples
         res.to_dict("records")
         return [res]
 
