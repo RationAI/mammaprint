@@ -446,12 +446,12 @@ class MILSequentialTreeSampler(TreeSampler):
                     # If there are more than 2000 tiles, sample them
                     if tile_count >= 2000:
                         # Convert to DataFrame if needed and sample
-                        slide_df = pd.DataFrame(slide) if isinstance(slide, dict) else slide
+                        slide_df = pandas.DataFrame(slide) if isinstance(slide, dict) else slide
                         slide = slide_df.sample(n=2000, replace=False).to_dict("records")
                         logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
                         
                     samples.append(slide)
-                elif isinstance(slide, pd.DataFrame):
+                elif isinstance(slide, pandas.DataFrame):
                     slide_name = slide.get("slide_name", "Unknown")
                     logging.info(f"Sampling tiles from slide {slide_name}.")
                     logging.info(f"Number of tiles in slide: {len(slide)}.")
