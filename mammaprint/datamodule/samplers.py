@@ -427,34 +427,14 @@ class MILSequentialTreeSampler(TreeSampler):
         Returns:
             list[dict] | None: List of sampled entries.
         """
-        # Retrieve data from the active node
         res = None if self.active_node is None else self.active_node.data
 
-        # Log the type and a summary of `res`
-        logging.debug(f"Type of `res`: {type(res)}")
-        if isinstance(res, pandas.DataFrame):
-            logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
-            logging.debug(f"Sample of `res`: {res.head()}")
-                       
-            if len(res) > 2000:
-                logging.info(f"Sampling 2000 entries from a DataFrame with {len(res)} rows.")
-                res = res.sample(n=2000, replace=False)
-            return res.to_dict("records")
+        if self.advance_to_next:
+            self.next()
+            log.debug("Sampler advanced to next node...")
 
-        elif isinstance(res, list) and all(isinstance(slide, str) for slide in res):
-            # Log if `res` appears as a list of strings (possibly slide names)
-            logging.warning("`res` is a list of strings; expected structured data entries.")
-            logging.debug(f"Contents of `res`: {res}")
-            return [{"slide_name": slide} for slide in res]  # Example transformation for each slide name
-
-        elif res is None:
-            logging.debug("`res` is None, likely due to reaching an empty or non-existent node.")
-            return None
-
-        else:
-            # Unexpected type or content of `res`
-            logging.warning(f"Unexpected structure in `res`: {res}")
-            return None
+        res = res.to_dict("records")
+        return res
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
