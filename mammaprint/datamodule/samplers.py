@@ -436,21 +436,20 @@ class MILSequentialTreeSampler(TreeSampler):
         if res is not None:
             samples = []
             for slide in res:
-                # Check if slide is a dictionary or a DataFrame
+                # Log the data type of slide
+                logging.debug(f"Type of slide: {type(slide)}")
+                
                 if isinstance(slide, dict):
                     slide_name = slide.get("slide_name", "Unknown")
-                    tile_count = len(slide)
                     logging.info(f"Sampling tiles from slide {slide_name}.")
-                    logging.info(f"Number of tiles in slide: {tile_count}.")
+                    logging.info(f"Number of tiles in slide: {len(slide)}.")
                     
-                    # If there are more than 2000 tiles, sample them
-                    if tile_count >= 2000:
-                        # Convert to DataFrame if needed and sample
-                        slide_df = pandas.DataFrame(slide) if isinstance(slide, dict) else slide
+                    if len(slide) >= 2000:
+                        slide_df = pandas.DataFrame(slide)
                         slide = slide_df.sample(n=2000, replace=False).to_dict("records")
                         logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
-                        
                     samples.append(slide)
+                    
                 elif isinstance(slide, pandas.DataFrame):
                     slide_name = slide.get("slide_name", "Unknown")
                     logging.info(f"Sampling tiles from slide {slide_name}.")
@@ -459,10 +458,11 @@ class MILSequentialTreeSampler(TreeSampler):
                     if len(slide) >= 2000:
                         slide = slide.sample(n=2000, replace=False).to_dict("records")
                         logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
-                        
                     samples.append(slide)
+                    
                 else:
-                    logging.warning("Unrecognized data type for slide; expected dict or DataFrame.")
+                    # Log a warning with the actual type encountered
+                    logging.warning(f"Unrecognized data type for slide; expected dict or DataFrame but got {type(slide)}.")
                     continue
             return samples
         return None
