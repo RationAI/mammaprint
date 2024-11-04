@@ -433,7 +433,7 @@ class MILSequentialTreeSampler(TreeSampler):
             self.active_node.load_data()  # Ensure this method exists or is correctly implemented
             
             res = self.active_node.data  # Assuming data is a DataFrame
-            if len(res) > self.tiles_per_bag:
+            if len(res) > 2000:
              # Sample exactly tiles_per_bag tiles without replacement
                 res = res.sample(n=2000, replace=False)        
  
