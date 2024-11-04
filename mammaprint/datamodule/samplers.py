@@ -436,7 +436,7 @@ class MILSequentialTreeSampler(TreeSampler):
             logging.debug(f"`res` data type: {type(res)}")
             
             # If `res` is a DataFrame, log its shape and a sample of its content
-            if isinstance(res, pd.DataFrame):
+            if isinstance(res, pandas.DataFrame):
                 logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
                 logging.debug(f"Sample of `res` content:\n{res.head()}")
                 
