@@ -38,7 +38,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
-                ("mammaprint_value", pa.float64()),
+                ("mammaprint_value", pa.float32()),
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
@@ -56,7 +56,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
                 ("luminal_id", pa.int64()),
-                ("mammaprint", pa.float64()),
+                ("mammaprint", pa.float32()),
             ]
         )
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
@@ -137,7 +137,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 pa.array(metadata["coord_y"], pa.int64()),
                 pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
                 pa.array(metadata["class_id"], pa.int64()),
-                pa.array(metadata["mammaprint_value"], pa.float64()),
+                pa.array(metadata["mammaprint_value"], pa.float32()),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
@@ -160,7 +160,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
             "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            "mammaprint": metadata["mammaprint"],
+            "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
@@ -175,7 +175,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         coord_y = pa.array([0] * padding_needed, pa.int64())
         model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
         class_id = pa.array([0] * padding_needed, pa.int64())
-        mammaprint_value = pa.array([0] * padding_needed, pa.float64())
+        mammaprint_value = pa.array([0] * padding_needed, pa.float32())
 
         # Create the record batch directly from arrays
         batch = pa.RecordBatch.from_arrays(
