@@ -427,33 +427,54 @@ class MILSequentialTreeSampler(TreeSampler):
         Returns:
             list[dict] | None: List of sampled entries.
         """
+        # Check if the active node has data
         res = None if self.active_node is None else self.active_node.data
 
+        # Log initial details about `res`
+        logging.debug(f"Type of `res`: {type(res)}")
+        if isinstance(res, list):
+            logging.debug(f"`res` contains {len(res)} elements.")
+            if len(res) > 0:
+                logging.debug(f"Sample of `res` first element: {res[0]}")
+        elif isinstance(res, pd.DataFrame):
+            logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
+            logging.debug(f"Sample of `res` DataFrame: {res.head()}")
+        else:
+            logging.debug(f"`res` content: {res}")
+
+        # Advance to the next node if required
         if self.advance_to_next:
             self.next()
             log.debug("Sampler advanced to next node...")
 
         if res is not None:
+            # Check if `res` is a list of strings and log the contents if it is
+            if all(isinstance(slide, str) for slide in res):
+                logging.warning("`res` appears to be a list of strings; expected structured data entries.")
+                logging.debug(f"Contents of `res`: {res}")
+                return [{"slide_name": slide} for slide in res]  # Example placeholder for each slide
+
             samples = []
-            for slide in res:
-                # Log the data type of slide
-                logging.debug(f"Type of slide: {type(slide)}")
+            for i, slide in enumerate(res):
+                # Log details for each `slide` in `res`
+                logging.debug(f"Processing slide {i+1}/{len(res)} with type {type(slide)}")
                 
                 if isinstance(slide, dict):
+                    logging.debug(f"Slide {i+1} is a dictionary with keys: {list(slide.keys())}")
                     slide_name = slide.get("slide_name", "Unknown")
-                    logging.info(f"Sampling tiles from slide {slide_name}.")
-                    logging.info(f"Number of tiles in slide: {len(slide)}.")
+                    tile_count = len(slide)  # Approximate length of dictionary items
+                    logging.info(f"Sampling tiles from slide {slide_name}. Number of tiles: {tile_count}")
                     
-                    if len(slide) >= 2000:
-                        slide_df = pandas.DataFrame(slide)
+                    if tile_count >= 2000:
+                        slide_df = pd.DataFrame(slide)
                         slide = slide_df.sample(n=2000, replace=False).to_dict("records")
                         logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
                     samples.append(slide)
                     
-                elif isinstance(slide, pandas.DataFrame):
+                elif isinstance(slide, pd.DataFrame):
+                    logging.debug(f"Slide {i+1} is a DataFrame with shape: {slide.shape}")
                     slide_name = slide.get("slide_name", "Unknown")
-                    logging.info(f"Sampling tiles from slide {slide_name}.")
-                    logging.info(f"Number of tiles in slide: {len(slide)}.")
+                    logging.info(f"Sampling tiles from slide {slide_name}. Number of tiles: {len(slide)}")
                     
                     if len(slide) >= 2000:
                         slide = slide.sample(n=2000, replace=False).to_dict("records")
@@ -461,12 +482,12 @@ class MILSequentialTreeSampler(TreeSampler):
                     samples.append(slide)
                     
                 else:
-                    # Log a warning with the actual type encountered
-                    logging.warning(f"Unrecognized data type for slide; expected dict or DataFrame but got {type(slide)}.")
+                    # Log warning for any unexpected data type
+                    logging.warning(f"Unrecognized data type for slide {i+1}; expected dict or DataFrame but got {type(slide)}.")
+                    logging.debug(f"Content of slide {i+1}: {slide}")
                     continue
             return samples
         return None
-
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
