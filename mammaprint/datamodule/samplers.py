@@ -427,25 +427,14 @@ class MILSequentialTreeSampler(TreeSampler):
         Returns:
             list[dict] | None: List of sampled entries.
         """
-        # Check if active_node is None or if active_node.data is empty
-        if self.active_node is None or self.active_node.data is None or self.active_node.data.empty:
-            return None
-
-        # Load data from the active node
-        self.active_node.load_data()  # Ensure this method exists or is correctly implemented
-        res = self.active_node.data  # Assuming data is a DataFrame
-
-        # Sample without replacement if the DataFrame has more than 2000 rows
-        if len(res) > 2000:
-            res = res.sample(n=2000, replace=False)
+        res = None if self.active_node is None else self.active_node.data
 
         if self.advance_to_next:
             self.next()
             log.debug("Sampler advanced to next node...")
 
-        # Convert the resulting DataFrame to a list of dictionaries
-        return res.to_dict("records")
-
+        res = res.to_dict("records")
+        return [res]
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
