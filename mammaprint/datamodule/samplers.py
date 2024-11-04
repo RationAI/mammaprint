@@ -436,7 +436,7 @@ class MILSequentialTreeSampler(TreeSampler):
             logging.debug(f"`res` contains {len(res)} elements.")
             if len(res) > 0:
                 logging.debug(f"Sample of `res` first element: {res[0]}")
-        elif isinstance(res, pd.DataFrame):
+        elif isinstance(res, pandas.DataFrame):
             logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
             logging.debug(f"Sample of `res` DataFrame: {res.head()}")
         else:
@@ -466,12 +466,12 @@ class MILSequentialTreeSampler(TreeSampler):
                     logging.info(f"Sampling tiles from slide {slide_name}. Number of tiles: {tile_count}")
                     
                     if tile_count >= 2000:
-                        slide_df = pd.DataFrame(slide)
+                        slide_df = pandas.DataFrame(slide)
                         slide = slide_df.sample(n=2000, replace=False).to_dict("records")
                         logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
                     samples.append(slide)
                     
-                elif isinstance(slide, pd.DataFrame):
+                elif isinstance(slide, pandas.DataFrame):
                     logging.debug(f"Slide {i+1} is a DataFrame with shape: {slide.shape}")
                     slide_name = slide.get("slide_name", "Unknown")
                     logging.info(f"Sampling tiles from slide {slide_name}. Number of tiles: {len(slide)}")
