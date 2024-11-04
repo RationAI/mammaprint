@@ -160,7 +160,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
             "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            "mammaprint": self._preprocess_data(metadata["mammaprint"]),
+            "mammaprint": metadata["mammaprint"],
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
