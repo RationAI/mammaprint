@@ -436,15 +436,37 @@ class MILSequentialTreeSampler(TreeSampler):
         if res is not None:
             samples = []
             for slide in res:
-                logging.info(f"Sampling tiles from slide {slide['slide_name']}.")
-                logging.info(f"Number of tiles in slide: {len(slide)}.")
-                if len(slide) >= 2000:
-                    slide = slide.sample(n=2000, replace=False).to_dict("records")
-                    logging.info(f"Sampled 2000 tiles from slide {slide['slide_name']}.")
-                samples.append(slide)
+                # Check if slide is a dictionary or a DataFrame
+                if isinstance(slide, dict):
+                    slide_name = slide.get("slide_name", "Unknown")
+                    tile_count = len(slide)
+                    logging.info(f"Sampling tiles from slide {slide_name}.")
+                    logging.info(f"Number of tiles in slide: {tile_count}.")
+                    
+                    # If there are more than 2000 tiles, sample them
+                    if tile_count >= 2000:
+                        # Convert to DataFrame if needed and sample
+                        slide_df = pd.DataFrame(slide) if isinstance(slide, dict) else slide
+                        slide = slide_df.sample(n=2000, replace=False).to_dict("records")
+                        logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
+                        
+                    samples.append(slide)
+                elif isinstance(slide, pd.DataFrame):
+                    slide_name = slide.get("slide_name", "Unknown")
+                    logging.info(f"Sampling tiles from slide {slide_name}.")
+                    logging.info(f"Number of tiles in slide: {len(slide)}.")
+                    
+                    if len(slide) >= 2000:
+                        slide = slide.sample(n=2000, replace=False).to_dict("records")
+                        logging.info(f"Sampled 2000 tiles from slide {slide_name}.")
+                        
+                    samples.append(slide)
+                else:
+                    logging.warning("Unrecognized data type for slide; expected dict or DataFrame.")
+                    continue
             return samples
-        res.to_dict("records")
-        return [res]
+        return None
+
 
     def next(self) -> None:
         """Sets next leaf as an active node."""
