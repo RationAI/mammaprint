@@ -377,15 +377,21 @@ class MILRandomTreeSampler(TreeSampler):
 
         return samples
 
-
     def next(self) -> None:
-        """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
-        if self.active_node is None:
-            raise StopIteration("Reached the end of available nodes.")
-        else:
-            # Randomly select a category
-            random_category = self._rng.choice(list(self.categories.keys()))
+            """Sets next leaf as an active node."""
+            if self.active_node is None:
+                raise StopIteration
+            else:
+                self.active_node = self.active_node.next
+
+    # def next(self) -> None:
+    #     """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
+    #     if self.active_node is None:
+    #         raise StopIteration("Reached the end of available nodes.")
+    #     else:
+    #         # Randomly select a category
+    #         random_category = self._rng.choice(list(self.categories.keys()))
             
-            # Randomly select a node from the chosen category
-            self.active_node = self._rng.choice(self.categories[random_category])
-            log.info(f"Randomly selected new active node from category '{random_category}'.")
+    #         # Randomly select a node from the chosen category
+    #         self.active_node = self._rng.choice(self.categories[random_category])
+    #         log.info(f"Randomly selected new active node from category '{random_category}'.")

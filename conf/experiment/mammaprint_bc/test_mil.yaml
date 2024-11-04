@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: ???
+    model_uri: mlflow-artifacts:/17/8088bebb4efb4672a60159cd2dbda91d/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -32,11 +32,9 @@ datamodule:
 
 metadata:
   experiment_name: mammaprint
-  run_name: VGG16 test whole slide images
+  run_name: MIL prostate test whole slide images
   description: |
-    Luminal binary classification.
+    prostate binary classification.
   hyperparameters:
     num_workers: 8
     batch_size: 40
-
-mlflow-artifacts:/17/3aaf24a1ed194fd4b6c3d124b476149c/artifacts/dataset
