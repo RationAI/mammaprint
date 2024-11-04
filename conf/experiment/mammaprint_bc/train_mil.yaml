@@ -43,13 +43,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 128
+        epoch_size: 160
         index_levels:
           - slide_name
       label: "class_id"
     valid:
       sampler:
-        epoch_size: 32
+        epoch_size: 40
         index_levels:
           - slide_name
       label: "class_id"
@@ -57,15 +57,15 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 15
-      batch_size: 16
+      batch_size: 32
     valid:
       num_workers: 15
-      batch_size: 16
+      batch_size: 32
 
 ml:
   optimizer:
     lr: 1e-4
-    weight_decay: 5e-05
+    weight_decay: 5e-04
   lr_scheduler:
     monitor: valid/loss
     scheduler:
