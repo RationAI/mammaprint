@@ -47,13 +47,13 @@ datamodule:
         epoch_size: 128
         index_levels:
           - slide_name
-      label: "class_id"
+      label: "luminal_id"
     valid:
       sampler:
         epoch_size: 32
         index_levels:
           - slide_name
-      label: "class_id"
+      label: "luminal_id"
 
   dataloaders_kwargs:
     train:
