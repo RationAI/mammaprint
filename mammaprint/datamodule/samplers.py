@@ -378,20 +378,71 @@ class MILRandomTreeSampler(TreeSampler):
         return samples
 
     def next(self) -> None:
-            """Sets next leaf as an active node."""
-            if self.active_node is None:
-                raise StopIteration
-            else:
-                self.active_node = self.active_node.next
-
-    # def next(self) -> None:
-    #     """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
-    #     if self.active_node is None:
-    #         raise StopIteration("Reached the end of available nodes.")
-    #     else:
-    #         # Randomly select a category
-    #         random_category = self._rng.choice(list(self.categories.keys()))
+        """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
+        if self.active_node is None:
+            raise StopIteration("Reached the end of available nodes.")
+        else:
+            # Randomly select a category
+            random_category = self._rng.choice(list(self.categories.keys()))
             
-    #         # Randomly select a node from the chosen category
-    #         self.active_node = self._rng.choice(self.categories[random_category])
-    #         log.info(f"Randomly selected new active node from category '{random_category}'.")
+            # Randomly select a node from the chosen category
+            self.active_node = self._rng.choice(self.categories[random_category])
+            log.info(f"Randomly selected new active node from category '{random_category}'.")
+
+
+class MILSequentialTreeSampler(TreeSampler):
+    """SequentialSampler traverses all leaves once and returns their data content.
+
+    Supports multi-level sampling by including 'index_level'.
+
+    The algorithm starts at the left-most leaf and returns its entire
+    content. The SequentialTreeSampler moves to the next leaf when the
+    ``next()`` function is called.
+
+    Attributes:
+        active_node (Node): A pointer to current leaf node.
+        advance_to_next (bool): Boolean value deciding whether to advance to the next
+            node when generating samples.
+    """
+
+    active_node: Node
+    advance_to_next: bool
+
+    def __init__(self, index_levels: list[str], advance_to_next: bool) -> None:
+        super().__init__(index_levels=index_levels)
+        self.advance_to_next = advance_to_next
+
+    def build_inner_structure(self, data_source: BaseDataSource) -> None:
+        """Builds the sampling tree and sets the active node to the left-most leaf.
+
+        Args:
+            data_source (BaseDataSource): Data source.
+        """
+        super().build_inner_structure(data_source)
+        self.active_node = self.sampling_tree.leftmost_leaf
+
+    def get_sample(self) -> list[dict] | None:
+        """Returns the content of currently active SamplerTree node.
+
+        Returns:
+            list[dict] | None: List of sampled entries.
+        """
+        res = None if self.active_node is None else self.active_node.data
+
+        if len(res) > 2000:
+            # Sample exactly tiles_per_bag tiles without replacement
+            res = res.sample(n=2000, replace=False)
+ 
+        if self.advance_to_next:
+           self.next()
+           log.debug("Sampler advanced to next node...")
+
+        res = res.to_dict("records")
+        return res
+
+    def next(self) -> None:
+        """Sets next leaf as an active node."""
+        if self.active_node is None:
+            raise StopIteration
+        else:
+            self.active_node = self.active_node.next
