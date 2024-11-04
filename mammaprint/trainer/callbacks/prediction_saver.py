@@ -23,7 +23,7 @@ logger = logging.getLogger("callbacks/prediction_saver")
 class ParquetPredictionSaver(DataloaderAgnosticCallback):
     writer: ParquetWriter
     writer2: ParquetWriter
-    min_tiles_per_slide: int = 3000  # Minimum number of tiles per slide
+    min_tiles_per_slide: int = 2000  # Minimum number of tiles per slide
 
     def __init__(self, save_dir: str) -> None:
         super().__init__()
