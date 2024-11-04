@@ -28,7 +28,7 @@ datamodule:
       label: "is_cancer"
   dataloaders_kwargs:
     test:
-      num_workers: 8
+      num_workers: 1
       batch_size: 4
 
 metadata:
@@ -37,5 +37,5 @@ metadata:
   description: |
     prostate binary classification.
   hyperparameters:
-    num_workers: 8
+    num_workers: 1
     batch_size: 4
