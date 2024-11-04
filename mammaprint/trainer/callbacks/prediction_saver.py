@@ -130,6 +130,14 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         # Debug print statement to verify data type consistency
         print("Data type of model_output_processed:", type(model_output_processed[0][0]))
         
+        # Extract mammaprint_value and ensure it is not a tensor
+        mammaprint_value = metadata["mammaprint_value"]
+
+        if isinstance(mammaprint_value, torch.Tensor):
+            # Convert tensor to a list or float
+            mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
+
+        # Proceed with pyarrow conversion after ensuring it’s not a tensor
         batch = pa.record_batch(
             [
                 pa.array(metadata["slide_name"]),
@@ -137,10 +145,11 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 pa.array(metadata["coord_y"], pa.int64()),
                 pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
                 pa.array(metadata["class_id"], pa.int64()),
-                pa.array(metadata["mammaprint_value"], pa.float32()),
+                pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
+
         self.writer.write(batch)
         
         # If the slide has reached its final batch, add padding if necessary
