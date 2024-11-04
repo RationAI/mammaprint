@@ -56,11 +56,11 @@ datamodule:
 
   dataloaders_kwargs:
     train:
-      num_workers: 12
-      batch_size: 12
+      num_workers: 15
+      batch_size: 16
     valid:
-      num_workers: 12
-      batch_size: 12
+      num_workers: 15
+      batch_size: 16
 
 ml:
   optimizer:
