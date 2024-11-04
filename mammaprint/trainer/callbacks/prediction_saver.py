@@ -55,8 +55,8 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("luminal_id", pa.int64()),
-                ("mammaprint", pa.float32()),
+                ("luminal_id", pa.float64()),
+                ("mammaprint", pa.float64()),
             ]
         )
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
