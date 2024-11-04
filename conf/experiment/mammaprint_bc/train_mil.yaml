@@ -80,12 +80,12 @@ trainer:
     log_model: all
   callbacks:
     early_stopping:
-      monitor: valid/binary_auroc
-      mode: max
+      monitor: valid/loss
+      mode: min
       patience: 5
     log_best_model:
-      monitor: valid/binary_auroc
-      mode: max
+      monitor: valid/loss
+      mode: min
       filename: MIL_binary_best
 
 
