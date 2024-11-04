@@ -436,11 +436,11 @@ class MILSequentialTreeSampler(TreeSampler):
         if res is not None:
             samples = []
             for slide in res:
-                logging.info(f"Sampling tiles from slide {slide['slide_name'].iloc[0]}.")
+                logging.info(f"Sampling tiles from slide {slide['slide_name']}.")
                 logging.info(f"Number of tiles in slide: {len(slide)}.")
                 if len(slide) >= 2000:
                     slide = slide.sample(n=2000, replace=False).to_dict("records")
-                    logging.info(f"Sampled 2000 tiles from slide {slide['slide_name'].iloc[0]}.")
+                    logging.info(f"Sampled 2000 tiles from slide {slide['slide_name']}.")
                 samples.append(slide)
             return samples
         res.to_dict("records")
