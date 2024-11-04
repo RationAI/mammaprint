@@ -25,6 +25,7 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
+      label: "is_cancer"
   dataloaders_kwargs:
     test:
       num_workers: 8
