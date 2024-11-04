@@ -54,8 +54,12 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
     tissue_mask_path = Path(TISSUE_MASKS_PATH, slide_path.name)
     cancer_mask_path = Path(ANNOTATION_MASKS_PATH, slide_path.name)
 
-    tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
-    tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
+    # Check if both masks exist, if not, skip this slide
+    if not cancer_mask_path.exists():
+        print(f"Skipping {slide_path} as required masks are missing.")
+        tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
+    else:
+        tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
 
     return slide, tiles
 
