@@ -427,16 +427,46 @@ class MILSequentialTreeSampler(TreeSampler):
         Returns:
             list[dict] | None: List of sampled entries.
         """
+        # Initialize samples list and get data from the active node
         res = None if self.active_node is None else self.active_node.data
         samples = []
+
+        # Log details about `res`
         if res is not None:
-            if len(res) >= 2000:
-                # Sample exactly tiles_per_bag tiles without replacement
-                chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
-                samples.append(chosen_tiles)
+            logging.debug(f"`res` data type: {type(res)}")
+            
+            # If `res` is a DataFrame, log its shape and a sample of its content
+            if isinstance(res, pd.DataFrame):
+                logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
+                logging.debug(f"Sample of `res` content:\n{res.head()}")
+                
+                # Log the number of tiles in `res`
+                if len(res) >= 2000:
+                    logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
+                    
+                    # Sample 2000 tiles and log a preview of `chosen_tiles`
+                    chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
+                    logging.debug(f"Sampled tiles (first 5 entries):\n{chosen_tiles[:5]}")
+                    samples.append(chosen_tiles)
+                else:
+                    logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
+                    chosen_tiles = res.to_dict("records")
+                    logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
+                    samples.append(chosen_tiles)
+            else:
+                logging.warning(f"Unexpected type for `res`: {type(res)}; expected a DataFrame.")
+        else:
+            logging.info("`res` is None, no data available in the current node.")
+
+        # Advance to the next node if necessary
         if self.advance_to_next:
             self.next()
-            log.debug("Sampler advanced to next node...")
+            logging.debug("Sampler advanced to next node...")
+
+        # Log summary of sampling results
+        total_tiles = sum(len(tiles) for tiles in samples)
+        logging.info(f"Sampled data contains {len(samples)} entries with a total of {total_tiles} tiles.")
+        
         return samples
 
     def next(self) -> None:
