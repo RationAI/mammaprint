@@ -429,10 +429,11 @@ class MILSequentialTreeSampler(TreeSampler):
         """
         res = None if self.active_node is None else self.active_node.data
         samples = []
-        if len(res) >= 2000:
-            # Sample exactly tiles_per_bag tiles without replacement
-            chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
-            samples.append(chosen_tiles)
+        if res is not None:
+            if len(res) >= 2000:
+                # Sample exactly tiles_per_bag tiles without replacement
+                chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
+                samples.append(chosen_tiles)
         if self.advance_to_next:
             self.next()
             log.debug("Sampler advanced to next node...")
