@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/940a9b94ad91467396c6b048eac10bbf/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/0d49cb159c20403896bede5e48cd63eb/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -39,3 +39,4 @@ metadata:
   hyperparameters:
     num_workers: 15
     batch_size: 16
+   

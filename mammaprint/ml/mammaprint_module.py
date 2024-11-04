@@ -84,12 +84,12 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         x, y, metadata = batch
         y_pred = self(x)
 
-        #   if "slide_name" in metadata[0]:
-        #     slide_name = metadata[0]["slide_name"][0]
+        if "slide_name" in metadata[0]:
+            slide_name = metadata[0]["slide_name"][0]
 
         # Update and log metrics
-        if "slide_name" in metadata:
-            slide_name = metadata["slide_name"][0]
+        # if "slide_name" in metadata:
+        #     slide_name = metadata["slide_name"][0]
         else:
             slide_name = dataloader_idx
         self.metrics.update("test", y_pred, y, slide_name)
