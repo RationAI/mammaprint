@@ -433,25 +433,25 @@ class MILSequentialTreeSampler(TreeSampler):
 
         # Log details about `res`
         if res is not None:
-            logging.debug(f"`res` data type: {type(res)}")
+            # logging.debug(f"`res` data type: {type(res)}")
             
             # If `res` is a DataFrame, log its shape and a sample of its content
             if isinstance(res, pandas.DataFrame):
                 logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
-                logging.debug(f"Sample of `res` content:\n{res.head()}")
+                # logging.debug(f"Sample of `res` content:\n{res.head()}")
                 
                 # Log the number of tiles in `res`
                 if len(res) >= 2000:
-                    logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
+                    # logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
                     
                     # Sample 2000 tiles and log a preview of `chosen_tiles`
                     chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
-                    logging.debug(f"Sampled tiles (first 5 entries):\n{chosen_tiles[:5]}")
+                    # logging.debug(f"Sampled tiles (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
                 else:
-                    logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
+                    # logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
                     chosen_tiles = res.to_dict("records")
-                    logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
+                    # logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
             else:
                 logging.warning(f"Unexpected type for `res`: {type(res)}; expected a DataFrame.")
