@@ -56,11 +56,11 @@ datamodule:
 
   dataloaders_kwargs:
     train:
-      num_workers: 8
-      batch_size: 8
+      num_workers: 12
+      batch_size: 32
     valid:
-      num_workers: 8
-      batch_size: 8
+      num_workers: 12
+      batch_size: 32
 
 ml:
   net:
@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 training level 0 luminal-type classification, tile size 1024x1024
+  run_name: VGG16 luminal-type classification, after TC segmentation
   description: |
     Luminal binary classification.
   hyperparameters:
