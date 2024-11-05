@@ -56,7 +56,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
 
     # Check if both masks exist, if not, skip this slide
     if not cancer_mask_path.exists():
-        print(f"Skipping {slide_path} as required masks are missing.")
+        # print(f"Skipping {slide_path} as required masks are missing.")
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
         tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
@@ -66,28 +66,36 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
 
 def main() -> None:
     slides, test_slides = train_test_split(
-        list(Path(SLIDES_PATH).rglob("*.tiff")), test_size=0.2
+        list(Path(SLIDES_PATH).rglob("*.tiff")), test_size=1
     )
-    train_slides, val_slides = train_test_split(slides, test_size=0.1)
+    # train_slides, val_slides = train_test_split(slides, test_size=0.1)
 
-    train_slides_df, train_tiles_df = tiling(slides=train_slides, handler=handler)
-    val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
+    # train_slides_df, train_tiles_df = tiling(slides=train_slides, handler=handler)
+    # val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
     test_slides_df, test_tiles_df = tiling(slides=list(test_slides), handler=handler)
+    
+    mlflow_uri = 'http://mlflow.rationai-mlflow:5000/'  # MLflow URI
+    description = 'Tiling mammaprint train dataset'
+    experiment_name = 'Mamma-print'
+    experiment = mlflow.set_experiment(experiment_name)
+    user = 'rainoch'
 
-    mlflow.set_experiment(experiment_name="Mamma-print")
-    with mlflow.start_run(run_name="Luminal-type Dataset") as _:
-        save_mlflow_dataset(
-            slides=train_slides_df,
-            tiles=train_tiles_df,
-            dataset_name="Luminal-type - train",
-        )
-        save_mlflow_dataset(
-            slides=val_slides_df, tiles=val_tiles_df, dataset_name="Luminal-type - val"
-        )
+    mlflow.set_tracking_uri(mlflow_uri)
+
+    with mlflow.start_run(run_name="mammaprint", experiment_id=experiment.experiment_id, description=description) as _:
+        mlflow.set_tag('mlflow.user', user)
+        # save_mlflow_dataset(
+        #     slides=train_slides_df,
+        #     tiles=train_tiles_df,
+        #     dataset_name="mammaprint",
+        # )
+        # save_mlflow_dataset(
+        #     slides=val_slides_df, tiles=val_tiles_df, dataset_name="mammaprint"
+        # )
         save_mlflow_dataset(
             slides=test_slides_df,
             tiles=test_tiles_df,
-            dataset_name="Luminal-type - test",
+            dataset_name="mammaprint",
         )
 
 
