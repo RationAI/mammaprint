@@ -11,9 +11,9 @@ from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
 
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff/"
-TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/test_heatmaps/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
+TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
 
 @dataclass
 class CancerTileMetadata(TileMetadata):
@@ -74,7 +74,7 @@ def main() -> None:
     test_slides_df, test_tiles_df = tiling(slides=test_slides, handler=handler)
     
     mlflow.set_experiment(experiment_name="Mamma-print")
-    with mlflow.start_run(run_name="Tiling mammaprint test dataset from tissue classification model") as _:
+    with mlflow.start_run(run_name="Tiling mammaprint train dataset from tissue classification model") as _:
         # save_mlflow_dataset(
         #     slides=train_slides_df,
         #     tiles=train_tiles_df,
@@ -86,7 +86,7 @@ def main() -> None:
         save_mlflow_dataset(
             slides=test_slides_df,
             tiles=test_tiles_df,
-            dataset_name="tissue_classification_tumor_tiles",
+            dataset_name="train_tissue_classification_tumor_tiles",
         )
 
 
