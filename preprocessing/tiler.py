@@ -7,7 +7,8 @@ import pyarrow as pa
 import mlflow
 from tqdm import tqdm
 
-Image.MAX_IMAGE_PIXELS = None  # Handle very large images
+# Allow processing of very large images
+Image.MAX_IMAGE_PIXELS = None  
 
 def calculate_annot_coverage(mask_tile, center_size):
     """Calculate the annotation coverage for the central region of a given tile."""
@@ -18,10 +19,7 @@ def calculate_annot_coverage(mask_tile, center_size):
     center_tile = mask_tile[center_y - half_center_size:center_y + half_center_size, 
                             center_x - half_center_size:center_x + half_center_size]
     
-    if np.sum(center_tile) == 0:
-        return 0.0
-    else:
-        return np.mean(center_tile > 0)
+    return np.mean(center_tile > 0)
 
 def calculate_tissue_coverage(tile, min_tissue=0.5, max_tissue=1.0):
     """Calculate the tissue coverage for a tile and filter based on min and max thresholds."""
@@ -30,19 +28,28 @@ def calculate_tissue_coverage(tile, min_tissue=0.5, max_tissue=1.0):
 
 def process_single_tile(mask_array, x, y, tile_size, slide_name, global_x, global_y, center_size, scale_factor=2.0, min_tissue=0.5, max_tissue=1.0, min_annot_coverage=0.5):
     """Process a single tile and return its global coordinates and annotation coverage."""
+    # Adjust coordinates and tile size to match the original slide's scale
+    scaled_x = int(x / scale_factor)
+    scaled_y = int(y / scale_factor)
+    scaled_tile_size = int(tile_size / scale_factor)
+    
+    # Extract the corresponding tile from the mask
     mask_tile = mask_array[y:y + tile_size, x:x + tile_size]
     
+    # Skip tile if tissue coverage doesn't meet requirements
     if not calculate_tissue_coverage(mask_tile, min_tissue, max_tissue):
         print(f"Tile at (x, y): ({x}, {y}) excluded due to tissue coverage.")
         return None
     
+    # Calculate annotation coverage
     annot_coverage = calculate_annot_coverage(mask_tile, center_size)
     if annot_coverage < min_annot_coverage:
         print(f"Tile at (x, y): ({x}, {y}) excluded due to low annotation coverage ({annot_coverage}).")
         return None
     
-    global_coord_x = int((global_x + x) * scale_factor)
-    global_coord_y = int((global_y + y) * scale_factor)
+    # Compute global coordinates in the slide space
+    global_coord_x = global_x + scaled_x
+    global_coord_y = global_y + scaled_y
     
     print(f"Processing tile at (x, y): ({x}, {y}), Global coordinates: ({global_coord_x}, {global_coord_y}), Scale factor: {scale_factor}")
     
@@ -63,10 +70,13 @@ def process_mask_and_save(mask_path, slide_name, tile_size=512, step_size=256, c
         print(f"Error processing {mask_path}: {e}")
         return []
 
+    # Calculate step size in mask coordinates
+    adjusted_step_size = int(step_size * scale_factor)
+    
     coordinates = [
         (x, y)
-        for y in range(0, mask_array.shape[0], step_size)
-        for x in range(0, mask_array.shape[1], step_size)
+        for y in range(0, mask_array.shape[0], adjusted_step_size)
+        for x in range(0, mask_array.shape[1], adjusted_step_size)
     ]
 
     tile_data = []
@@ -78,58 +88,79 @@ def process_mask_and_save(mask_path, slide_name, tile_size=512, step_size=256, c
     return tile_data
 
 def create_parquet_from_selected_masks(mask_dir, slide_dir, output_path, tile_size=512, step_size=256, center_size=256, mask_level=0, global_x=0, global_y=0, scale_factor=2.0, min_tissue=0.5, max_tissue=1.0, min_annot_coverage=0.5):
-    """Generate a Parquet file from mask files that have corresponding slides in the slide directory."""
+    """
+    Process only the first mask file that has a corresponding slide in the slide directory,
+    save the resulting tile data to a Parquet file, and return the path to the Parquet file.
+    """
     mask_files = [f for f in os.listdir(mask_dir) if f.endswith(('.tiff', '.tif'))]
     if not mask_files:
         print("No mask files found in the directory.")
-        return
+        return None
 
-    all_tile_data = []
-
-    for mask_file in tqdm(mask_files, desc="Processing masks"):
-        slide_name = os.path.splitext(mask_file)[0]
+    for mask_file in mask_files:  # Loop through mask files
+        slide_name = os.path.splitext(mask_file)[0]  # Remove extension for slide name
         slide_path = os.path.join(slide_dir, slide_name + '.mrxs')  # Assuming slides have .mrxs extension
 
-        if not os.path.exists(slide_path):
+        # Check if corresponding slide exists
+        if os.path.exists(slide_path):
+            mask_path = os.path.join(mask_dir, mask_file)
+            print(f"Processing mask: {mask_path} and corresponding slide: {slide_path}")
+            
+            # Process mask and save data
+            tile_data = process_mask_and_save(
+                mask_path, slide_name, tile_size, step_size, center_size, mask_level, 
+                global_x, global_y, scale_factor, min_tissue, max_tissue, min_annot_coverage
+            )
+
+            if tile_data:
+                df = pd.DataFrame(tile_data)
+                # Save DataFrame to Parquet
+                table = pa.Table.from_pandas(df)
+                pq.write_table(table, output_path)
+                print(f"Parquet file saved to {output_path}")
+                return output_path  # Return after processing the first matching pair
+            else:
+                print("No data was processed for the selected mask file.")
+                return None
+        else:
             print(f"Skipping {mask_file} because corresponding slide {slide_path} does not exist.")
-            continue
 
-        mask_path = os.path.join(mask_dir, mask_file)
-
-        print(f"Processing mask: {mask_path}")
-        tile_data = process_mask_and_save(mask_path, slide_name, tile_size, step_size, center_size, mask_level, global_x, global_y, scale_factor, min_tissue, max_tissue, min_annot_coverage)
-
-        if tile_data:
-            all_tile_data.extend(tile_data)
-
-    # Convert the collected data to a DataFrame and write it to Parquet
-    if all_tile_data:
-        df = pd.DataFrame(all_tile_data)
-        table = pa.Table.from_pandas(df)
-        pq.write_table(table, output_path)
-        print(f"Parquet file saved to {output_path}")
-    else:
-        print("No data was processed and saved.")
+    print("No matching mask-slide pair found.")
+    return None
 
 def main():
+    # Define directories and MLflow parameters
     mask_directory = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/test_heatmaps"
     slide_directory = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint/"
     output_parquet = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/output_tiles.parquet"
+    
     mlflow_uri = "http://mlflow.rationai-mlflow:5000/"
     experiment_name = "Mamma-print"
     run_name = "mammaprint test set - Tissue classification tiling"
     description = "Tiling for mammaprint, coverage 0.5"
 
-    scale_factor = 2.0  # Apply this scale factor to match the original Parquet file
+    scale_factor = 2.0  # Use scale factor of 2 to adjust from mask to slide coordinates
 
+    # Set up MLflow
     mlflow.set_tracking_uri(mlflow_uri)
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name=run_name, description=description):
-        create_parquet_from_selected_masks(mask_directory, slide_directory, output_parquet, scale_factor=scale_factor)
+        # Process masks and get the path to the Parquet file
+        parquet_path = create_parquet_from_selected_masks(
+            mask_directory, slide_directory, output_parquet, 
+            tile_size=512, step_size=256, center_size=256, 
+            mask_level=0, global_x=0, global_y=0, 
+            scale_factor=scale_factor, min_tissue=0.5, 
+            max_tissue=1.0, min_annot_coverage=0.5
+        )
 
-        mlflow.log_artifact(output_parquet)
-        print(f"Parquet file logged to MLflow: {output_parquet}")
+        if parquet_path:
+            # Log the Parquet file as an artifact to MLflow
+            mlflow.log_artifact(parquet_path)
+            print(f"Parquet file logged to MLflow: {parquet_path}")
+        else:
+            print("No Parquet file was created to log to MLflow.")
 
 if __name__ == "__main__":
     main()
