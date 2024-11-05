@@ -74,7 +74,7 @@ def main() -> None:
     # val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
     test_slides_df, test_tiles_df = tiling(slides=list(test_slides), handler=handler)
     
-    mlflow_uri = 'http://mlflow.rationai-mlflow:5000/'  # MLflow URI
+    mlflow_uri = 'https://mlflow.rationai.cloud.trusted.e-infra.cz/'  # MLflow URI
     description = 'Tiling mammaprint train dataset'
     experiment_name = 'Mamma-print'
     experiment = mlflow.set_experiment(experiment_name)
