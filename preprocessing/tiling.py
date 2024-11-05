@@ -76,13 +76,11 @@ def main() -> None:
     
     mlflow_uri = 'https://mlflow.rationai.cloud.trusted.e-infra.cz/'  # MLflow URI
     description = 'Tiling mammaprint train dataset'
-    experiment_name = 'Mamma-print'
-    experiment = mlflow.set_experiment(experiment_name)
     user = 'rainoch'
 
     mlflow.set_tracking_uri(mlflow_uri)
 
-    with mlflow.start_run(run_name="mammaprint", experiment_id=experiment.experiment_id, description=description) as _:
+    with mlflow.start_run(run_name="mammaprint", experiment_id=17, description=description):
         mlflow.set_tag('mlflow.user', user)
         # save_mlflow_dataset(
         #     slides=train_slides_df,
