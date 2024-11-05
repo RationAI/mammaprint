@@ -29,22 +29,22 @@ class TissueMask(PyvipsMask[TileMetadata]):
         return tile_labels
 
 
-class CancerMask(PyvipsMask[CancerTileMetadata]):
-    def forward_tile(
-        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
-    ) -> CancerTileMetadata:
-        return CancerTileMetadata(
-            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
-        )
+# class CancerMask(PyvipsMask[CancerTileMetadata]):
+#     def forward_tile(
+#         self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+#     ) -> CancerTileMetadata:
+#         return CancerTileMetadata(
+#             **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
+#         )
 
 
 source = OpenSlideTileSource(mpp=0.48, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
-cancer_mask = CancerMask(
-    tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
-)
+# cancer_mask = CancerMask(
+#     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
+# )
 
 
 @ray.remote
@@ -59,23 +59,22 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
         # print(f"Skipping {slide_path} as required masks are missing.")
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
-        tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
+        tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
 
     return slide, tiles
 
 
 def main() -> None:
-    slides, test_slides = train_test_split(
-        list(Path(SLIDES_PATH).rglob("*.tiff")), test_size=1
-    )
+    test_slides = list(Path(SLIDES_PATH).rglob("*.tiff"))
+
     # train_slides, val_slides = train_test_split(slides, test_size=0.1)
 
     # train_slides_df, train_tiles_df = tiling(slides=train_slides, handler=handler)
     # val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
-    test_slides_df, test_tiles_df = tiling(slides=list(test_slides), handler=handler)
+    test_slides_df, test_tiles_df = tiling(slides=test_slides, handler=handler)
     
     mlflow.set_experiment(experiment_name="Mamma-print")
-    with mlflow.start_run(run_name="Tiling mammaprint train dataset") as _:
+    with mlflow.start_run(run_name="Tiling mammaprint test dataset from tissue classification model") as _:
         # save_mlflow_dataset(
         #     slides=train_slides_df,
         #     tiles=train_tiles_df,
@@ -87,7 +86,7 @@ def main() -> None:
         save_mlflow_dataset(
             slides=test_slides_df,
             tiles=test_tiles_df,
-            dataset_name="mammaprint",
+            dataset_name="tissue_classification_tumor_tiles",
         )
 
 
