@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/0d49cb159c20403896bede5e48cd63eb/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/d79edc51a0334507aa4c35bb08d6205d/artifacts/model/MLFlowModelCheckpoint/last
 
 datamodule:
   datasets:
@@ -25,7 +25,7 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
   dataloaders_kwargs:
     test:
       num_workers: 15
@@ -33,9 +33,9 @@ datamodule:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL prostate test whole slide images
+  run_name: MIL luminal test whole slide images
   description: |
-    prostate binary classification.
+    Luminal binary classification.
   hyperparameters:
     num_workers: 15
     batch_size: 16
