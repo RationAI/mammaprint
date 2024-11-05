@@ -74,14 +74,8 @@ def main() -> None:
     # val_slides_df, val_tiles_df = tiling(slides=list(val_slides), handler=handler)
     test_slides_df, test_tiles_df = tiling(slides=list(test_slides), handler=handler)
     
-    mlflow_uri = 'https://mlflow.rationai.cloud.trusted.e-infra.cz/'  # MLflow URI
-    description = 'Tiling mammaprint train dataset'
-    user = 'rainoch'
-
-    mlflow.set_tracking_uri(mlflow_uri)
-
-    with mlflow.start_run(run_name="mammaprint", experiment_id=17, description=description):
-        mlflow.set_tag('mlflow.user', user)
+    mlflow.set_experiment(experiment_name="Mamma-print")
+    with mlflow.start_run(run_name="Tiling mammaprint train dataset") as _:
         # save_mlflow_dataset(
         #     slides=train_slides_df,
         #     tiles=train_tiles_df,
