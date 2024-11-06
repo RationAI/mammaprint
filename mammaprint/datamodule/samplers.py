@@ -329,7 +329,7 @@ class MILRandomTreeSampler(TreeSampler):
     categories: dict[object, Node]
     sample_index: int = 0
     
-    def __init__(self, index_levels: list[str], seed: int, epoch_size: int, label_column: str = "is_cancer",):
+    def __init__(self, index_levels: list[str], seed: int, epoch_size: int, label_column: str = "luminal_id",):
         super().__init__(index_levels)
         self.seed = seed
         self._rng = np.random.default_rng(seed)

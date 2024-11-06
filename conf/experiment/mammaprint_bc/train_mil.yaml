@@ -34,10 +34,10 @@ datamodule:
       data_uris:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
       # Prostate dataset
-      - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
-      - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
-      # - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset
-      # - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset
+#      - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
+#      - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
+       - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset
+       - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -48,21 +48,21 @@ datamodule:
         epoch_size: 128
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
     valid:
       sampler:
         epoch_size: 32
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
 
   dataloaders_kwargs:
     train:
       num_workers: 15
-      batch_size: 16
+      batch_size: 32
     valid:
       num_workers: 15
-      batch_size: 16
+      batch_size: 32
 
 ml:
   optimizer:
