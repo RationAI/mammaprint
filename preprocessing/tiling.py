@@ -70,7 +70,6 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
 
 # Load labels data from CSV file using pandas, then convert to Polars
-LABELS_FILE = 'Learning_set.csv'
 labels_df_pandas = pd.read_csv(LABELS_FILE, sep=';')
 labels_df = pl.from_pandas(labels_df_pandas)
 # Ensure 'luminal_id' is Int64 and 'mammaprint' is Float32
