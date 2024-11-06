@@ -33,6 +33,7 @@ class PipelineTileMetadata:
     coord_x: int
     coord_y: int
     class_id: int
+    cancer_percentage: float
 
 @dataclass
 class PipelineSlideMetadata(SlideMetadata):
@@ -127,7 +128,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
         luminal_id=slide_label,
         slide_name=slide_name,
         slide_fp=slide.path,
-        sample_level=1,
+        sample_level=0,
         tile_size=slide.tile_extent_x,
     )
     logging.info(f"Slide metadata: {slide_metadata}")
@@ -157,6 +158,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
             coord_x=t.x,
             coord_y=t.y,
             class_id=slide_label,
+            cancer_percentage=t.cancer_percentage,
         )
         for t in tiles
     ]
