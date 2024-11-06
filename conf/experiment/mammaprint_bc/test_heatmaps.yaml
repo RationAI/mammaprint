@@ -2,7 +2,6 @@
 defaults:
   - /experiment/mammaprint_bc: test
   - /trainer/callbacks:
-    - slide_predictor
     - heatmap_visualizer
   - _self_
 
