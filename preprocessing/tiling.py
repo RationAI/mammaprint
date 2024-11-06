@@ -33,6 +33,7 @@ class PipelineTileMetadata(TileMetadata):
     coord_x: int
     coord_y: int
     class_id: int
+    cancer_percentage: float
 
 @dataclass
 class PipelineSlideMetadata(SlideMetadata):
@@ -145,8 +146,8 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     if not cancer_mask_path.exists():
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
-        tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
         tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
+        tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
     logging.info(f"Number of tiles after masking: {len(tiles)}")
     logging.info("Finished applying tissue mask")
 
