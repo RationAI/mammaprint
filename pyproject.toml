@@ -14,6 +14,7 @@ dependencies = [
     "pandas>=2.2.2",
     "torch>=2.2.2",
     "tqdm>=4.66.5",
+    "polars>=0.19.0",  # Added polars with a minimum version of 0.19.0
     "rationai-mlkit @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/mlkit.git",
     "rationai-masks @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/masks.git",
     "rationai-tiling @ git+https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/tiling.git",
