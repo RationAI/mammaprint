@@ -25,6 +25,9 @@ TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_ti
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
 
 @dataclass
+class CancerTileMetadata(TileMetadata):
+    cancer_percentage: float
+
 class PipelineTileMetadata:
     slide_name: str
     coord_x: int
@@ -50,9 +53,20 @@ class TissueMask(PyvipsMask[TileMetadata]):
             return None
         return tile_labels
 
+class CancerMask(PyvipsMask[CancerTileMetadata]):
+    def forward_tile(
+        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+    ) -> CancerTileMetadata:
+        return CancerTileMetadata(
+            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
+        )
+
 # Initialize tile source and mask
 source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
+    tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
+)
+cancer_mask = CancerMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
 
@@ -131,6 +145,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     if not cancer_mask_path.exists():
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
+        tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
         tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
     logging.info(f"Number of tiles after masking: {len(tiles)}")
     logging.info("Finished applying tissue mask")
