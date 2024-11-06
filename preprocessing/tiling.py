@@ -63,6 +63,12 @@ tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
 
+# Determine the directory where this script resides
+SCRIPT_DIR = Path(__file__).parent.resolve()
+
+# Define the path to Learning_set.csv relative to the script's directory
+LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
+
 # Load labels data from CSV file using pandas, then convert to Polars
 LABELS_FILE = 'Learning_set.csv'
 labels_df_pandas = pd.read_csv(LABELS_FILE, sep=';')
