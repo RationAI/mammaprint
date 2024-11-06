@@ -38,7 +38,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         self.register_metric_dict("metrics", metrics)
 
     def forward(self, x):
-        x = self.model(x)
+        x, y = self.model(x)
         x = self.output_activation(x)
         return x
 
