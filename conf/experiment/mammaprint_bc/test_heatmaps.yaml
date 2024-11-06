@@ -20,7 +20,7 @@ datamodule:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/164d674c95994dc7ba426e8904730bfe/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
+    model_uri: mlflow-artifacts:/17/d7fc2c8ff3c74cfea7cc0fd489bd52c1/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
 
 trainer:
   callbacks:
