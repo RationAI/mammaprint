@@ -51,7 +51,7 @@ class TissueMask(PyvipsMask[TileMetadata]):
         return tile_labels
 
 # Initialize tile source and mask
-source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
+source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
@@ -113,7 +113,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
         luminal_id=slide_label,
         slide_name=slide_name,
         slide_fp=slide.path,
-        sample_level=0,
+        sample_level=1,
         tile_size=slide.tile_extent_x,
     )
     logging.info(f"Slide metadata: {slide_metadata}")
