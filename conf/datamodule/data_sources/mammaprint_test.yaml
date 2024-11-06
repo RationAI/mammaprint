@@ -2,6 +2,6 @@ mammaprint_test:
   _target_: mammaprint.datamodule.datasources.WSIDataSource
   seed: ${seed}
   data_uris: 
-    - mlflow-artifacts:/17/fa48e1cf57034ef697beb743837bc11e/artifacts/dataset
+    - mlflow-artifacts:/17/a4b1a67f4da4400b821826e899486a5c/artifacts/train_tissue_classification_tumor_tiles #level1
   splits:
     test: 1.0
