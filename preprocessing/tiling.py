@@ -28,12 +28,11 @@ ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_c
 class CancerTileMetadata(TileMetadata):
     cancer_percentage: float
 
-class PipelineTileMetadata:
+class PipelineTileMetadata(TileMetadata):
     slide_name: str
     coord_x: int
     coord_y: int
     class_id: int
-    cancer_percentage: float
 
 @dataclass
 class PipelineSlideMetadata(SlideMetadata):
