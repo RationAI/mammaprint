@@ -8,6 +8,8 @@ import lightning
 import torch
 import torchmetrics
 
+import numpy as np
+
 from mammaprint.ml.metrics import MetricDictionary
 
 
@@ -42,7 +44,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
@@ -60,7 +62,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
@@ -82,7 +84,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
     @torch.inference_mode()
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, metadata = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
 
         if "slide_name" in metadata[0]:
             slide_name = metadata[0]["slide_name"][0]
@@ -91,17 +93,32 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         #     slide_name = metadata["slide_name"][0]
         else:
             slide_name = dataloader_idx
+
+        # Process attention weights here
+        attention_weights_flat = attention_weights.view(-1).detach().cpu().numpy()
+        coord_x = np.concatenate([md['coord_x'] for md in metadata])
+        coord_y = np.concatenate([md['coord_y'] for md in metadata])
+        attention_data = {
+            'weights': attention_weights_flat,
+            'coord_x': coord_x,
+            'coord_y': coord_y
+        }
         self.metrics.update("test", y_pred, y, slide_name)
         self.log_dict(self.metrics.get("test", slide_name), add_dataloader_idx=False)
 
-        return {"metrics": self.metrics.compute("test", slide_name), "outputs": y_pred}
+        return {
+            "metrics": self.metrics.compute("test", slide_name),
+            "outputs": y_pred,
+            "attention_data": attention_data,
+            "metadata": metadata,
+        }
 
     def on_test_epoch_end(self):
         self.log_dict(self.metrics.get("test"))
 
     def predict_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, _ = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
         return {"outputs": y_pred}
 
     def configure_optimizers(self):
