@@ -117,6 +117,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
         tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
+    print(f"{len(tiles)=}")
     print("Finished tissue mask")
 
     tiles = [
