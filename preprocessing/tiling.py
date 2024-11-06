@@ -11,15 +11,18 @@ from rationai.tiling.modules.tile_sources import OpenSlideTileSource
 from rationai.tiling.typing import TiledSlideMetadata, TileMetadata, SlideMetadata
 from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
+import logging
 
+# Configure logging for better visibility
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
+# Define paths
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
-
-# @dataclass
-# class CancerTileMetadata(TileMetadata):
-#     cancer_percentage: float
 
 @dataclass
 class PipelineTileMetadata:
@@ -39,7 +42,6 @@ class PipelineSlideMetadata(SlideMetadata):
     path: str
     level: int
 
-
 class TissueMask(PyvipsMask[TileMetadata]):
     def forward_tile(
         self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
@@ -48,16 +50,7 @@ class TissueMask(PyvipsMask[TileMetadata]):
             return None
         return tile_labels
 
-
-# class CancerMask(PyvipsMask[CancerTileMetadata]):
-#     def forward_tile(
-#         self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
-#     ) -> CancerTileMetadata:
-#         return CancerTileMetadata(
-#             **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
-#         )
-
-
+# Initialize tile source and mask
 source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
@@ -69,37 +62,53 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 # Define the path to Learning_set.csv relative to the script's directory
 LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
 
+# Verify if LABELS_FILE exists
+if not LABELS_FILE.exists():
+    logging.error(f"Labels file not found at {LABELS_FILE}. Please ensure the file exists.")
+    raise FileNotFoundError(f"Labels file not found at {LABELS_FILE}")
+
 # Load labels data from CSV file using pandas, then convert to Polars
 labels_df_pandas = pd.read_csv(LABELS_FILE, sep=';')
 labels_df = pl.from_pandas(labels_df_pandas)
+
 # Ensure 'luminal_id' is Int64 and 'mammaprint' is Float32
 labels_df = labels_df.with_columns([
     pl.col("luminal_id").cast(pl.Int64),
     pl.col('mammaprint').str.replace(',', '.').cast(pl.Float32)
 ])
 
-# cancer_mask = CancerMask(
-#     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
-# )
-
+# Convert labels_df to a dictionary for efficient lookup
+labels_dict = labels_df.select(['slide_name', 'luminal_id']).to_pandas().set_index('slide_name')['luminal_id'].to_dict()
 
 @ray.remote
-def handler(slide_path: Path) -> TiledSlideMetadata:
-    print(f"Processing {slide_path}")
-    slide, tiles = source(slide_path)
-    assert slide.tile_extent_x == slide.tile_extent_y, "Only square tiles!"
-    print(f"{len(tiles)=}")
+def handler(slide_path: Path) -> TiledSlideMetadata | None:
+    logging.info(f"Processing {slide_path}")
+    try:
+        slide, tiles = source(slide_path)
+    except Exception as e:
+        logging.error(f"Failed to load slide {slide_path}: {e}")
+        return None
 
-    slide_name = slide_path.stem
+    if slide.tile_extent_x != slide.tile_extent_y:
+        logging.error(f"Non-square tiles in slide {slide_path}. Skipping.")
+        return None
 
-    matching_row = labels_df.filter(pl.col('slide_name') == slide_name)
-    if matching_row.is_empty():
-        slide_label = 0  # Or any other default value indicating unlabeled
-        raise ValueError(f"No matching row found for slide {slide_name}")
-    else:
-        slide_label = matching_row['luminal_id'].item()
+    logging.info(f"Number of tiles: {len(tiles)}")
 
-    slide = PipelineSlideMetadata(
+    # Extract the slide name
+    slide_name = slide_path.stem  # Get the filename without the extension
+
+    # Efficient label lookup
+    slide_label = labels_dict.get(slide_name, None)
+
+    if slide_label is None:
+        logging.warning(f"No label found for slide {slide_name}. Assigning default label.")
+        slide_label = 0  # Assign a default value or decide to skip
+        # Optionally, skip the slide by returning None
+        # return None
+
+    # Create PipelineSlideMetadata
+    slide_metadata = PipelineSlideMetadata(
         **asdict(slide),
         luminal_id=slide_label,
         slide_name=slide_name,
@@ -107,33 +116,38 @@ def handler(slide_path: Path) -> TiledSlideMetadata:
         sample_level=0,
         tile_size=slide.tile_extent_x,
     )
-    print(f"{slide=}")
+    logging.info(f"Slide metadata: {slide_metadata}")
 
+    # Define mask paths
     tissue_mask_path = Path(TISSUE_MASKS_PATH, slide_path.name)
     cancer_mask_path = Path(ANNOTATION_MASKS_PATH, slide_path.name)
-    # Check if both masks exist, if not, skip this slide
+
+    # Validate mask paths
+    if not tissue_mask_path.exists():
+        logging.error(f"Tissue mask not found for slide {slide_name}. Skipping.")
+        return None
+
+    # Apply masks
     if not cancer_mask_path.exists():
-        # print(f"Skipping {slide_path} as required masks are missing.")
         tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
     else:
         tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
-    print(f"{len(tiles)=}")
-    print("Finished tissue mask")
+    logging.info(f"Number of tiles after masking: {len(tiles)}")
+    logging.info("Finished applying tissue mask")
 
-    tiles = [
+    # Create tile metadata without using **asdict(t)
+    tiles_metadata = [
         PipelineTileMetadata(
-            **asdict(t),
-            class_id=slide_label,
             slide_name=slide_name,
             coord_x=t.x,
             coord_y=t.y,
+            class_id=slide_label,
         )
         for t in tiles
     ]
-    print("Finished labelling")
+    logging.info("Finished labeling tiles")
 
-    return slide, tiles
-
+    return slide_metadata, tiles_metadata
 
 def main() -> None:
     all_slides = list(Path(SLIDES_PATH).rglob("*.tiff"))
@@ -142,19 +156,33 @@ def main() -> None:
 
     unlabeled_slides = [slide for slide in all_slides if slide.stem not in labeled_slides_names]
     if unlabeled_slides:
-        print(f"Found {len(unlabeled_slides)} slides without labels. They will be skipped.")
+        logging.info(f"Found {len(unlabeled_slides)} slides without labels. They will be skipped.")
 
-    # Proceed with only labeled slides
-    test_slides_df, test_tiles_df = tiling(slides=labeled_slides, handler=handler)
+    # Initialize Ray
+    ray.init(ignore_reinit_error=True)
 
-    mlflow.set_experiment(experiment_name="Mamma-print")
-    with mlflow.start_run(run_name="Tiling mammaprint train dataset from tissue classification model") as _:
-        save_mlflow_dataset(
-            slides=test_slides_df,
-            tiles=test_tiles_df,
-            dataset_name="train_tissue_classification_tumor_tiles",
-        )
+    # Process labeled slides using tiling
+    try:
+        test_slides_df, test_tiles_df = tiling(slides=labeled_slides, handler=handler)
+    except Exception as e:
+        logging.error(f"Error during tiling: {e}")
+        ray.shutdown()
+        return
 
+    # Save to MLflow
+    try:
+        mlflow.set_experiment(experiment_name="Mamma-print")
+        with mlflow.start_run(run_name="Tiling mammaprint train dataset from tissue classification model") as _:
+            save_mlflow_dataset(
+                slides=test_slides_df,
+                tiles=test_tiles_df,
+                dataset_name="train_tissue_classification_tumor_tiles",
+            )
+    except Exception as e:
+        logging.error(f"Error during MLflow logging: {e}")
+    finally:
+        # Shutdown Ray
+        ray.shutdown()
 
 if __name__ == "__main__":
     main()
