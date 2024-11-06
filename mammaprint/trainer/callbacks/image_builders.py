@@ -158,9 +158,9 @@ class DiskMappedPatchAssembler(ImageAssembler):
     ) -> None:
         filename = metadata["slide_name"]
         image_size = (
-            int(metadata["slide_width"]),
-            int(metadata["slide_height"]),
-            int(metadata["slide_channels"]),
+            int(metadata["extent_x"]),
+            int(metadata["extent_y"]),
+            4,
         )
         tile_size = int(metadata["tile_size"])
         super().__init__(
@@ -262,12 +262,15 @@ class InMemoryHeatmapAssembler(ImageAssembler):
     ) -> None:
         filename = metadata["slide_name"]
         image_size = (
-            int(metadata["slide_width"]),
-            int(metadata["slide_height"]),
-            int(metadata["slide_channels"]),
+            # int(metadata["slide_width"]),
+            # int(metadata["slide_height"]),
+            # int(metadata["slide_channels"]),
+            int(metadata["extent_x"]),
+            int(metadata["extent_y"]),
+            4,
         )
         tile_size = int(metadata["tile_size"])
-        step_size = int(metadata["step_size"])
+        step_size = int(metadata["stride_x"])
         super().__init__(
             image_size=image_size,
             tile_size=tile_size,

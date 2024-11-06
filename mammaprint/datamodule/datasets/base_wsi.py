@@ -5,7 +5,8 @@ from typing import Any
 
 import numpy as np
 import PIL
-import slidelip
+# import slidelip
+import openslide
 import torch
 from numpy.typing import NDArray
 
@@ -48,7 +49,8 @@ def extract_tile(
     Returns:
         NDArray: RGB Tile represented as numpy array.
     """
-    wsi = slidelip.open_slide(slide_path=slide_fp)
+    # wsi = slidelip.open_slide(slide_path=slide_fp)
+    wsi = openslide.OpenSlide(str(slide_fp))
     bg_tile = PIL.Image.new(mode="RGB", size=(tile_size, tile_size), color="#FFFFFF")
     im_tile = wsi.read_region(
         location=(coord_x, coord_y), level=level, size=(tile_size, tile_size)

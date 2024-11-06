@@ -2,7 +2,7 @@ mammaprint:
   _target_: mammaprint.datamodule.datasources.WSIDataSource
   seed: ${seed}
   data_uris:
-    - mlflow-artifacts:/17/170bbfd4977a4fe1839834bc5bbd9140/artifacts/dataset
+    - mlflow-artifacts:/17/fd14e11c797d49c5b6b31d90830555a1/artifacts/train_tissue_classification_tumor_tiles
   stratified_keys:
     - luminal_id
   splits:
