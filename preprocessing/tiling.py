@@ -1,215 +1,76 @@
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
 
 import mlflow
 import ray
-import pandas as pd
-import polars as pl
 from rationai.tiling import tiling
 from rationai.tiling.modules.masks import PyvipsMask
 from rationai.tiling.modules.tile_sources import OpenSlideTileSource
-from rationai.tiling.typing import TiledSlideMetadata, TileMetadata, SlideMetadata
+from rationai.tiling.typing import TiledSlideMetadata, TileMetadata
 from rationai.tiling.writers import save_mlflow_dataset
-from sklearn.model_selection import train_test_split
-import logging
 
-# Configure logging for better visibility
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-# Define paths
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
 
 @dataclass
-class PipelineTileMetadata(TileMetadata):
-    slide_name: str
-    coord_x: int
-    coord_y: int
-    class_id: int
-    cancer_percentage: Optional[float] = 0.0  # Made optional initially
+class CancerTileMetadata(TileMetadata):
+    cancer_percentage: float
 
-@dataclass
-class PipelineSlideMetadata(SlideMetadata):
-    luminal_id: int
-    slide_name: str
-    slide_fp: str
-    sample_level: int
-    tile_size: int
-    # from OpenSlideMetadata:
-    path: str
-    level: int
 
-class TissueMask(PyvipsMask[PipelineTileMetadata]):
+class TissueMask(PyvipsMask[TileMetadata]):
     def forward_tile(
-        self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
-    ) -> PipelineTileMetadata | None:
+        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+    ) -> TileMetadata | None:
         if class_overlaps.get(0, 0) > 0.5:
             return None
         return tile_labels
 
-class CancerMask(PyvipsMask[PipelineTileMetadata]):
-    def forward_tile(
-        self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
-    ) -> PipelineTileMetadata:
-        # Calculate cancer percentage and log it for debugging
-        cancer_percentage = class_overlaps.get(255, 0)
-        logging.info(f"Cancer mask applied. Cancer coverage for tile: {cancer_percentage}")
-        
-        # Update the existing tile_labels with cancer_percentage instead of creating a new instance
-        tile_labels.cancer_percentage = cancer_percentage
-        return tile_labels
 
-# Initialize tile source and mask
-source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
+class CancerMask(PyvipsMask[CancerTileMetadata]):
+    def forward_tile(
+        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+    ) -> CancerTileMetadata:
+        return CancerTileMetadata(
+            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
+        )
+
+
+source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
 cancer_mask = CancerMask(
-    tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
+    tile_extent=source.tile_extent // 2, absolute_roi_extent=128, relative_roi_offset=0
 )
 
-# Determine the directory where this script resides
-SCRIPT_DIR = Path(__file__).parent.resolve()
-
-# Define the path to Learning_set.csv relative to the script's directory
-LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
-
-# Verify if LABELS_FILE exists
-if not LABELS_FILE.exists():
-    logging.error(f"Labels file not found at {LABELS_FILE}. Please ensure the file exists.")
-    raise FileNotFoundError(f"Labels file not found at {LABELS_FILE}")
-
-# Load labels data from CSV file using pandas, then convert to Polars
-labels_df_pandas = pd.read_csv(LABELS_FILE, sep=';')
-labels_df = pl.from_pandas(labels_df_pandas)
-
-# Ensure 'luminal_id' is Int64 and 'mammaprint' is Float32
-labels_df = labels_df.with_columns([
-    pl.col("luminal_id").cast(pl.Int64),
-    pl.col('mammaprint').str.replace(',', '.').cast(pl.Float32)
-])
-
-# Convert labels_df to a dictionary for efficient lookup
-labels_dict = labels_df.select(['slide_name', 'luminal_id']).to_pandas().set_index('slide_name')['luminal_id'].to_dict()
 
 @ray.remote
-def handler(slide_path: Path) -> TiledSlideMetadata | None:
-    logging.info(f"Processing {slide_path}")
-    try:
-        slide, tiles = source(slide_path)
-    except Exception as e:
-        logging.error(f"Failed to load slide {slide_path}: {e}")
-        return None
+def handler(slide_path: Path) -> TiledSlideMetadata:
+    slide, tiles = source(slide_path)
 
-    if slide.tile_extent_x != slide.tile_extent_y:
-        logging.error(f"Non-square tiles in slide {slide_path}. Skipping.")
-        return None
-
-    logging.info(f"Number of tiles: {len(tiles)}")
-
-    # Extract the slide name
-    slide_name = slide_path.stem  # Get the filename without the extension
-
-    # Efficient label lookup
-    slide_label = labels_dict.get(slide_name, None)
-
-    if slide_label is None:
-        logging.warning(f"No label found for slide {slide_name}. Assigning default label.")
-        slide_label = 0  # Assign a default value or decide to skip
-
-    # Create PipelineSlideMetadata
-    slide_metadata = PipelineSlideMetadata(
-        **asdict(slide),
-        luminal_id=slide_label,
-        slide_name=slide_name,
-        slide_fp=slide.path,
-        sample_level=0,
-        tile_size=slide.tile_extent_x,
-    )
-    logging.info(f"Slide metadata: {slide_metadata}")
-
-    # Define mask paths
     tissue_mask_path = Path(TISSUE_MASKS_PATH, slide_path.name)
     cancer_mask_path = Path(ANNOTATION_MASKS_PATH, slide_path.name)
 
-    # Validate mask paths
-    if not tissue_mask_path.exists():
-        logging.error(f"Tissue mask not found for slide {slide_name}. Skipping.")
-        return None
-
-    # Apply Tissue Mask
     tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
-
-    # Apply Cancer Mask if it exists
     if cancer_mask_path.exists():
         tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
-        logging.info(f"Applied cancer mask. Number of tiles after masking: {len(tiles)}")
-    else:
-        logging.info("Cancer mask not found; skipping cancer mask application.")
 
-    # Create tile metadata with `cancer_percentage` as set by the cancer mask
-    tiles_metadata = [
-        PipelineTileMetadata(
-            **asdict(t),
-            class_id=slide_label,
-            slide_name=slide_name,
-            coord_x=t.x,             # Override x with coord_x
-            coord_y=t.y,             # Override y with coord_y
-            cancer_percentage=t.cancer_percentage  # Use cancer_percentage directly if set
-        )
-        for t in tiles
-    ]
-    logging.info("Finished labeling tiles")
+    return slide, tiles
 
-    return slide_metadata, tiles_metadata
 
 def main() -> None:
-    # Specify the slide you want to process
-    specific_slide_name = "P2023_01003.tiff"
-    specific_slide_path = Path(SLIDES_PATH) / specific_slide_name
+    slides = list(Path(SLIDES_PATH).rglob("*.tiff"))
+    test_slides_df, test_tiles_df = tiling(slides=slides, handler=handler)
 
-    # Check if the specific slide exists
-    if not specific_slide_path.exists():
-        logging.error(f"Slide {specific_slide_name} not found at {SLIDES_PATH}")
-        return
-    
-    # Load the labels for the specified slide
-    labeled_slides_names = set(labels_df['slide_name'].to_list())
-    
-    if specific_slide_name.replace('.tiff', '') not in labeled_slides_names:
-        logging.warning(f"Label not found for slide {specific_slide_name}. Skipping.")
-        return
-    
-    # Initialize Ray
-    ray.init(ignore_reinit_error=True)
-    
-    # Process the specific slide
-    try:
-        test_slides_df, test_tiles_df = tiling(slides=[specific_slide_path], handler=handler)
-    except Exception as e:
-        logging.error(f"Error during tiling for {specific_slide_name}: {e}")
-        ray.shutdown()
-        return
-    
-    # Save to MLflow
-    try:
-        mlflow.set_experiment(experiment_name="Mamma-print")
-        with mlflow.start_run(run_name="Tiling mammaprint for specific slide") as _:
-            save_mlflow_dataset(
-                slides=test_slides_df,
-                tiles=test_tiles_df,
-                dataset_name="specific_slide_tissue_classification_tumor_tiles",
-            )
-    except Exception as e:
-        logging.error(f"Error during MLflow logging for {specific_slide_name}: {e}")
-    finally:
-        # Shutdown Ray
-        ray.shutdown()
+    mlflow.set_experiment(experiment_name="Mamma-print")
+    with mlflow.start_run(run_name="Tiling mammaprint train dataset from tissue classification model") as _:
+        save_mlflow_dataset(
+            slides=test_slides_df,
+            tiles=test_tiles_df,
+            dataset_name="train_tissue_classification_tumor_tiles",
+        )
+
 
 if __name__ == "__main__":
     main()
