@@ -309,8 +309,8 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         )
 
     def update(self, data: torch.Tensor, metadata: dict) -> None:
-        logger.debug("Pasting tiles.")
-
+        logger.debug("Mapping attention weights to heatmap.")
+        
         # Get base tile coordinates for uncompressed accumulator
         xs_accum = metadata["coord_x"] // self.level_coord_multiplier
         ys_accum = metadata["coord_y"] // self.level_coord_multiplier

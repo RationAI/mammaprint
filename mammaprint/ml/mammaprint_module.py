@@ -38,9 +38,9 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         self.register_metric_dict("metrics", metrics)
 
     def forward(self, x):
-        x, y = self.model(x)
+        x, attention_weights = self.model(x)
         x = self.output_activation(x)
-        return x
+        return x, attention_weights
 
     def training_step(self, batch, batch_idx):
         x, y, _ = batch
@@ -84,7 +84,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
     @torch.inference_mode()
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, metadata = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x) 
 
         if "slide_name" in metadata[0]:
             slide_name = metadata[0]["slide_name"][0]
@@ -109,7 +109,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         return {
             "metrics": self.metrics.compute("test", slide_name),
             "outputs": y_pred,
-            # "attention_data": attention_data,
+            "attention_weights": attention_weights,
             "metadata": metadata,
         }
 
@@ -118,8 +118,8 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def predict_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, _ = batch
-        y_pred, attention_weights = self(x)
-        return {"outputs": y_pred}
+        y_pred, attention_weights = self(x)  # Extract both output and attention weights
+        return {"outputs": y_pred, "attention_weights": attention_weights}  # Return attention weights too
 
     def configure_optimizers(self):
         if self.optimizer is None:
