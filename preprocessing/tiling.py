@@ -156,7 +156,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
             coord_x=t.x,
             coord_y=t.y,
             class_id=slide_label,
-            cancer_percentage=t.cancer_percentage,
+            cancer_percentage=getattr(t, "cancer_percentage", 0.0),
         )
         for t in tiles
     ]
