@@ -27,9 +27,15 @@ class DataloaderAgnosticCallback(Callback, ABC):
         Metadata are assumed to be the same for all batches in a dataloader (slide)
         """
         excluded_keys = ["coord_x", "coord_y"]
-        metadata = {
-            key: val[0] for key, val in batch[2].items() if key not in excluded_keys
-        }
+        
+        # Access metadata from the first slide in the batch
+        if isinstance(batch[2], list) and isinstance(batch[2][0], dict):
+            metadata = {
+                key: val[0] for key, val in batch[2][0].items() if key not in excluded_keys
+            }
+        else:
+            raise TypeError("Expected batch[2] to be a list of dictionaries with metadata.")
+        
         metadata["slide_channels"] = outputs["outputs"].shape[1]  # Assuming [N, C, ...]
         return metadata
 
