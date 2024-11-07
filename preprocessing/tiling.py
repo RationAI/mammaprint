@@ -11,6 +11,7 @@ from rationai.tiling.modules.tile_sources import OpenSlideTileSource
 from rationai.tiling.typing import TiledSlideMetadata, TileMetadata, SlideMetadata
 from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
+from typing import Optional
 import logging
 
 # Configure logging for better visibility
@@ -30,7 +31,7 @@ class PipelineTileMetadata(TileMetadata):
     coord_x: int
     coord_y: int
     class_id: int
-    cancer_percentage: float
+    cancer_percentage: Optional[float] = 0.0  # Made optional initially
 
 @dataclass
 class PipelineSlideMetadata(SlideMetadata):
@@ -43,20 +44,22 @@ class PipelineSlideMetadata(SlideMetadata):
     path: str
     level: int
 
-class TissueMask(PyvipsMask[TileMetadata]):
+class TissueMask(PyvipsMask[PipelineTileMetadata]):
     def forward_tile(
-        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
-    ) -> TileMetadata | None:
+        self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
+    ) -> PipelineTileMetadata | None:
         if class_overlaps.get(0, 0) > 0.5:
             return None
         return tile_labels
 
 class CancerMask(PyvipsMask[PipelineTileMetadata]):
     def forward_tile(
-        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+        self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
         return PipelineTileMetadata(
-            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
+            cancer_percentage=class_overlaps.get(255, 0)
+            tile_labels.cancer_percentage = cancer_percentage
+            return tile_labels
         )
 
 # Initialize tile source and mask
@@ -155,7 +158,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
             coord_x=t.x,
             coord_y=t.y,
             class_id=slide_label,
-            cancer_percentage=t.cancer_percentage,
+            cancer_percentage=0.0,
         )
         for t in tiles
     ]
