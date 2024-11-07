@@ -117,8 +117,6 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     if slide_label is None:
         logging.warning(f"No label found for slide {slide_name}. Assigning default label.")
         slide_label = 0  # Assign a default value or decide to skip
-        # Optionally, skip the slide by returning None
-        # return None
 
     # Create PipelineSlideMetadata
     slide_metadata = PipelineSlideMetadata(
@@ -149,14 +147,15 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     logging.info(f"Number of tiles after masking: {len(tiles)}")
     logging.info("Finished applying tissue and cancer masks")
 
-    # Create tile metadata
+    # Create tile metadata with coord_x and coord_y
     tiles_metadata = [
         PipelineTileMetadata(
-            slide_name=slide_name,
-            coord_x=t.x,
-            coord_y=t.y,
+            **asdict(t),             # Unpack original TileMetadata fields
             class_id=slide_label,
-            cancer_percentage=getattr(t, "cancer_percentage", 0.0),
+            slide_name=slide_name,
+            coord_x=t.x,             # Override x with coord_x
+            coord_y=t.y,             # Override y with coord_y
+            cancer_percentage=getattr(t, "cancer_percentage", 0.0)
         )
         for t in tiles
     ]
