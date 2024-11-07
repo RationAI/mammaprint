@@ -25,7 +25,7 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
-      label: "luminal_id"
+      label: "is_cancer"
   dataloaders_kwargs:
     test:
       num_workers: 15
@@ -33,9 +33,9 @@ datamodule:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL luminal test whole slide images
+  run_name: MIL test whole slide images
   description: |
-    Luminal binary classification.
+    Binary classification.
   hyperparameters:
     num_workers: 15
     batch_size: 16

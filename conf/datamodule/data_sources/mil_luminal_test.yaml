@@ -2,6 +2,6 @@ mammaprint_test:
   _target_: mammaprint.datamodule.datasources.WSIDataSource
   seed: ${seed}
   data_uris: 
-    - mlflow-artifacts:/17/ed57ee768d8544599e642a0c471d8eb1/artifacts/dataset
+    - mlflow-artifacts:/17/1cb6c6cd67c94694b5491018c2e7a8c2/artifacts/dataset # mil prostate dataset for test
   splits:
     test: 1.0

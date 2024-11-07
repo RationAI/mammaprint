@@ -27,7 +27,7 @@ class MILDataset(BaseDataset):
         # label_value = float(sample[0].get(self.label, 0.0))  # Default label if missing
         # Check if any tile in `sample` has `self.label` not 0.0
         label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
-        logging.info(f"label value found mammaprint: {label_value}")
+        logging.info(f"label value found: {label_value}")
         label = torch.tensor([label_value])
 
         return images_tensor, label, sample
