@@ -56,8 +56,12 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
     def forward_tile(
         self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
+        # Calculate cancer percentage and log it for debugging
+        cancer_percentage = class_overlaps.get(255, 0)
+        logging.info(f"Cancer mask applied. Cancer coverage for tile: {cancer_percentage}")
+        
         # Update the existing tile_labels with cancer_percentage instead of creating a new instance
-        tile_labels.cancer_percentage = class_overlaps.get(255, 0)
+        tile_labels.cancer_percentage = cancer_percentage
         return tile_labels
 
 # Initialize tile source and mask
