@@ -308,41 +308,35 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: torch.Tensor, metadata: dict) -> None:
+    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
         logger.debug("Mapping attention weights to heatmap.")
         
-        # Get base tile coordinates for uncompressed accumulator
-        xs_accum = metadata["coord_x"] // self.level_coord_multiplier
-        ys_accum = metadata["coord_y"] // self.level_coord_multiplier
+        # Iterate over each slide's metadata in the list
+        xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in metadata]
+        ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in metadata]
+        
         data = self._preprocess_data(data)
 
-        # compress overlap counter coordinates
-        xs_count = xs_accum // self.gcd_size_factor
-        ys_count = ys_accum // self.gcd_size_factor
-
-        # compress accumulator coordinates if enabled
-        if self.compress_accumulator_array:
-            xs_accum = xs_count
-            ys_accum = ys_count
+        # Process compressed coordinates
+        xs_count = [x // self.gcd_size_factor for x in xs_accum]
+        ys_count = [y // self.gcd_size_factor for y in ys_accum]
 
         # Paste tiles onto mask
-        for xa, ya, xc, yc, tile in zip(
-            xs_accum, ys_accum, xs_count, ys_count, data, strict=False
-        ):
+        for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
-                :,
+                :
             ].shape
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
-                :,
+                :
             ] += tile[:mm_h, :mm_w, :mm_c]
             self.patch_overlap_counter[
                 yc : yc + self.overlap_counter_tile_size,
                 xc : xc + self.overlap_counter_tile_size,
-                :,
+                :
             ] += 1
 
     def save(self) -> str:
