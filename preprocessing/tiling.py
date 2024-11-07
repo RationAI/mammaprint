@@ -57,9 +57,8 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
         self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
         return PipelineTileMetadata(
+            **asdict(tile_labels),
             cancer_percentage=class_overlaps.get(255, 0)
-            tile_labels.cancer_percentage = cancer_percentage
-            return tile_labels
         )
 
 # Initialize tile source and mask
