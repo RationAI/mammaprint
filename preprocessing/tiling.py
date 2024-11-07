@@ -144,18 +144,19 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     # Apply Cancer Mask if it exists
     if cancer_mask_path.exists():
         tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
-    logging.info(f"Number of tiles after masking: {len(tiles)}")
-    logging.info("Finished applying tissue and cancer masks")
+        logging.info(f"Applied cancer mask. Number of tiles after masking: {len(tiles)}")
+    else:
+        logging.info("Cancer mask not found; skipping cancer mask application.")
 
-    # Create tile metadata with coord_x and coord_y
+    # Create tile metadata with `cancer_percentage` as set by the cancer mask
     tiles_metadata = [
         PipelineTileMetadata(
-            **asdict(t),             # Unpack original TileMetadata fields
+            **asdict(t),
             class_id=slide_label,
             slide_name=slide_name,
             coord_x=t.x,             # Override x with coord_x
             coord_y=t.y,             # Override y with coord_y
-            cancer_percentage=getattr(t, "cancer_percentage", 0.0)
+            cancer_percentage=t.cancer_percentage  # Use cancer_percentage directly if set
         )
         for t in tiles
     ]
