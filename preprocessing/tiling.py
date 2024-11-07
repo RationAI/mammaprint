@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Optional
 
 import mlflow
 import ray
@@ -11,7 +12,6 @@ from rationai.tiling.modules.tile_sources import OpenSlideTileSource
 from rationai.tiling.typing import TiledSlideMetadata, TileMetadata, SlideMetadata
 from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
-from typing import Optional
 import logging
 
 # Configure logging for better visibility
@@ -56,10 +56,9 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
     def forward_tile(
         self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
-        return PipelineTileMetadata(
-            **asdict(tile_labels),
-            cancer_percentage=class_overlaps.get(255, 0)
-        )
+        # Update the existing tile_labels with cancer_percentage instead of creating a new instance
+        tile_labels.cancer_percentage = class_overlaps.get(255, 0)
+        return tile_labels
 
 # Initialize tile source and mask
 source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
@@ -141,23 +140,23 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
         logging.error(f"Tissue mask not found for slide {slide_name}. Skipping.")
         return None
 
-    # Apply masks
-    if not cancer_mask_path.exists():
-        tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
-    else:
-        tiles = tissue_mask(cancer_mask_path, slide.extent, tiles)
+    # Apply Tissue Mask
+    tiles = tissue_mask(tissue_mask_path, slide.extent, tiles)
+
+    # Apply Cancer Mask if it exists
+    if cancer_mask_path.exists():
         tiles = cancer_mask(cancer_mask_path, slide.extent, tiles)
     logging.info(f"Number of tiles after masking: {len(tiles)}")
-    logging.info("Finished applying tissue mask")
+    logging.info("Finished applying tissue and cancer masks")
 
-    # Create tile metadata without using **asdict(t)
+    # Create tile metadata
     tiles_metadata = [
         PipelineTileMetadata(
             slide_name=slide_name,
             coord_x=t.x,
             coord_y=t.y,
             class_id=slide_label,
-            cancer_percentage=0.0,
+            cancer_percentage=t.cancer_percentage,
         )
         for t in tiles
     ]
