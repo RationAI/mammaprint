@@ -25,9 +25,6 @@ TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_ti
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
 
 @dataclass
-class CancerTileMetadata(TileMetadata):
-    cancer_percentage: float
-
 class PipelineTileMetadata(TileMetadata):
     slide_name: str
     coord_x: int
