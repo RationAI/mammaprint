@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test_mil
+  - /trainer/callbacks:
+    - heatmap_visualizer
+  - _self_
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/17/cfbf70a7ec34480685e6415ca9362ee0/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "is_cancer"
+  dataloaders_kwargs:
+    test:
+      num_workers: 15
+      batch_size: 16
+
+trainer:
+  callbacks:
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+
+metadata:
+  experiment_name: mammaprint
+  run_name: MIL Prostate test whole slide images with Heatmaps
+  description: |
+    Prostate binary classification.
+  hyperparameters:
+    num_workers: 15
+    batch_size: 16
+   
