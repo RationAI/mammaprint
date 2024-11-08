@@ -11,7 +11,7 @@ from rationai.tiling.writers import save_mlflow_dataset
 
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks_resized/"
 
 @dataclass
 class CancerTileMetadata(TileMetadata):
@@ -41,7 +41,7 @@ tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
 cancer_mask = CancerMask(
-    tile_extent=source.tile_extent // 2, absolute_roi_extent=128, relative_roi_offset=0
+    tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
 
 
