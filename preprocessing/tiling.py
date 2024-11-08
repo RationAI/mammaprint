@@ -26,15 +26,6 @@ class TissueMask(PyvipsMask[TileMetadata]):
             return None
         return tile_labels
 
-
-class CancerMask(PyvipsMask[CancerTileMetadata]):
-    def forward_tile(
-        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
-    ) -> CancerTileMetadata:
-        return CancerTileMetadata(
-            **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
-        )
-
 class CancerMask(PyvipsMask[CancerTileMetadata]):
     def forward_tile(
         self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
