@@ -35,6 +35,19 @@ class CancerMask(PyvipsMask[CancerTileMetadata]):
             **asdict(tile_labels), cancer_percentage=class_overlaps.get(255, 0)
         )
 
+class CancerMask(PyvipsMask[CancerTileMetadata]):
+    def forward_tile(
+        self, tile_labels: TileMetadata, class_overlaps: dict[int, float]
+    ) -> CancerTileMetadata:
+        # Compute cancer percentage as the sum of all non-background overlaps
+        cancer_percentage = 0.0
+        if class_overlaps.get(0, 0) < 0.5:
+            cancer_percentage = 1 - class_overlaps.get(0, 0)  # Assume background is 0
+        return CancerTileMetadata(
+            **asdict(tile_labels), cancer_percentage=cancer_percentage
+        )
+
+
 
 source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
