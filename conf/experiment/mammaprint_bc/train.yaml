@@ -41,7 +41,7 @@ datamodule:
     train:
       label: "class_id"
       sampler:
-        epoch_size: 40_000
+        epoch_size: 160_000
         index_levels:
           - luminal_id
           - slide_name
@@ -49,7 +49,7 @@ datamodule:
     valid:
       label: "class_id"
       sampler:
-        epoch_size: 10_000
+        epoch_size: 40_000
         index_levels:
           - luminal_id
           - slide_name
