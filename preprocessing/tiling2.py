@@ -23,7 +23,7 @@ logging.basicConfig(
 # Define paths
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks_resized/"
 
 @dataclass
 class PipelineTileMetadata(TileMetadata):
@@ -57,15 +57,18 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
         self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
         # Calculate cancer percentage and log it for debugging
-        cancer_percentage = class_overlaps.get(255, 0)
+        cancer_percentage = 0.0
+        if class_overlaps.get(0, 0) < 0.5:
+            cancer_percentage = 1 - class_overlaps.get(0, 0)  # Assume background is 0
         logging.info(f"Cancer mask applied. Cancer coverage for tile: {cancer_percentage}")
         
         # Update the existing tile_labels with cancer_percentage instead of creating a new instance
         tile_labels.cancer_percentage = cancer_percentage
         return tile_labels
 
+
 # Initialize tile source and mask
-source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
+source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
