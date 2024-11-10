@@ -80,7 +80,7 @@ cancer_mask = CancerMask(
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 # Define the path to Learning_set.csv relative to the script's directory
-LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
+LABELS_FILE = SCRIPT_DIR / 'test_set.csv'
 
 # Verify if LABELS_FILE exists
 if not LABELS_FILE.exists():
