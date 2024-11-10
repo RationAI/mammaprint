@@ -12,11 +12,11 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
-      label: "luminal_id"
+      label: "class_id"
   dataloaders_kwargs:
     test:
-      num_workers: 8
-      batch_size: 40
+      num_workers: 12
+      batch_size: 50
 
 ml:
   net:
