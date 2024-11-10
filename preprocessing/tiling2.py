@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 # Define paths
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/test_heatmaps"
 
@@ -172,7 +172,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     return slide_metadata, tiles_metadata
 
 def main() -> None:
-    all_slides = list(Path(SLIDES_PATH).rglob("*.mrxs"))
+    all_slides = list(Path(SLIDES_PATH).rglob("*.tiff"))
     labeled_slides_names = set(labels_df['slide_name'].to_list())
     labeled_slides = [slide for slide in all_slides if slide.stem in labeled_slides_names]
 
