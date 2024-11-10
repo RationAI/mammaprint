@@ -19,7 +19,7 @@ datamodule:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/14985f023dd644c396f6b1147ceeb0d8/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
+    model_uri: mlflow-artifacts:/17/7c625a1732044e1e920627759e4432d3/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
 
 trainer:
   callbacks:
@@ -32,7 +32,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Luminal-type VGG16 no overlap Testing optimizer
+  run_name: After TC, Luminal-type VGG16 no overlap Testing optimizer
   description: |
     Luminal binary classification test with finding best threshold and mask size for whole slide predictions.
   hyperparameters:
