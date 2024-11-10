@@ -21,9 +21,9 @@ logging.basicConfig(
 )
 
 # Define paths
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint/"
-TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks_resized/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint/"
+TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/test_heatmaps"
 
 @dataclass
 class PipelineTileMetadata(TileMetadata):
@@ -194,11 +194,11 @@ def main() -> None:
     # Save to MLflow
     try:
         mlflow.set_experiment(experiment_name="Mamma-print")
-        with mlflow.start_run(run_name="Tiling mammaprint train dataset from tissue classification model") as _:
+        with mlflow.start_run(run_name="Tiling mammaprint test dataset from tissue classification model") as _:
             save_mlflow_dataset(
                 slides=test_slides_df,
                 tiles=test_tiles_df,
-                dataset_name="train_tissue_classification_tumor_tiles",
+                dataset_name="test_tissue_classification_tumor_tiles",
             )
     except Exception as e:
         logging.error(f"Error during MLflow logging: {e}")
