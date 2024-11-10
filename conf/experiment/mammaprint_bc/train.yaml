@@ -57,18 +57,18 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 12
-      batch_size: 36
+      batch_size: 50
     valid:
       num_workers: 12
-      batch_size: 36
+      batch_size: 50
 
 ml:
   net:
     features:
       weights: IMAGENET1K_V1
   optimizer:
-    lr: 5e-5
-    weight_decay: 5e-05
+    lr: 1e-4
+    weight_decay: 1e-04
   lr_scheduler:
     monitor: valid/loss
     scheduler:
