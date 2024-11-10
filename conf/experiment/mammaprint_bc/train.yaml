@@ -7,7 +7,7 @@ defaults:
   # Train dataset
   - /datamodule/datasets@datamodule.datasets.train: base_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: random_tree
-  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: her_transforms
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
   # Valid dataset
   - /datamodule/datasets@datamodule.datasets.valid: base_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: random_tree
@@ -41,7 +41,7 @@ datamodule:
     train:
       label: "class_id"
       sampler:
-        epoch_size: 80_000
+        epoch_size: 20_000
         index_levels:
           - luminal_id
           - slide_name
@@ -49,7 +49,7 @@ datamodule:
     valid:
       label: "class_id"
       sampler:
-        epoch_size: 20_000
+        epoch_size: 5_000
         index_levels:
           - luminal_id
           - slide_name
@@ -57,18 +57,18 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 12
-      batch_size: 50
+      batch_size: 32
     valid:
       num_workers: 12
-      batch_size: 50
+      batch_size: 32
 
 ml:
   net:
     features:
       weights: IMAGENET1K_V1
   optimizer:
-    lr: 1e-4
-    weight_decay: 1e-04
+    lr: 5e-5
+    weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 luminal-type classification, after TC segmentation, Sample level 1
+  run_name: Base line VGG16 luminal-type classification, after TC segmentation, Sample level 1
   description: |
     Luminal binary classification.
   hyperparameters:
