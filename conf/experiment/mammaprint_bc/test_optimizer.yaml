@@ -12,6 +12,7 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
+      label: "luminal_id"
   dataloaders_kwargs:
     test:
       num_workers: 8
@@ -27,7 +28,7 @@ trainer:
       save_dir: slide_predictions
       mask_size_min: 1
       mask_size_max: 100
-      ground_truth_col: class_id
+      ground_truth_col: luminal_id
 
 
 metadata:
