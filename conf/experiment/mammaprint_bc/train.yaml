@@ -41,7 +41,7 @@ datamodule:
     train:
       label: "class_id"
       sampler:
-        epoch_size: 160_000
+        epoch_size: 80_000
         index_levels:
           - luminal_id
           - slide_name
@@ -49,7 +49,7 @@ datamodule:
     valid:
       label: "class_id"
       sampler:
-        epoch_size: 40_000
+        epoch_size: 20_000
         index_levels:
           - luminal_id
           - slide_name
@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: VGG16 luminal-type classification, after TC segmentation
+  run_name: VGG16 luminal-type classification, after TC segmentation, Sample level 1
   description: |
     Luminal binary classification.
   hyperparameters:
