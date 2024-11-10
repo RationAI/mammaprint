@@ -309,62 +309,70 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         )
 
     def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
-        logger.debug("Mapping attention weights to heatmap.")
+        logger.debug("Starting to map attention weights to heatmap.")
         
-        # Iterate over each slide's metadata in the list
+        # Convert data to numpy array and log its min and max before scaling
+        data = self._to_numpy(data)
+        data_min, data_max = data.min(), data.max()
+        logger.info(f"Attention weights min: {data_min}, max: {data_max} before scaling.")
+
+        # Normalize data to 0–255 range for visualization
+        data = 255 * (data - data_min) / (data_max - data_min + 1e-5)
+        data = data.astype(np.uint8)  # Convert to uint8 after scaling
+        logger.info(f"Attention weights min: {data.min()}, max: {data.max()} after scaling to 0-255.")
+
+        # Transform coordinates based on metadata and log results
         xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in metadata]
         ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in metadata]
-        
-        data = self._preprocess_data(data)
-
-        # Process compressed coordinates
         xs_count = [x // self.gcd_size_factor for x in xs_accum]
         ys_count = [y // self.gcd_size_factor for y in ys_accum]
+        logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
+        logger.debug(f"Compressed coordinates xs_count: {xs_count[:5]}, ys_count: {ys_count[:5]}")
 
-        # Paste tiles onto mask
+        # Paste tiles onto heatmap accumulator and count overlaps
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
+            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
+
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ] += tile[:mm_h, :mm_w, :mm_c]
+
+            # Update overlap counter for averaging
             self.patch_overlap_counter[
                 yc : yc + self.overlap_counter_tile_size,
                 xc : xc + self.overlap_counter_tile_size,
                 :
             ] += 1
 
+        # Flush data to disk if using memory-mapped arrays
+        self.heatmap_accumulator.flush()
+        self.patch_overlap_counter.flush()
+        logger.info("Updated heatmap accumulator and flushed to disk.")
+
+
     def save(self) -> str:
-        # Converting to pyVips
+        logger.info("Starting heatmap save process.")
+        
+        # Convert the accumulator and overlap counter to pyVips images
         vips_im = pyvips.Image.new_from_array(self.heatmap_accumulator)
         count_im = pyvips.Image.new_from_array(self.patch_overlap_counter)
+        
+        logger.debug("Created pyVips images for accumulator and overlap counter.")
 
-        if not self.compress_accumulator_array:
-            # resize overlap counter to full size
-            count_im = count_im.resize(
-                self.w / count_im.width,
-                vscale=self.h / count_im.height,
-                kernel=self.interpolation,
-            )
+        # Normalize by overlap counter, with zero-safe division
+        vips_im = vips_im / (count_im + 1e-5)  # Add epsilon to prevent division by zero
+        logger.info(f"Normalized heatmap with overlap counter. Range after normalization: min {vips_im.min()}, max {vips_im.max()}.")
 
-        # Resolve overlaps
-        vips_im /= count_im
-
+        # Finalize image and save
         vips_im = self._finalize_image(vips_im)
-
-        # Resize to full size
-        if self.compress_accumulator_array:
-            vips_im = vips_im.resize(
-                self.w / vips_im.width,
-                vscale=self.h / vips_im.height,
-                kernel=self.interpolation,
-            )
-
         save_path = self._save_xopat_compatible(vips_im)
-
+        logger.info(f"Saved heatmap to {save_path}.")
+        
         return save_path
