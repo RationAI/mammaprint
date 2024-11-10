@@ -26,7 +26,6 @@ trainer:
   callbacks:
     heatmap_visualizer:
       save_dir: test_heatmaps
-  callbacks:
     slide_predictor:
       _target_: mammaprint.trainer.callbacks.SlidePredictor
       save_dir: slide_predictions
