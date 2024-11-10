@@ -31,7 +31,7 @@ class PipelineTileMetadata(TileMetadata):
     coord_x: int
     coord_y: int
     class_id: int
-    cancer_percentage: Optional[float] = 0.0  # Made optional initially
+    cancer_percentage: float = 0.0  # Set a default cancer percentage
 
 @dataclass
 class PipelineSlideMetadata(SlideMetadata):
@@ -163,7 +163,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
             slide_name=slide_name,
             coord_x=t.x,             # Override x with coord_x
             coord_y=t.y,             # Override y with coord_y
-            cancer_percentage=t.cancer_percentage  # Use cancer_percentage directly if set
+            cancer_percentage=getattr(t, 'cancer_percentage', 0.0)  # Use cancer_percentage directly if set
         )
         for t in tiles
     ]
