@@ -298,6 +298,9 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         else:
             accum_h, accum_w = self.h, self.w
 
+        logger.debug(f"Initializing heatmap_accumulator with shape: ({accum_h}, {accum_w}, {self.c})")
+        logger.debug(f"Initializing patch_overlap_counter with shape: ({compressed_h}, {compressed_w}, 1)")
+
         self.heatmap_accumulator = np.zeros(
             shape=(accum_h, accum_w, self.c),  # row-first format (H, W, C)
             dtype=np.float32,
@@ -308,23 +311,29 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: np.ndarray, metadata: list[dict]) -> None:
+    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
         """
         Update the heatmap and patch overlap counter with new data and metadata.
 
         Args:
-            data: A numpy array of attention weights or tiles for the entire slide.
+            data: A torch tensor of attention weights or tiles for the entire slide.
             metadata: A list of dictionaries containing metadata about the tiles.
         """
         logger.debug("Processing tiles for a single slide.")
 
+        # Preprocess data
+        data = self._preprocess_data(data)
+
         # Extract tile coordinates from metadata
         xs_accum = []
         ys_accum = []
-        xs_count = []
-        ys_count = []
-        yc_count = []
         xc_count = []
+        yc_count = []
+
+        max_x_before = 0
+        max_y_before = 0
+        max_x_after = 0
+        max_y_after = 0
 
         for md in metadata:
             coord_x = md.get("coord_x", 0)
@@ -339,9 +348,21 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             xs_accum.append(coord_x)
             ys_accum.append(coord_y)
 
+            # Update max coordinates before compression
+            if coord_x > max_x_before:
+                max_x_before = coord_x
+            if coord_y > max_y_before:
+                max_y_before = coord_y
+
             # Calculate compressed coordinates
             xc = coord_x // self.gcd_size_factor
             yc = coord_y // self.gcd_size_factor
+
+            # Update max coordinates after compression
+            if xc > max_x_after:
+                max_x_after = xc
+            if yc > max_y_after:
+                max_y_after = yc
 
             # Ensure compressed coordinates are within bounds
             if xc >= self.heatmap_accumulator.shape[1] or yc >= self.heatmap_accumulator.shape[0]:
@@ -351,15 +372,19 @@ class InMemoryHeatmapAssembler(ImageAssembler):
                 )
                 continue  # Skip this tile
 
-            xs_count.append(xc)
-            ys_count.append(yc)
+            xc_count.append(xc)
+            yc_count.append(yc)
 
-        # Log metadata information
-        logger.debug(f"Transformed coordinates xs_accum: {xs_accum}, ys_accum: {ys_accum}")
-        logger.debug(f"Compressed coordinates xs_count: {xs_count}, ys_count: {ys_count}")
+        # Log coordinate ranges
+        logger.debug(f"Tile coordinates before compression: x_max={max_x_before}, y_max={max_y_before}")
+        logger.debug(f"Tile coordinates after compression: x_max={max_x_after}, y_max={max_y_after}")
+
+        # Log metadata information (show first 10 for brevity)
+        logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:10]}, ys_accum: {ys_accum[:10]}")
+        logger.debug(f"Compressed coordinates xc_count: {xc_count[:10]}, yc_count: {yc_count[:10]}")
 
         # Handle the data directly for the slide
-        for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data):
+        for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xc_count, yc_count, data):
             # Validate tile data type and shape
             if isinstance(tile, (float, np.float32, np.float64)):  # Scalar attention weights
                 logger.debug(f"Adding scalar attention weight at ({yc}, {xc}): {tile}")
@@ -403,22 +428,36 @@ class InMemoryHeatmapAssembler(ImageAssembler):
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
 
-        # Convert the accumulator and overlap counter to pyVips images
-        vips_im = pyvips.Image.new_from_array(self.heatmap_accumulator)
-        count_im = pyvips.Image.new_from_array(self.patch_overlap_counter)
+        # Inspect heatmap_accumulator before saving
+        logger.debug(f"Heatmap accumulator stats: min={self.heatmap_accumulator.min()}, max={self.heatmap_accumulator.max()}, mean={self.heatmap_accumulator.mean()}")
 
-        logger.debug("Created pyVips images for accumulator and overlap counter.")
+        # Convert the accumulator and overlap counter to pyVips images
+        try:
+            vips_im = pyvips.Image.new_from_array(self.heatmap_accumulator)
+            count_im = pyvips.Image.new_from_array(self.patch_overlap_counter)
+            logger.debug("Created pyVips images for accumulator and overlap counter.")
+        except Exception as e:
+            logger.error(f"Failed to create pyVips images: {e}")
+            raise
 
         # Normalize by overlap counter, with zero-safe division
-        vips_im = vips_im / (count_im + 1e-5)  # Add epsilon to prevent division by zero
-        logger.info(
-            f"Normalized heatmap with overlap counter. "
-            f"Range after normalization: min {vips_im.min()}, max {vips_im.max()}."
-        )
+        try:
+            vips_im = vips_im / (count_im + 1e-5)  # Add epsilon to prevent division by zero
+            logger.info(
+                f"Normalized heatmap with overlap counter. "
+                f"Range after normalization: min={vips_im.min()}, max={vips_im.max()}."
+            )
+        except Exception as e:
+            logger.error(f"Failed to normalize heatmap: {e}")
+            raise
 
         # Finalize image and save
-        vips_im = self._finalize_image(vips_im)
-        save_path = self._save_xopat_compatible(vips_im)
-        logger.info(f"Saved heatmap to {save_path}.")
+        try:
+            vips_im = self._finalize_image(vips_im)
+            save_path = self._save_xopat_compatible(vips_im)
+            logger.info(f"Saved heatmap to {save_path}.")
+        except Exception as e:
+            logger.error(f"Failed to save heatmap: {e}")
+            raise
 
         return save_path
