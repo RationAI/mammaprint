@@ -308,87 +308,87 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
-        logger.debug("Starting to map attention weights to heatmap.")
+    def update(self, data: np.ndarray, metadata: List[Dict[str, Any]]) -> None:
+        """
+        Update the heatmap and patch overlap counter with new data and metadata.
 
-        # Process metadata (coordinates specifically)
-        processed_metadata = []
+        Args:
+            data: A numpy array of attention weights.
+            metadata: A list of dictionaries containing metadata about the tiles.
+        """
+        # Debug metadata and attention weights structure
+        logger.debug(f"Metadata: {metadata}")
+        logger.debug(f"Data shape: {data.shape}")
+
+        # Extract coordinates and other relevant information from metadata
+        xs_accum = []
+        ys_accum = []
+        xs_count = []
+        ys_count = []
+
         for md in metadata:
-            # Handle coord_x and coord_y specifically
-            coord_x = md["coord_x"]
-            coord_y = md["coord_y"]
-            
-            # Skip padding or invalid tiles (assuming coord_x or coord_y of tensor([0]) is padding)
-            if torch.is_tensor(coord_x) and torch.is_tensor(coord_y):
-                if (coord_x == 0).all() and (coord_y == 0).all():
-                    logger.debug("Skipping padding tile.")
-                    continue
-                
-                # Extract single value from tensors with one element
-                if coord_x.numel() == 1:
-                    coord_x = coord_x.item()
-                if coord_y.numel() == 1:
-                    coord_y = coord_y.item()
-            
-            # Update processed metadata
-            processed_metadata.append(
-                {key: val.item() if torch.is_tensor(val) and val.numel() == 1 else val for key, val in md.items()}
-            )
-            processed_metadata[-1]["coord_x"] = coord_x
-            processed_metadata[-1]["coord_y"] = coord_y
+            coord_x = md.get("coord_x", 0)
+            coord_y = md.get("coord_y", 0)
 
-        # Log a sample of processed metadata
-        logger.debug(f"Processed metadata sample: {processed_metadata[:5]}")
+            # Validate coordinates
+            if torch.is_tensor(coord_x):
+                coord_x = coord_x.item()
+            if torch.is_tensor(coord_y):
+                coord_y = coord_y.item()
 
-        # Convert attention weights to numpy and log their range
-        data = self._to_numpy(data)
-        data_min, data_max = data.min(), data.max()
-        logger.info(f"Attention weights min: {data_min}, max: {data_max} before scaling.")
+            xs_accum.append(coord_x)
+            ys_accum.append(coord_y)
 
-        # Normalize data to 0–255 range for visualization
-        data = 255 * (data - data_min) / (data_max - data_min + 1e-5)
-        data = data.astype(np.uint8)  # Convert to uint8 after scaling
-        logger.info(f"Attention weights min: {data.min()}, max: {data.max()} after scaling to 0-255.")
+            xs_count.append(coord_x // self.overlap_counter_tile_size)
+            ys_count.append(coord_y // self.overlap_counter_tile_size)
 
-        # Transform coordinates based on metadata
-        xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in processed_metadata]
-        ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in processed_metadata]
-        xs_count = [x // self.gcd_size_factor for x in xs_accum]
-        ys_count = [y // self.gcd_size_factor for y in ys_accum]
-
-        # Log transformed coordinates
-        logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
-        logger.debug(f"Compressed coordinates xs_count: {xs_count[:5]}, ys_count: {ys_count[:5]}")
+        # Log the extracted coordinates
+        logger.debug(f"Transformed coordinates xs_accum: {xs_accum}, ys_accum: {ys_accum}")
+        logger.debug(f"Compressed coordinates xs_count: {xs_count}, ys_count: {ys_count}")
 
         # Paste tiles onto heatmap accumulator and count overlaps
-        for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
+        for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data):
+            # Validate tile type and shape
+            if not isinstance(tile, np.ndarray):
+                logger.error(f"Tile at ({ya}, {xa}) is not a numpy array. Type: {type(tile)}")
+                continue
+
+            if len(tile.shape) != 3:
+                logger.error(f"Tile at ({ya}, {xa}) has an invalid shape: {tile.shape}")
+                continue
+
+            # Determine the max possible shape for the heatmap slice
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
-            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
 
-            # Add tile to the heatmap accumulator
-            self.heatmap_accumulator[
-                ya : ya + self.accumulator_tile_size,
-                xa : xa + self.accumulator_tile_size,
-                :
-            ] += tile[:mm_h, :mm_w, :mm_c]
+            # Log the current operation
+            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}, {mm_c}).")
+
+            # Safeguard against indexing issues
+            try:
+                self.heatmap_accumulator[
+                    ya : ya + self.accumulator_tile_size,
+                    xa : xa + self.accumulator_tile_size,
+                    :
+                ] += tile[:mm_h, :mm_w, :mm_c]
+            except IndexError as e:
+                logger.error(f"IndexError while processing tile at ({ya}, {xa}): {e}")
+                continue
 
             # Update overlap counter for averaging
-            self.patch_overlap_counter[
-                yc : yc + self.overlap_counter_tile_size,
-                xc : xc + self.overlap_counter_tile_size,
-                :
-            ] += 1
+            try:
+                self.patch_overlap_counter[
+                    yc : yc + self.overlap_counter_tile_size,
+                    xc : xc + self.overlap_counter_tile_size,
+                    :
+                ] += 1
+            except IndexError as e:
+                logger.error(f"IndexError while updating overlap counter at ({yc}, {xc}): {e}")
+                continue
 
-        # If using memory-mapped arrays, flush changes to disk
-        if hasattr(self.heatmap_accumulator, "flush"):
-            self.heatmap_accumulator.flush()
-            self.patch_overlap_counter.flush()
-
-        logger.info("Updated heatmap accumulator and flushed to disk (if applicable).")
 
 
     def save(self) -> str:
