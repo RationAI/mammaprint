@@ -308,14 +308,14 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: np.ndarray, metadata: list[dict]) -> None:
+    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
         logger.debug("Starting to map attention weights to heatmap.")
 
         # Ensure data is 1D and matches metadata
         assert data.ndim == 1, f"Expected 1D attention weights, got shape {data.shape}"
         assert len(data) == len(metadata), f"Data and metadata mismatch: {len(data)} vs {len(metadata)}"
         
-        # Transform 1D attention weights into tiles
+        # Transform attention weights into tiles
         tile_size = self.tile_size
         data = np.array([np.full((tile_size, tile_size, 1), weight) for weight in data])
         logger.debug(f"Transformed data into tiles: {data.shape}")
@@ -342,17 +342,20 @@ class InMemoryHeatmapAssembler(ImageAssembler):
                 :
             ] += tile[:mm_h, :mm_w, :mm_c]
 
+            # Update overlap counter
             self.patch_overlap_counter[
                 yc : yc + self.overlap_counter_tile_size,
                 xc : xc + self.overlap_counter_tile_size,
                 :
             ] += 1
 
-        # Flush data to disk if using memory-mapped arrays
-        self.heatmap_accumulator.flush()
-        self.patch_overlap_counter.flush()
-        logger.info("Updated heatmap accumulator and flushed to disk.")
-
+        # Flush only if heatmap_accumulator is a memmap
+        if isinstance(self.heatmap_accumulator, np.memmap):
+            self.heatmap_accumulator.flush()
+            self.patch_overlap_counter.flush()
+            logger.debug("Flushed heatmap_accumulator and patch_overlap_counter to disk.")
+        else:
+            logger.debug("Skipping flush; heatmap_accumulator is an in-memory numpy array.")
 
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
