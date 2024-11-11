@@ -34,6 +34,7 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         dataloader_idx: int,
     ) -> None:
         logger.debug("Creating new Heatmap visualizer.")
+        logger.debug(f"Metadata for dataloader {dataloader_idx}: {metadata}")
         self.image_builder = self.partial_image_builder(
             metadata=metadata, save_dir=self.save_dir
         )
@@ -48,9 +49,9 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         save_path = self.image_builder.save()
         mlflow.log_artifact(local_path=save_path, artifact_path=self.save_dir)
         artifact_uri = mlflow.get_artifact_uri(str(save_path))
-        logger.debug(f"heatmap saved to: {artifact_uri}")
+        logger.debug(f"Heatmap saved to: {artifact_uri}")
         stripped_uri = artifact_uri.removeprefix("mlflow-artifacts:/")
-        logger.debug(f"saving heatmap URI to the cache as {stripped_uri}")
+        logger.debug(f"Saving heatmap URI to the cache as {stripped_uri}")
 
     def on_test_batch_end(
         self,
@@ -65,6 +66,20 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
         _, _, metadata = batch
+
+        # Debug metadata structure
+        logger.debug(f"Batch metadata structure: {type(metadata)}, content: {metadata[:1] if isinstance(metadata, list) else metadata}")
+        
+        # Extract attention weights
         attention_weights = outputs["attention_weights"].detach().cpu().numpy()
+        logger.debug(f"Attention weights shape: {attention_weights.shape}")
+
+        # Validate metadata and attention weights match
+        assert len(metadata) == attention_weights.shape[0], (
+            f"Metadata and attention weights mismatch: {len(metadata)} metadata entries, "
+            f"{attention_weights.shape[0]} attention weights."
+        )
+
+        # Update image builder with data and metadata
         self.image_builder.update(data=attention_weights, metadata=metadata)
         # self.image_builder.update(data=outputs["outputs"], metadata=metadata)

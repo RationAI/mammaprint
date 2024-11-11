@@ -328,15 +328,23 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         ys_count = [y // self.gcd_size_factor for y in ys_accum]
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
         logger.debug(f"Compressed coordinates xs_count: {xs_count[:5]}, ys_count: {ys_count[:5]}")
-
-        # Paste tiles onto heatmap accumulator and count overlaps
+        
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
+            logger.debug(f"Processing tile with shape: {tile.shape}")
+
+            if tile.ndim == 1:  # Broadcast 1D tiles to full dimensions
+                logger.debug("Tile is 1D; broadcasting.")
+                tile = np.full((self.tile_size, self.tile_size, 1), tile[0])
+            elif tile.ndim == 2:  # Add channel dimension for 2D tiles
+                logger.debug("Tile is 2D; adding channel dimension.")
+                tile = tile[:, :, None]
+
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
-            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
+            logger.debug(f"Accumulator shape: {mm_h}, {mm_w}, {mm_c}")
 
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
@@ -344,7 +352,6 @@ class InMemoryHeatmapAssembler(ImageAssembler):
                 :
             ] += tile[:mm_h, :mm_w, :mm_c]
 
-            # Update overlap counter for averaging
             self.patch_overlap_counter[
                 yc : yc + self.overlap_counter_tile_size,
                 xc : xc + self.overlap_counter_tile_size,
