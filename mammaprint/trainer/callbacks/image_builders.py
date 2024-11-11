@@ -313,14 +313,12 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         Update the heatmap and patch overlap counter with new data and metadata.
 
         Args:
-            data: A numpy array of attention weights.
+            data: A numpy array of attention weights or tiles for the entire slide.
             metadata: A list of dictionaries containing metadata about the tiles.
         """
-        # Debug metadata and attention weights structure
-        logger.debug(f"Metadata: {metadata}")
-        logger.debug(f"Data shape: {data.shape}")
+        logger.debug("Processing tiles for a single slide.")
 
-        # Extract coordinates and other relevant information from metadata
+        # Extract tile coordinates from metadata
         xs_accum = []
         ys_accum = []
         xs_count = []
@@ -330,7 +328,7 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             coord_x = md.get("coord_x", 0)
             coord_y = md.get("coord_y", 0)
 
-            # Convert tensors to scalar values if necessary
+            # Convert tensors to scalars if necessary
             if isinstance(coord_x, torch.Tensor):
                 coord_x = coord_x.item()
             if isinstance(coord_y, torch.Tensor):
@@ -339,55 +337,48 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             xs_accum.append(coord_x)
             ys_accum.append(coord_y)
 
-            xs_count.append(coord_x // self.overlap_counter_tile_size)
-            ys_count.append(coord_y // self.overlap_counter_tile_size)
+            xs_count.append(coord_x // self.gcd_size_factor)
+            ys_count.append(coord_y // self.gcd_size_factor)
 
-        # Log the extracted coordinates
+        # Log metadata information
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum}, ys_accum: {ys_accum}")
         logger.debug(f"Compressed coordinates xs_count: {xs_count}, ys_count: {ys_count}")
 
-        # Paste tiles onto heatmap accumulator and count overlaps
+        # Handle the data directly for the slide
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data):
-            # Validate tile type and shape
-            if not isinstance(tile, np.ndarray):
-                logger.error(f"Tile at ({ya}, {xa}) is not a numpy array. Type: {type(tile)}")
-                continue
+            # Validate tile data type and shape
+            if isinstance(tile, (float, np.float32)):  # Scalar attention weights
+                logger.debug(f"Adding scalar attention weight at ({ya}, {xa}): {tile}")
+                self.heatmap_accumulator[ya, xa, :] += tile
+                self.patch_overlap_counter[yc, xc, :] += 1
+            elif isinstance(tile, np.ndarray) and len(tile.shape) == 3:
+                # Add full tiles to the accumulator
+                mm_h, mm_w, mm_c = self.heatmap_accumulator[
+                    ya : ya + self.accumulator_tile_size,
+                    xa : xa + self.accumulator_tile_size,
+                    :
+                ].shape
 
-            if len(tile.shape) != 3:
-                logger.error(f"Tile at ({ya}, {xa}) has an invalid shape: {tile.shape}")
-                continue
+                logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}, {mm_c}).")
 
-            # Determine the max possible shape for the heatmap slice
-            mm_h, mm_w, mm_c = self.heatmap_accumulator[
-                ya : ya + self.accumulator_tile_size,
-                xa : xa + self.accumulator_tile_size,
-                :
-            ].shape
-
-            # Log the current operation
-            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}, {mm_c}).")
-
-            # Safeguard against indexing issues
-            try:
                 self.heatmap_accumulator[
                     ya : ya + self.accumulator_tile_size,
                     xa : xa + self.accumulator_tile_size,
                     :
                 ] += tile[:mm_h, :mm_w, :mm_c]
-            except IndexError as e:
-                logger.error(f"IndexError while processing tile at ({ya}, {xa}): {e}")
-                continue
-
-            # Update overlap counter for averaging
-            try:
                 self.patch_overlap_counter[
                     yc : yc + self.overlap_counter_tile_size,
                     xc : xc + self.overlap_counter_tile_size,
                     :
                 ] += 1
-            except IndexError as e:
-                logger.error(f"IndexError while updating overlap counter at ({yc}, {xc}): {e}")
+            else:
+                logger.error(
+                    f"Unsupported tile type or shape at ({ya}, {xa}): {type(tile)}, {tile.shape if isinstance(tile, np.ndarray) else 'scalar'}"
+                )
                 continue
+
+        # Debug the state of the accumulators
+        logger.debug("Updated heatmap accumulator and overlap counter for slide.")
 
 
     def save(self) -> str:
