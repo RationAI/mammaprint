@@ -56,13 +56,21 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
     def forward_tile(
         self, tile_labels: PipelineTileMetadata, class_overlaps: dict[int, float]
     ) -> PipelineTileMetadata:
-        # Calculate cancer percentage and log it for debugging
+        # Default cancer percentage
         cancer_percentage = 0.0
+
+        # Check if background is less than 50% and apply whiteness threshold
         if class_overlaps.get(0, 0) < 0.5:
-            cancer_percentage = 1 - class_overlaps.get(0, 0)  # Assume background is 0
+            # Aggregate all non-background overlaps above a certain threshold
+            whiteness_threshold = 128  # Define threshold for "white" (e.g., grayscale > 50%)
+            cancer_percentage = sum(
+                overlap for value, overlap in class_overlaps.items() if value >= whiteness_threshold
+            )
+
+        # Log for debugging
         logging.info(f"Cancer mask applied. Cancer coverage for tile: {cancer_percentage}")
-        
-        # Update the existing tile_labels with cancer_percentage instead of creating a new instance
+
+        # Update the existing tile_labels with cancer_percentage
         tile_labels.cancer_percentage = cancer_percentage
         return tile_labels
 
