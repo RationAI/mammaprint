@@ -62,17 +62,28 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
+        # Call the parent implementation for standard handling
         super().on_test_batch_end(
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
+
+        # Unpack batch to get metadata
         _, _, metadata = batch
 
         # Debug metadata structure
-        logger.debug(f"Batch metadata structure: {type(metadata)}, content: {metadata[:1] if isinstance(metadata, list) else metadata}")
-        
-        # Extract attention weights
+        logger.debug(
+            f"Batch metadata structure: {type(metadata)}, content: {metadata[:1] if isinstance(metadata, list) else metadata}"
+        )
+
+        # Extract and reshape attention weights
         attention_weights = outputs["attention_weights"].detach().cpu().numpy()
-        logger.debug(f"Attention weights shape: {attention_weights.shape}")
+        logger.debug(f"Original attention weights shape: {attention_weights.shape}")
+
+        # Reshape attention weights to align with metadata
+        if attention_weights.ndim == 2 and attention_weights.shape[0] == 1:
+            # Squeeze the batch dimension to match metadata
+            attention_weights = attention_weights.squeeze(0)  # Shape: [2000]
+            logger.debug(f"Reshaped attention weights shape: {attention_weights.shape}")
 
         # Validate metadata and attention weights match
         assert len(metadata) == attention_weights.shape[0], (
@@ -80,6 +91,6 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             f"{attention_weights.shape[0]} attention weights."
         )
 
-        # Update image builder with data and metadata
+        # Update the image builder with attention weights and metadata
         self.image_builder.update(data=attention_weights, metadata=metadata)
-        # self.image_builder.update(data=outputs["outputs"], metadata=metadata)
+        logger.debug("Image builder updated with attention weights and metadata.")

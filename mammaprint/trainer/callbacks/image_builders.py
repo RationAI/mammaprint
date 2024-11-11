@@ -308,43 +308,33 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
+    def update(self, data: np.ndarray, metadata: list[dict]) -> None:
         logger.debug("Starting to map attention weights to heatmap.")
+
+        # Ensure data is 1D and matches metadata
+        assert data.ndim == 1, f"Expected 1D attention weights, got shape {data.shape}"
+        assert len(data) == len(metadata), f"Data and metadata mismatch: {len(data)} vs {len(metadata)}"
         
-        # Convert data to numpy array and log its min and max before scaling
-        data = self._to_numpy(data)
-        data_min, data_max = data.min(), data.max()
-        logger.info(f"Attention weights min: {data_min}, max: {data_max} before scaling.")
+        # Transform 1D attention weights into tiles
+        tile_size = self.tile_size
+        data = np.array([np.full((tile_size, tile_size, 1), weight) for weight in data])
+        logger.debug(f"Transformed data into tiles: {data.shape}")
 
-        # Normalize data to 0–255 range for visualization
-        data = 255 * (data - data_min) / (data_max - data_min + 1e-5)
-        data = data.astype(np.uint8)  # Convert to uint8 after scaling
-        logger.info(f"Attention weights min: {data.min()}, max: {data.max()} after scaling to 0-255.")
-
-        # Transform coordinates based on metadata and log results
+        # Transform coordinates based on metadata
         xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in metadata]
         ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in metadata]
         xs_count = [x // self.gcd_size_factor for x in xs_accum]
         ys_count = [y // self.gcd_size_factor for y in ys_accum]
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
-        logger.debug(f"Compressed coordinates xs_count: {xs_count[:5]}, ys_count: {ys_count[:5]}")
-        
+
+        # Paste tiles onto heatmap
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
-            logger.debug(f"Processing tile with shape: {tile.shape}")
-
-            if tile.ndim == 1:  # Broadcast 1D tiles to full dimensions
-                logger.debug("Tile is 1D; broadcasting.")
-                tile = np.full((self.tile_size, self.tile_size, 1), tile[0])
-            elif tile.ndim == 2:  # Add channel dimension for 2D tiles
-                logger.debug("Tile is 2D; adding channel dimension.")
-                tile = tile[:, :, None]
-
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
-            logger.debug(f"Accumulator shape: {mm_h}, {mm_w}, {mm_c}")
+            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
 
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
