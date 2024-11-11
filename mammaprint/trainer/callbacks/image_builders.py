@@ -311,30 +311,37 @@ class InMemoryHeatmapAssembler(ImageAssembler):
     def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
         logger.debug("Starting to map attention weights to heatmap.")
 
-        # Ensure data is 1D and matches metadata
-        assert data.ndim == 1, f"Expected 1D attention weights, got shape {data.shape}"
-        assert len(data) == len(metadata), f"Data and metadata mismatch: {len(data)} vs {len(metadata)}"
-        
-        # Transform attention weights into tiles
-        tile_size = self.tile_size
-        data = np.array([np.full((tile_size, tile_size, 1), weight) for weight in data])
-        logger.debug(f"Transformed data into tiles: {data.shape}")
+        # Normalize metadata values (convert tensors to plain data)
+        metadata = [
+            {key: val.item() if torch.is_tensor(val) else val for key, val in md.items()}
+            for md in metadata
+        ]
 
-        # Transform coordinates based on metadata
-        xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in metadata]
-        ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in metadata]
+        # Transform coordinates and ensure they're integers
+        xs_accum = [int(md["coord_x"] // self.level_coord_multiplier) for md in metadata]
+        ys_accum = [int(md["coord_y"] // self.level_coord_multiplier) for md in metadata]
         xs_count = [x // self.gcd_size_factor for x in xs_accum]
         ys_count = [y // self.gcd_size_factor for y in ys_accum]
+
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
 
-        # Paste tiles onto heatmap
+        # Iterate through tiles and add them to the heatmap
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
-            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
+
+            # Validate tile size
+            if mm_h == 0 or mm_w == 0:
+                logger.warning(
+                    f"Invalid tile size at position ({xa}, {ya}). Skipping tile."
+                )
+                continue
+
+            # Log tile placement
+            logger.debug(f"Adding tile to heatmap at position ({xa}, {ya}) with size ({mm_h}, {mm_w}).")
 
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
