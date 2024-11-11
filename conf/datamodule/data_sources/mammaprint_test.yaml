@@ -5,6 +5,7 @@ mammaprint_test:
     # - mlflow-artifacts:/17/fd14e11c797d49c5b6b31d90830555a1/artifacts/train_tissue_classification_tumor_tiles #level 0
     # - mlflow-artifacts:/17/0adc2a9312124549be1a4237a353d1ec/artifacts/dataset #validation set after TC
     # - mlflow-artifacts:/17/05af7650d77342a5a0a612cea5c47791/artifacts/dataset #test set after TC
-    - mlflow-artifacts:/17/3381db462dc24b43af8e0eb0e9545b74/artifacts/dataset #validation set after TC, threshold 128
+    # - mlflow-artifacts:/17/3381db462dc24b43af8e0eb0e9545b74/artifacts/dataset #validation set after TC, threshold 128
+    - mlflow-artifacts:/17/4271bba097804309b2c72a665992d144/artifacts/dataset #test set after TC, threshold 128
   splits:
     test: 1.0
