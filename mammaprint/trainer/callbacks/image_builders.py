@@ -308,7 +308,7 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: np.ndarray, metadata: List[Dict[str, Any]]) -> None:
+    def update(self, data: np.ndarray, metadata: list[dict]) -> None:
         """
         Update the heatmap and patch overlap counter with new data and metadata.
 
@@ -388,8 +388,6 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             except IndexError as e:
                 logger.error(f"IndexError while updating overlap counter at ({yc}, {xc}): {e}")
                 continue
-
-
 
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
