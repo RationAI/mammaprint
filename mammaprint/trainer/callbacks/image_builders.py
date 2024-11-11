@@ -330,10 +330,10 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             coord_x = md.get("coord_x", 0)
             coord_y = md.get("coord_y", 0)
 
-            # Validate coordinates
-            if torch.is_tensor(coord_x):
+            # Convert tensors to scalar values if necessary
+            if isinstance(coord_x, torch.Tensor):
                 coord_x = coord_x.item()
-            if torch.is_tensor(coord_y):
+            if isinstance(coord_y, torch.Tensor):
                 coord_y = coord_y.item()
 
             xs_accum.append(coord_x)
@@ -388,6 +388,7 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             except IndexError as e:
                 logger.error(f"IndexError while updating overlap counter at ({yc}, {xc}): {e}")
                 continue
+
 
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
