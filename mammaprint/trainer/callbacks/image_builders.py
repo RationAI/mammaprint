@@ -289,8 +289,8 @@ class InMemoryHeatmapAssembler(ImageAssembler):
 
         # Calculate sizes for accumulator and overlap counter
         self.w, self.h, self.c = self.image_size
-        compressed_w = self.w // self.gcd_size_factor
-        compressed_h = self.h // self.gcd_size_factor
+        compressed_w = math.ceil(self.w / self.gcd_size_factor)
+        compressed_h = math.ceil(self.h / self.gcd_size_factor)
 
         # set accumulator size to compressed size if enabled
         if self.compress_accumulator_array:
@@ -323,6 +323,8 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         ys_accum = []
         xs_count = []
         ys_count = []
+        yc_count = []
+        xc_count = []
 
         for md in metadata:
             coord_x = md.get("coord_x", 0)
@@ -337,8 +339,20 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             xs_accum.append(coord_x)
             ys_accum.append(coord_y)
 
-            xs_count.append(coord_x // self.gcd_size_factor)
-            ys_count.append(coord_y // self.gcd_size_factor)
+            # Calculate compressed coordinates
+            xc = coord_x // self.gcd_size_factor
+            yc = coord_y // self.gcd_size_factor
+
+            # Ensure compressed coordinates are within bounds
+            if xc >= self.heatmap_accumulator.shape[1] or yc >= self.heatmap_accumulator.shape[0]:
+                logger.error(
+                    f"Compressed coordinates ({yc}, {xc}) out of bounds "
+                    f"for heatmap_accumulator with shape {self.heatmap_accumulator.shape}."
+                )
+                continue  # Skip this tile
+
+            xs_count.append(xc)
+            ys_count.append(yc)
 
         # Log metadata information
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum}, ys_accum: {ys_accum}")
@@ -347,56 +361,64 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         # Handle the data directly for the slide
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data):
             # Validate tile data type and shape
-            if isinstance(tile, (float, np.float32)):  # Scalar attention weights
-                logger.debug(f"Adding scalar attention weight at ({ya}, {xa}): {tile}")
-                self.heatmap_accumulator[ya, xa, :] += tile
+            if isinstance(tile, (float, np.float32, np.float64)):  # Scalar attention weights
+                logger.debug(f"Adding scalar attention weight at ({yc}, {xc}): {tile}")
+                self.heatmap_accumulator[yc, xc, :] += tile
                 self.patch_overlap_counter[yc, xc, :] += 1
             elif isinstance(tile, np.ndarray) and len(tile.shape) == 3:
                 # Add full tiles to the accumulator
+                end_y = yc + self.accumulator_tile_size
+                end_x = xc + self.accumulator_tile_size
+
+                # Ensure indices do not exceed the accumulator's dimensions
+                end_y = min(end_y, self.heatmap_accumulator.shape[0])
+                end_x = min(end_x, self.heatmap_accumulator.shape[1])
+
                 mm_h, mm_w, mm_c = self.heatmap_accumulator[
-                    ya : ya + self.accumulator_tile_size,
-                    xa : xa + self.accumulator_tile_size,
-                    :
+                    yc:end_y, xc:end_x, :
                 ].shape
 
-                logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}, {mm_c}).")
+                logger.debug(
+                    f"Adding tile to heatmap at position ({yc}, {xc}) with size ({mm_h}, {mm_w}, {mm_c})."
+                )
 
                 self.heatmap_accumulator[
-                    ya : ya + self.accumulator_tile_size,
-                    xa : xa + self.accumulator_tile_size,
-                    :
+                    yc:end_y, xc:end_x, :
                 ] += tile[:mm_h, :mm_w, :mm_c]
                 self.patch_overlap_counter[
-                    yc : yc + self.overlap_counter_tile_size,
-                    xc : xc + self.overlap_counter_tile_size,
+                    yc // self.gcd_size_factor : (yc // self.gcd_size_factor) + self.overlap_counter_tile_size,
+                    xc // self.gcd_size_factor : (xc // self.gcd_size_factor) + self.overlap_counter_tile_size,
                     :
                 ] += 1
             else:
                 logger.error(
-                    f"Unsupported tile type or shape at ({ya}, {xa}): {type(tile)}, {tile.shape if isinstance(tile, np.ndarray) else 'scalar'}"
+                    f"Unsupported tile type or shape at ({yc}, {xc}): {type(tile)}, "
+                    f"{tile.shape if isinstance(tile, np.ndarray) else 'scalar'}"
                 )
                 continue
 
         # Debug the state of the accumulators
         logger.debug("Updated heatmap accumulator and overlap counter for slide.")
 
-
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
-        
+
         # Convert the accumulator and overlap counter to pyVips images
         vips_im = pyvips.Image.new_from_array(self.heatmap_accumulator)
         count_im = pyvips.Image.new_from_array(self.patch_overlap_counter)
-        
+
         logger.debug("Created pyVips images for accumulator and overlap counter.")
 
         # Normalize by overlap counter, with zero-safe division
         vips_im = vips_im / (count_im + 1e-5)  # Add epsilon to prevent division by zero
-        logger.info(f"Normalized heatmap with overlap counter. Range after normalization: min {vips_im.min()}, max {vips_im.max()}.")
+        logger.info(
+            f"Normalized heatmap with overlap counter. "
+            f"Range after normalization: min {vips_im.min()}, max {vips_im.max()}."
+        )
 
         # Finalize image and save
         vips_im = self._finalize_image(vips_im)
         save_path = self._save_xopat_compatible(vips_im)
         logger.info(f"Saved heatmap to {save_path}.")
-        
+
         return save_path
