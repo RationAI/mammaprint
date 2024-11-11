@@ -311,58 +311,85 @@ class InMemoryHeatmapAssembler(ImageAssembler):
     def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
         logger.debug("Starting to map attention weights to heatmap.")
 
-        # Normalize metadata values (convert tensors to plain data)
-        metadata = [
-            {key: val.item() if torch.is_tensor(val) else val for key, val in md.items()}
-            for md in metadata
-        ]
+        # Process metadata (coordinates specifically)
+        processed_metadata = []
+        for md in metadata:
+            # Handle coord_x and coord_y specifically
+            coord_x = md["coord_x"]
+            coord_y = md["coord_y"]
+            
+            # Skip padding or invalid tiles (assuming coord_x or coord_y of tensor([0]) is padding)
+            if torch.is_tensor(coord_x) and torch.is_tensor(coord_y):
+                if (coord_x == 0).all() and (coord_y == 0).all():
+                    logger.debug("Skipping padding tile.")
+                    continue
+                
+                # Extract single value from tensors with one element
+                if coord_x.numel() == 1:
+                    coord_x = coord_x.item()
+                if coord_y.numel() == 1:
+                    coord_y = coord_y.item()
+            
+            # Update processed metadata
+            processed_metadata.append(
+                {key: val.item() if torch.is_tensor(val) and val.numel() == 1 else val for key, val in md.items()}
+            )
+            processed_metadata[-1]["coord_x"] = coord_x
+            processed_metadata[-1]["coord_y"] = coord_y
 
-        # Transform coordinates and ensure they're integers
-        xs_accum = [int(md["coord_x"] // self.level_coord_multiplier) for md in metadata]
-        ys_accum = [int(md["coord_y"] // self.level_coord_multiplier) for md in metadata]
+        # Log a sample of processed metadata
+        logger.debug(f"Processed metadata sample: {processed_metadata[:5]}")
+
+        # Convert attention weights to numpy and log their range
+        data = self._to_numpy(data)
+        data_min, data_max = data.min(), data.max()
+        logger.info(f"Attention weights min: {data_min}, max: {data_max} before scaling.")
+
+        # Normalize data to 0–255 range for visualization
+        data = 255 * (data - data_min) / (data_max - data_min + 1e-5)
+        data = data.astype(np.uint8)  # Convert to uint8 after scaling
+        logger.info(f"Attention weights min: {data.min()}, max: {data.max()} after scaling to 0-255.")
+
+        # Transform coordinates based on metadata
+        xs_accum = [md["coord_x"] // self.level_coord_multiplier for md in processed_metadata]
+        ys_accum = [md["coord_y"] // self.level_coord_multiplier for md in processed_metadata]
         xs_count = [x // self.gcd_size_factor for x in xs_accum]
         ys_count = [y // self.gcd_size_factor for y in ys_accum]
 
+        # Log transformed coordinates
         logger.debug(f"Transformed coordinates xs_accum: {xs_accum[:5]}, ys_accum: {ys_accum[:5]}")
+        logger.debug(f"Compressed coordinates xs_count: {xs_count[:5]}, ys_count: {ys_count[:5]}")
 
-        # Iterate through tiles and add them to the heatmap
+        # Paste tiles onto heatmap accumulator and count overlaps
         for xa, ya, xc, yc, tile in zip(xs_accum, ys_accum, xs_count, ys_count, data, strict=False):
             mm_h, mm_w, mm_c = self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ].shape
+            logger.debug(f"Adding tile to heatmap at position ({ya}, {xa}) with size ({mm_h}, {mm_w}).")
 
-            # Validate tile size
-            if mm_h == 0 or mm_w == 0:
-                logger.warning(
-                    f"Invalid tile size at position ({xa}, {ya}). Skipping tile."
-                )
-                continue
-
-            # Log tile placement
-            logger.debug(f"Adding tile to heatmap at position ({xa}, {ya}) with size ({mm_h}, {mm_w}).")
-
+            # Add tile to the heatmap accumulator
             self.heatmap_accumulator[
                 ya : ya + self.accumulator_tile_size,
                 xa : xa + self.accumulator_tile_size,
                 :
             ] += tile[:mm_h, :mm_w, :mm_c]
 
-            # Update overlap counter
+            # Update overlap counter for averaging
             self.patch_overlap_counter[
                 yc : yc + self.overlap_counter_tile_size,
                 xc : xc + self.overlap_counter_tile_size,
                 :
             ] += 1
 
-        # Flush only if heatmap_accumulator is a memmap
-        if isinstance(self.heatmap_accumulator, np.memmap):
+        # If using memory-mapped arrays, flush changes to disk
+        if hasattr(self.heatmap_accumulator, "flush"):
             self.heatmap_accumulator.flush()
             self.patch_overlap_counter.flush()
-            logger.debug("Flushed heatmap_accumulator and patch_overlap_counter to disk.")
-        else:
-            logger.debug("Skipping flush; heatmap_accumulator is an in-memory numpy array.")
+
+        logger.info("Updated heatmap accumulator and flushed to disk (if applicable).")
+
 
     def save(self) -> str:
         logger.info("Starting heatmap save process.")
