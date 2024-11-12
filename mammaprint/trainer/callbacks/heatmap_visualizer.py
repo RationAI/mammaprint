@@ -10,7 +10,8 @@ import mlflow
 from mammaprint.trainer.callbacks.dataloader_agnostic import (
     DataloaderAgnosticCallback,
 )
-from mammaprint.trainer.callbacks.image_builders import ImageBuilder, InMemoryHeatmapAssembler
+from mammaprint.trainer.callbacks.image_builders import ImageBuilder
+
 
 logger = logging.getLogger("callbacks/heatmap_visualizer")
 
@@ -33,15 +34,9 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         dataloader_idx: int,
     ) -> None:
         logger.debug("Creating new Heatmap visualizer.")
-        logger.debug(f"Metadata for dataloader {dataloader_idx}: {metadata}")
-        try:
-            self.image_builder = self.partial_image_builder(
-                metadata=metadata, save_dir=self.save_dir
-            )
-            logger.debug("Image builder initialized successfully.")
-        except Exception as e:
-            logger.error(f"Failed to initialize image builder: {e}")
-            self.image_builder = None
+        self.image_builder = self.partial_image_builder(
+            metadata=metadata, save_dir=self.save_dir
+        )
 
     def on_test_dataloader_end(
         self,
@@ -49,20 +44,13 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         pl_module: lightning.LightningModule,
         dataloader_idx: int,
     ) -> None:
-        if self.image_builder is None:
-            logger.error("Image builder is not initialized. Skipping save.")
-            return
-
         logger.debug("Saving heatmap.")
-        try:
-            save_path = self.image_builder.save()
-            mlflow.log_artifact(local_path=save_path, artifact_path=self.save_dir)
-            artifact_uri = mlflow.get_artifact_uri(str(save_path))
-            logger.debug(f"Heatmap saved to: {artifact_uri}")
-            stripped_uri = artifact_uri.removeprefix("mlflow-artifacts:/")
-            logger.debug(f"Saving heatmap URI to the cache as {stripped_uri}")
-        except Exception as e:
-            logger.error(f"Failed to save heatmap: {e}")
+        save_path = self.image_builder.save()
+        mlflow.log_artifact(local_path=save_path, artifact_path=self.save_dir)
+        artifact_uri = mlflow.get_artifact_uri(str(save_path))
+        logger.debug(f"heatmap saved to: {artifact_uri}")
+        stripped_uri = artifact_uri.removeprefix("mlflow-artifacts:/")
+        logger.debug(f"saving heatmap URI to the cache as {stripped_uri}")
 
     def on_test_batch_end(
         self,
@@ -73,60 +61,8 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
-        # Call the parent implementation for standard handling
         super().on_test_batch_end(
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
-
-        if self.image_builder is None:
-            logger.error("Image builder is not initialized. Skipping update.")
-            return
-
-        # Unpack batch to get metadata
         _, _, metadata = batch
-
-        # Debug metadata structure
-        logger.debug(
-            f"Batch metadata structure: {type(metadata)}, content: {metadata[:1] if isinstance(metadata, list) else metadata}"
-        )
-
-        # Extract and reshape attention weights
-        attention_weights = outputs.get("attention_weights", None)
-        if attention_weights is None:
-            logger.error("No 'attention_weights' found in outputs. Skipping update.")
-            return
-
-        attention_weights = attention_weights.detach().cpu().numpy()
-        logger.debug(f"Original attention weights shape: {attention_weights.shape}")
-
-        # Ensure attention_weights is 2D [N, C]
-        if attention_weights.ndim == 1:
-            attention_weights = attention_weights.reshape(-1, 1)  # Shape: [N, 1]
-            logger.debug(f"Reshaped attention weights to shape: {attention_weights.shape}")
-        elif attention_weights.ndim == 2:
-            logger.debug(f"Attention weights already 2D with shape: {attention_weights.shape}")
-        else:
-            logger.error(
-                f"Unexpected attention_weights shape: {attention_weights.shape}. "
-                f"Expected [N, C] or [N, C, W, H]."
-            )
-            return
-
-        # Validate metadata and attention weights match
-        if not isinstance(metadata, list):
-            logger.error("Metadata is not a list. Skipping update.")
-            return
-
-        if len(metadata) != attention_weights.shape[0]:
-            logger.error(
-                f"Metadata and attention weights mismatch: {len(metadata)} metadata entries, "
-                f"{attention_weights.shape[0]} attention weights."
-            )
-            return
-
-        # Update the image builder with attention weights and metadata
-        try:
-            self.image_builder.update(data=attention_weights, metadata=metadata)
-            logger.debug("Image builder updated with attention weights and metadata.")
-        except Exception as e:
-            logger.error(f"Failed to update image builder: {e}")
+        self.image_builder.update(data=outputs["attention_weights"], metadata=metadata)
