@@ -23,7 +23,7 @@ logging.basicConfig(
 # Define paths
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tiff/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_tissue_classification_tumor_masks/test_heatmaps/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Test_set_mamaprint_tissue_masks_resized/"
 
 @dataclass
 class PipelineTileMetadata(TileMetadata):
@@ -88,7 +88,7 @@ cancer_mask = CancerMask(
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 # Define the path to Learning_set.csv relative to the script's directory
-LABELS_FILE = SCRIPT_DIR / 'test_set.csv'
+LABELS_FILE = SCRIPT_DIR / 'validation_set.csv'
 
 # Verify if LABELS_FILE exists
 if not LABELS_FILE.exists():
@@ -202,7 +202,7 @@ def main() -> None:
     # Save to MLflow
     try:
         mlflow.set_experiment(experiment_name="Mamma-print")
-        with mlflow.start_run(run_name="Tiling mammaprint test dataset from tissue classification model, threshold 128") as _:
+        with mlflow.start_run(run_name="Tiling mammaprint validation dataset from tissue classification model, threshold 128") as _:
             save_mlflow_dataset(
                 slides=test_slides_df,
                 tiles=test_tiles_df,
