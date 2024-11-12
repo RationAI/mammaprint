@@ -110,7 +110,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
             "metrics": self.metrics.compute("test", slide_name),
             "outputs": y_pred,
             "attention_weights": attention_weights,
-            "metadata": metadata[0],
+            "metadata": metadata,
         }
 
     def on_test_epoch_end(self):

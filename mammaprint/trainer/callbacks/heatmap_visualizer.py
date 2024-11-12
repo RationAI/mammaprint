@@ -65,4 +65,5 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
         _, _, metadata = batch
-        self.image_builder.update(data=outputs["attention_weights"], metadata=metadata)
+        for index in range(2000):
+            self.image_builder.update(data=outputs["attention_weights"][index], metadata=metadata[index])
