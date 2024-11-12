@@ -64,11 +64,8 @@ class ImageBuilder(ABC):
         if data.ndim == 2:  # tile is classification
             logger.debug("Adding dimensions.")
             return data[:, None, None, :]  # [N, W, H, C]
-        if data.ndim == 1:  # data is scalar per tile
-            logger.debug("Adding dimensions for scalar data.")
-            return data[:, None, None, None]  # [N, W, H, C]
         raise ValueError(
-            f"Incorrect data format. Expected 4-dim [N, C, W, H], 2-dim [N, C], or 1-dim [N]"
+            f"Incorrect data format. Expected 4-dim [N, C, W, H], 2-dim [N, C]"
             f" but found {data.ndim}-dim {data.shape}."
         )
 
@@ -312,40 +309,20 @@ class InMemoryHeatmapAssembler(ImageAssembler):
 
     def update(self, data: torch.Tensor, metadata: dict) -> None:
         logger.debug("Pasting tiles.")
+        xs = metadata['coord_x'] // self.scale_factor
+        ys = metadata['coord_y'] // self.scale_factor
+        data = self._to_numpy(data)  # Convert to numpy array, shape [num_tiles]
 
-        # Get base tile coordinates for uncompressed accumulator
-        xs_accum = metadata["coord_x"] // self.level_coord_multiplier
-        ys_accum = metadata["coord_y"] // self.level_coord_multiplier
-        data = self._preprocess_data(data)
+        # Process each tile's attention weight
+        for x, y, weight in zip(xs, ys, data, strict=False):
+            mm_h, mm_w, mm_c = self.image[y:y + self.tile_size, x:x + self.tile_size, :].shape
+            # Create a tile filled with the attention weight
+            tile = np.full((mm_h, mm_w, mm_c), weight, dtype=np.float32)
+            self.image[y:y + self.tile_size, x:x + self.tile_size, :] += tile
+            self.count[y:y + self.tile_size, x:x + self.tile_size, :] += 1
 
-        # compress overlap counter coordinates
-        xs_count = xs_accum // self.gcd_size_factor
-        ys_count = ys_accum // self.gcd_size_factor
-
-        # compress accumulator coordinates if enabled
-        if self.compress_accumulator_array:
-            xs_accum = xs_count
-            ys_accum = ys_count
-
-        # Paste tiles onto mask
-        for xa, ya, xc, yc, tile in zip(
-            xs_accum, ys_accum, xs_count, ys_count, data, strict=False
-        ):
-            mm_h, mm_w, mm_c = self.heatmap_accumulator[
-                ya : ya + self.accumulator_tile_size,
-                xa : xa + self.accumulator_tile_size,
-                :,
-            ].shape
-            self.heatmap_accumulator[
-                ya : ya + self.accumulator_tile_size,
-                xa : xa + self.accumulator_tile_size,
-                :,
-            ] += tile[:mm_h, :mm_w, :mm_c]
-            self.patch_overlap_counter[
-                yc : yc + self.overlap_counter_tile_size,
-                xc : xc + self.overlap_counter_tile_size,
-                :,
-            ] += 1
+        self.image.flush()
+        self.count.flush()
 
     def save(self) -> str:
         # Converting to pyVips
