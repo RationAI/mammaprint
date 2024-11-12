@@ -74,7 +74,11 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         # Extract attention weights and metadata
         attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
         logger.debug(f"Extracted attention_weights with shape: {attention_weights.shape}")
-        logger.debug(f"Attention weights: {attention_weights}")
+        min_weight = attention_weights.min()
+        max_weight = attention_weights.max()
+        mean_weight = attention_weights.mean()
+        logger.debug(f"Attention weights: min={min_weight}, max={max_weight}, mean={mean_weight}")
+        # logger.debug(f"Attention weights: {attention_weights}")
 
         metadata_list = batch[2]  # list of metadata dicts per batch element
         logger.debug(f"Extracted metadata_list with length: {len(metadata_list)}")
@@ -94,20 +98,8 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             metadata = metadata_list  # dict containing per-tile metadata
             logger.debug(f"Extracted metadata for batch {i+1}: {metadata}")
 
-            tile_metadata = {
-                'coord_x': metadata['coord_x'],
-                'coord_y': metadata['coord_y'],
-                'tile_size': metadata['tile_size'],
-                'sample_level': metadata['sample_level'],
-                'slide_name': metadata['slide_name'],
-                'slide_width': metadata['slide_width'],
-                'slide_height': metadata['slide_height'],
-                'slide_channels': 1,  # Since attention weights are scalar
-            }
-            logger.debug(f"Constructed tile_metadata for batch {i+1}: {tile_metadata}")
-
             # Update the image builder with arrays of data and metadata
             logger.debug(f"Updating image builder for batch {i+1}.")
-            self.image_builder.update(data=data, metadata=tile_metadata)
+            self.image_builder.update(data=data, metadata=metadata)
 
         logger.debug("Completed on_test_batch_end.")
