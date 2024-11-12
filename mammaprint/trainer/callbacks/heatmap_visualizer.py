@@ -65,10 +65,16 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
         logger.debug("Starting on_test_batch_end.")
+        logger.debug(f"Batch structure: {[type(b) for b in batch]}")
+        logger.debug(f"Batch[0] (inputs): {batch[0].shape if hasattr(batch[0], 'shape') else type(batch[0])}")
+        logger.debug(f"Batch[1] (labels or metadata?): {batch[1]}")
+        logger.debug(f"Batch[2] (metadata or something else?): {batch[2]}")
+
 
         # Extract attention weights and metadata
         attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
         logger.debug(f"Extracted attention_weights with shape: {attention_weights.shape}")
+        logger.debug(f"Attention weights: {attention_weights}")
 
         metadata_list = batch[2]  # list of metadata dicts per batch element
         logger.debug(f"Extracted metadata_list with length: {len(metadata_list)}")
@@ -85,28 +91,23 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             data = data.unsqueeze(1)  # Now data shape is [num_tiles, 1]
             logger.debug(f"Reshaped data to: {data.shape}")
 
-            metadata = metadata_list[i]  # dict containing per-tile metadata
+            metadata = metadata_list  # dict containing per-tile metadata
             logger.debug(f"Extracted metadata for batch {i+1}: {metadata}")
 
-            # Loop over each tile and construct per-tile metadata
-            for tile_idx in range(num_tiles):
-                tile_metadata = {
-                    'coord_x': metadata['coord_x'][tile_idx].item(),  # Get per-tile coord_x
-                    'coord_y': metadata['coord_y'][tile_idx].item(),  # Get per-tile coord_y
-                    'tile_size': metadata['tile_size'].item(),
-                    'sample_level': metadata['sample_level'].item(),
-                    'slide_name': metadata['slide_name'][0],  # Assuming slide_name is the same
-                    'slide_width': metadata['slide_width'].item(),
-                    'slide_height': metadata['slide_height'].item(),
-                    'slide_channels': 1,  # Since attention weights are scalar
-                }
+            tile_metadata = {
+                'coord_x': metadata['coord_x'],
+                'coord_y': metadata['coord_y'],
+                'tile_size': metadata['tile_size'],
+                'sample_level': metadata['sample_level'],
+                'slide_name': metadata['slide_name'],
+                'slide_width': metadata['slide_width'],
+                'slide_height': metadata['slide_height'],
+                'slide_channels': 1,  # Since attention weights are scalar
+            }
+            logger.debug(f"Constructed tile_metadata for batch {i+1}: {tile_metadata}")
 
-                logger.debug(
-                    f"Constructed tile_metadata for tile {tile_idx+1}/{num_tiles}: {tile_metadata}"
-                )
-
-                # Update the image builder with per-tile data and metadata
-                self.image_builder.update(data=data[tile_idx], metadata=tile_metadata)
+            # Update the image builder with arrays of data and metadata
+            logger.debug(f"Updating image builder for batch {i+1}.")
+            self.image_builder.update(data=data, metadata=tile_metadata)
 
         logger.debug("Completed on_test_batch_end.")
-
