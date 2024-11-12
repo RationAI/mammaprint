@@ -5,7 +5,8 @@ mammaprint:
     # - mlflow-artifacts:/17/fd14e11c797d49c5b6b31d90830555a1/artifacts/train_tissue_classification_tumor_tiles
     # - mlflow-artifacts:/17/30d36a9e4c674aa8849c507d78847ff2/artifacts/dataset
     # - mlflow-artifacts:/17/cd7ac5f952594da2905decc1cdbcb960/artifacts/dataset #Level 1 after TC
-    - mlflow-artifacts:/17/fb42c5d94099425587cc053a11da2165/artifacts/dataset #Level 1, threshold on white tiles 128 after TC
+    # - mlflow-artifacts:/17/fb42c5d94099425587cc053a11da2165/artifacts/dataset #Level 1, threshold on white tiles 128 after TC
+    - mlflow-artifacts:/17/5073268caf424686a97434c3a0f6fede/artifacts/dataset #Level 1, validation set threshold on white tiles 128 after TC, downsized tumor masks
   stratified_keys:
     - luminal_id
   splits:
