@@ -79,11 +79,7 @@ class ImageBuilder(ABC):
         """
         data = self._to_numpy(data)
         data = self._to_nwhc(data)
-        # Apply logarithmic scaling
-        data = np.log(data + 1e-8)  # Add epsilon to avoid log(0)
-        # Normalize to [0, 1]
-        data = (data - data.min()) / (data.max() - data.min() + 1e-8)
-        data = self.visualization_mode.scale(data)  # Scale from [0, 1] to [0, 255]
+        data = self.visualization_mode.scale(data)  # Scale from [0,1] to [0,255]
         return data
 
     def _finalize_image(self, vips_im: pyvips.Image) -> pyvips.Image:
