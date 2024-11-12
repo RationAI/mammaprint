@@ -311,18 +311,22 @@ class InMemoryHeatmapAssembler(ImageAssembler):
             dtype=np.uint8,
         )
 
-    def update(self, data: torch.Tensor, metadata: list[dict]) -> None:
+    def update(self, data: np.ndarray, metadata: list[dict]) -> None:
         """
         Update the heatmap and patch overlap counter with new data and metadata.
 
         Args:
-            data: A torch tensor of attention weights or tiles for the entire slide.
+            data: A numpy array of attention weights for the entire slide. Shape: [N, 1]
             metadata: A list of dictionaries containing metadata about the tiles.
         """
         logger.debug("Processing tiles for a single slide.")
 
-        # Preprocess data
-        data = self._preprocess_data(data)
+        # data is expected to be [N, 1]
+        if data.ndim != 2 or data.shape[1] != 1:
+            logger.error(
+                f"Incorrect data shape for heatmap accumulation: {data.shape}. Expected [N, 1]."
+            )
+            return
 
         # Extract tile coordinates from metadata
         xs_accum = []
@@ -410,11 +414,7 @@ class InMemoryHeatmapAssembler(ImageAssembler):
                 self.heatmap_accumulator[
                     yc:end_y, xc:end_x, :
                 ] += tile[:mm_h, :mm_w, :mm_c]
-                self.patch_overlap_counter[
-                    yc // self.gcd_size_factor : (yc // self.gcd_size_factor) + self.overlap_counter_tile_size,
-                    xc // self.gcd_size_factor : (xc // self.gcd_size_factor) + self.overlap_counter_tile_size,
-                    :
-                ] += 1
+                self.patch_overlap_counter[yc, xc, :] += 1
             else:
                 logger.error(
                     f"Unsupported tile type or shape at ({yc}, {xc}): {type(tile)}, "

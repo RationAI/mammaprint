@@ -99,11 +99,18 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         attention_weights = attention_weights.detach().cpu().numpy()
         logger.debug(f"Original attention weights shape: {attention_weights.shape}")
 
-        # Reshape attention weights to align with metadata
-        if attention_weights.ndim == 2 and attention_weights.shape[0] == 1:
-            # Squeeze the batch dimension to match metadata
-            attention_weights = attention_weights.squeeze(0)  # Shape: [N]
-            logger.debug(f"Reshaped attention weights shape: {attention_weights.shape}")
+        # Ensure attention_weights is 2D [N, C]
+        if attention_weights.ndim == 1:
+            attention_weights = attention_weights.reshape(-1, 1)  # Shape: [N, 1]
+            logger.debug(f"Reshaped attention weights to shape: {attention_weights.shape}")
+        elif attention_weights.ndim == 2:
+            logger.debug(f"Attention weights already 2D with shape: {attention_weights.shape}")
+        else:
+            logger.error(
+                f"Unexpected attention_weights shape: {attention_weights.shape}. "
+                f"Expected [N, C] or [N, C, W, H]."
+            )
+            return
 
         # Validate metadata and attention weights match
         if not isinstance(metadata, list):
