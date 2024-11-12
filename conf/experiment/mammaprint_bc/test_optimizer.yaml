@@ -16,7 +16,7 @@ datamodule:
   dataloaders_kwargs:
     test:
       num_workers: 12
-      batch_size: 50
+      batch_size: 32
 
 ml:
   net:
