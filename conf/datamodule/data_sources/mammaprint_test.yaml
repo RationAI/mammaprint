@@ -6,6 +6,7 @@ mammaprint_test:
     # - mlflow-artifacts:/17/0adc2a9312124549be1a4237a353d1ec/artifacts/dataset #validation set after TC
     # - mlflow-artifacts:/17/05af7650d77342a5a0a612cea5c47791/artifacts/dataset #test set after TC
     # - mlflow-artifacts:/17/3381db462dc24b43af8e0eb0e9545b74/artifacts/dataset #validation set after TC, threshold 128
-    - mlflow-artifacts:/17/4271bba097804309b2c72a665992d144/artifacts/dataset #test set after TC, threshold 128
+    # - mlflow-artifacts:/17/4271bba097804309b2c72a665992d144/artifacts/dataset #test set after TC, threshold 128
+    - mlflow-artifacts:/17/5073268caf424686a97434c3a0f6fede/artifacts/dataset #Level 1, validation set threshold on white tiles 128 after TC, downsized tumor masks
   splits:
     test: 1.0
