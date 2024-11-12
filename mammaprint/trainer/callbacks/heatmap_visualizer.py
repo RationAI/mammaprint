@@ -64,6 +64,10 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         super().on_test_batch_end(
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
-        _, _, metadata = batch
-        for index in range(2000):
-            self.image_builder.update(data=outputs["attention_weights"][index], metadata=metadata[index])
+        attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
+        metadata_list = batch[2]  # list of metadata dicts per batch element
+        batch_size = attention_weights.shape[0]
+        for i in range(batch_size):
+            data = attention_weights[i]  # shape [num_tiles]
+            metadata = metadata_list[i]  # dict containing 'coord_x', 'coord_y' per tile
+            self.image_builder.update(data=data, metadata=metadata)
