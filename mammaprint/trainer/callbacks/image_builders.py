@@ -60,15 +60,16 @@ class ImageBuilder(ABC):
         """
         if data.ndim == 4:  # tile is image
             logger.debug("Shuffling dimensions.")
-            return data.transpose((0, 2, 3, 1))  # [N, C, W, H] into [N, W, H, C]
+            return data.transpose(
+                (0, 2, 3, 1)
+            )  # [N, C, W, H] into sensible [N, W, H, C]
         if data.ndim == 2:  # tile is classification
             logger.debug("Adding dimensions.")
-            return data[:, None, None, :]  # [N, W, H, C]
+            return data[:, None, None, :]  # [N, C] into [N, W, H, C]
         raise ValueError(
-            f"Incorrect data format. Expected 4-dim [N, C, W, H], 2-dim [N, C]"
+            f"Incorrect data format. Expected 4-dim [N, C, W, H] or 2-dim [N, C]"
             f" but found {data.ndim}-dim {data.shape}."
         )
-
 
     def _preprocess_data(self, data: torch.Tensor) -> NDArray:
         """Converts data to numpy, scales it to [0,255] and resizes it to tile_size if segmentation task is visualized.

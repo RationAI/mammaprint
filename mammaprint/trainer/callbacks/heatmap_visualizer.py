@@ -67,7 +67,23 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
         metadata_list = batch[2]  # list of metadata dicts per batch element
         batch_size = attention_weights.shape[0]
+        num_tiles = attention_weights.shape[1]
+
         for i in range(batch_size):
             data = attention_weights[i]  # shape [num_tiles]
-            metadata = metadata_list[i]  # dict containing 'coord_x', 'coord_y' per tile
-            self.image_builder.update(data=data, metadata=metadata)
+            metadata = metadata_list[i]  # dict containing per-tile metadata
+
+            tile_metadata = {
+                'coord_x': metadata['coord_x'],
+                'coord_y': metadata['coord_y'],
+                'tile_size': metadata['tile_size'],
+                'sample_level': metadata['sample_level'],
+                'slide_name': metadata['slide_name'],
+                'slide_width': metadata['slide_width'],
+                'slide_height': metadata['slide_height'],
+                'slide_channels': 1,  # Since attention weights are scalar
+                # Include any other necessary metadata fields
+            }
+
+            # Update the image builder with arrays of data and metadata
+            self.image_builder.update(data=data, metadata=tile_metadata)
