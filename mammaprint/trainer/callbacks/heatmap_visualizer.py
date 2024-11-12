@@ -132,8 +132,8 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             data_min = data.min()
             data_max = data.max()
             data = (data - data_min) / (data_max - data_min + epsilon)
-            self.logger.debug(f"Data after log scaling and normalization: min={data.min()}, max={data.max()}")
-            self.logger.debug(f"Data shape after log scaling and normalization: {data.shape}")
+            logger.debug(f"Data after log scaling and normalization: min={data.min()}, max={data.max()}")
+            logger.debug(f"Data shape after log scaling and normalization: {data.shape}")
 
             # Update the image builder with arrays of data and metadata
             logger.debug(f"Updating image builder for batch {i+1}.")
