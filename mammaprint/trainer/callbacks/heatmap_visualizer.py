@@ -88,20 +88,25 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             metadata = metadata_list[i]  # dict containing per-tile metadata
             logger.debug(f"Extracted metadata for batch {i+1}: {metadata}")
 
-            tile_metadata = {
-                'coord_x': metadata['coord_x'],
-                'coord_y': metadata['coord_y'],
-                'tile_size': metadata['tile_size'],
-                'sample_level': metadata['sample_level'],
-                'slide_name': metadata['slide_name'],
-                'slide_width': metadata['slide_width'],
-                'slide_height': metadata['slide_height'],
-                'slide_channels': 1,  # Since attention weights are scalar
-            }
-            logger.debug(f"Constructed tile_metadata for batch {i+1}: {tile_metadata}")
+            # Loop over each tile and construct per-tile metadata
+            for tile_idx in range(num_tiles):
+                tile_metadata = {
+                    'coord_x': metadata['coord_x'][tile_idx].item(),  # Get per-tile coord_x
+                    'coord_y': metadata['coord_y'][tile_idx].item(),  # Get per-tile coord_y
+                    'tile_size': metadata['tile_size'].item(),
+                    'sample_level': metadata['sample_level'].item(),
+                    'slide_name': metadata['slide_name'][0],  # Assuming slide_name is the same
+                    'slide_width': metadata['slide_width'].item(),
+                    'slide_height': metadata['slide_height'].item(),
+                    'slide_channels': 1,  # Since attention weights are scalar
+                }
 
-            # Update the image builder with arrays of data and metadata
-            logger.debug(f"Updating image builder for batch {i+1}.")
-            self.image_builder.update(data=data, metadata=tile_metadata)
+                logger.debug(
+                    f"Constructed tile_metadata for tile {tile_idx+1}/{num_tiles}: {tile_metadata}"
+                )
+
+                # Update the image builder with per-tile data and metadata
+                self.image_builder.update(data=data[tile_idx], metadata=tile_metadata)
 
         logger.debug("Completed on_test_batch_end.")
+
