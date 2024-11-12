@@ -30,7 +30,7 @@ trainer:
       _target_: mammaprint.trainer.callbacks.SlidePredictor
       save_dir: slide_predictions
       mask_size: 20
-      threshold: 0.212661
+      threshold: 0.212077
       ground_truth_col: luminal_id
 
 metadata:
