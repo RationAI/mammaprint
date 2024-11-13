@@ -21,14 +21,14 @@ datamodule:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/3e47af6eb9d04f57be4cf5b537a319b4/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
+    model_uri: mlflow-artifacts:/17/7c625a1732044e1e920627759e4432d3/artifacts/model/MLFlowModelCheckpoint/vgg16_mammaprint_best
 
 trainer:
   callbacks:
     slide_predictor:
       save_dir: slide_predictions
-      mask_size: 4
-      threshold: 0.823759
+      mask_size: 12
+      threshold: 0.685183
       ground_truth_col: luminal_id
     heatmap_visualizer:
       save_dir: test_heatmaps
@@ -37,7 +37,7 @@ metadata:
   experiment_name: Mamma-print
   run_name: After TC VGG16 Test heatmaps # Luminal-type ResNet101 after segmentation Testing slide prediction with Heatmaps
   description: |
-    Luminal binary classification test VGG16, Mask 4 with prediction heatmap generation, sample level 0
+    Luminal binary classification test VGG16, Mask 12 with prediction heatmap generation, sample level 0
   hyperparameters:
     # tested with ~ 8 GiB Memory, 8 cpus
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

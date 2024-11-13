@@ -315,8 +315,8 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         logger.debug("Pasting tiles.")
 
         # Get base tile coordinates for uncompressed accumulator
-        xs_accum = metadata["coord_x"] // self.level_coord_multiplier
-        ys_accum = metadata["coord_y"] // self.level_coord_multiplier
+        xs_accum = metadata["coord_x"] #// self.level_coord_multiplier
+        ys_accum = metadata["coord_y"] #// self.level_coord_multiplier
         data = self._preprocess_data(data)
 
         # compress overlap counter coordinates
