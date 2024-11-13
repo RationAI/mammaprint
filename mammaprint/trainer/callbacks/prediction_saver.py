@@ -55,7 +55,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("is_cancer", pa.string()),
+                ("is_cancer", pa.float64()),
                 # ("luminal_id", pa.float64()),
                 # ("mammaprint", pa.float64()),
             ]
