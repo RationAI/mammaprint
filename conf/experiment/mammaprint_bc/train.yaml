@@ -93,7 +93,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Base line VGG16 luminal-type classification, after TC segmentation, Sample level 1
+  run_name: Base line VGG16 luminal-type classification, after TC segmentation, Sample level 1, level 1
   description: |
     Luminal binary classification.
   hyperparameters:

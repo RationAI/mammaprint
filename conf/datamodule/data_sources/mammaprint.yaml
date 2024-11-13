@@ -7,7 +7,8 @@ mammaprint:
     # - mlflow-artifacts:/17/cd7ac5f952594da2905decc1cdbcb960/artifacts/dataset #Level 1 after TC
     # - mlflow-artifacts:/17/fb42c5d94099425587cc053a11da2165/artifacts/dataset #Level 1, threshold on white tiles 128 after TC
     # - mlflow-artifacts:/17/5073268caf424686a97434c3a0f6fede/artifacts/dataset #Level 1, validation set threshold on white tiles 128 after TC, downsized tumor masks
-    - mlflow-artifacts:/17/de910e242ee9466baa5b6489429d25a9/artifacts/dataset # sample level 0, after TC threshold 128
+    # - mlflow-artifacts:/17/de910e242ee9466baa5b6489429d25a9/artifacts/dataset # sample level 0, after TC threshold 128
+    - mlflow-artifacts:/17/486f5d9ee81e48c0991105019573e69b/artifacts/dataset # sample level 1, after TC threshold 128
   stratified_keys:
     - luminal_id
   splits:
