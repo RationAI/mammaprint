@@ -44,7 +44,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
@@ -62,7 +62,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred = self(x)
+        y_pred, attention_weights = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
