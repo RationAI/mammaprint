@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
   - /experiment/mammaprint_bc: test
-  - /trainer/callbacks:
-    - heatmap_visualizer
+#  - /trainer/callbacks:
+#    - heatmap_visualizer
   - _self_
 
 
