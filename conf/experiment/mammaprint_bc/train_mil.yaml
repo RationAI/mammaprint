@@ -45,13 +45,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 64
+        epoch_size: 128
         index_levels:
           - slide_name
       label: "is_cancer"
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 32
         index_levels:
           - slide_name
       label: "is_cancer"
@@ -59,10 +59,10 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 15
-      batch_size: 8
+      batch_size: 32
     valid:
       num_workers: 15
-      batch_size: 8
+      batch_size: 32
 
 ml:
   optimizer:
