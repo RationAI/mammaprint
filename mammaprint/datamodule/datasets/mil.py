@@ -6,7 +6,7 @@ from mammaprint.datamodule.samplers import BaseSampler
 import torch
 
 class MILDataset(BaseDataset):
-    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "class_id") -> None:
+    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "is_cancer") -> None:
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
         self.label = label
