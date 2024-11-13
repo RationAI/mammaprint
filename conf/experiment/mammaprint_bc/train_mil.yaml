@@ -47,13 +47,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 64
+        epoch_size: 128
         index_levels:
           - slide_name
       label: "is_cancer"
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 32
         index_levels:
           - slide_name
       label: "is_cancer"
@@ -75,7 +75,7 @@ ml:
     scheduler:
       mode: min
       factor: 0.5
-      patience: 5
+      patience: 3
 
 trainer:
   max_epochs: 300
