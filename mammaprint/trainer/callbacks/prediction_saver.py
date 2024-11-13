@@ -38,7 +38,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
-                ("mammaprint_value", pa.float32()),
+                # ("mammaprint_value", pa.float32()),
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
@@ -55,8 +55,9 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("luminal_id", pa.float64()),
-                ("mammaprint", pa.float64()),
+                ("is_cancer", pa.string()),
+                # ("luminal_id", pa.float64()),
+                # ("mammaprint", pa.float64()),
             ]
         )
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
@@ -130,12 +131,12 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         # Debug print statement to verify data type consistency
         print("Data type of model_output_processed:", type(model_output_processed[0][0]))
         
-        # Extract mammaprint_value and ensure it is not a tensor
-        mammaprint_value = metadata["mammaprint_value"]
+        # # Extract mammaprint_value and ensure it is not a tensor
+        # mammaprint_value = metadata["mammaprint_value"]
 
-        if isinstance(mammaprint_value, torch.Tensor):
-            # Convert tensor to a list or float
-            mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
+        # if isinstance(mammaprint_value, torch.Tensor):
+        #     # Convert tensor to a list or float
+        #     mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
 
         # Proceed with pyarrow conversion after ensuring it’s not a tensor
         batch = pa.record_batch(
@@ -145,9 +146,9 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 pa.array(metadata["coord_y"], pa.int64()),
                 pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
                 pa.array(metadata["class_id"], pa.int64()),
-                pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
+                # pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
             ],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"],
         )
 
         self.writer.write(batch)
@@ -168,8 +169,9 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "center_size": self._preprocess_data(metadata["center_size"]),
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
-            "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            "mammaprint": self._preprocess_data(metadata["mammaprint"]),
+            "is_cancer": self._preprocess_data(metadata["is_cancer"]),
+            # "luminal_id": self._preprocess_data(metadata["luminal_id"]),
+            # "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
@@ -184,12 +186,12 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         coord_y = pa.array([0] * padding_needed, pa.int64())
         model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
         class_id = pa.array([0] * padding_needed, pa.int64())
-        mammaprint_value = pa.array([0] * padding_needed, pa.float32())
+        # mammaprint_value = pa.array([0] * padding_needed, pa.float32())
 
         # Create the record batch directly from arrays
         batch = pa.RecordBatch.from_arrays(
-            [slide_names, coord_x, coord_y, model_output, class_id, mammaprint_value],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"]
+            [slide_names, coord_x, coord_y, model_output, class_id],
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"]
         )
 
         self.writer.write(batch)
