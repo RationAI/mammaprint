@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
   - /experiment/mammaprint_bc: test
-#  - /trainer/callbacks:
-#    - heatmap_visualizer
+  - /trainer/callbacks:
+    - heatmap_visualizer
   - _self_
 
 
@@ -15,8 +15,8 @@ datamodule:
       label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 16
-      batch_size: 60
+      num_workers: 12
+      batch_size: 32
 
 ml:
   net:
@@ -24,8 +24,8 @@ ml:
 
 trainer:
   callbacks:
-    # heatmap_visualizer:
-    #   save_dir: test_heatmaps
+     heatmap_visualizer:
+       save_dir: test_heatmaps
     slide_predictor:
       _target_: mammaprint.trainer.callbacks.SlidePredictor
       save_dir: slide_predictions
