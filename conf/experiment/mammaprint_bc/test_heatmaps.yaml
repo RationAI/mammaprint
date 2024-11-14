@@ -16,8 +16,8 @@ datamodule:
       label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 12
-      batch_size: 60
+      num_workers: 10
+      batch_size: 40
 
 ml:
   net:
