@@ -7,7 +7,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/71a0b2e3f24a4a76a63ece0606cc0bb7/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/8d3ae32b3a5b43b9b08712fb777b3dd7/artifacts/model/MLFlowModelCheckpoint/last
 datamodule:
   datasets:
     test:
@@ -27,7 +27,7 @@ trainer:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL Prostate test whole slide images with Heatmaps
+  run_name: MIL Prostate test whole slide images with Heatmaps, using the gated attention model
   description: |
     Prostate binary classification.
   hyperparameters:
