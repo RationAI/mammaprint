@@ -23,7 +23,7 @@ logger = logging.getLogger("callbacks/prediction_saver")
 class ParquetPredictionSaver(DataloaderAgnosticCallback):
     writer: ParquetWriter
     writer2: ParquetWriter
-    min_tiles_per_slide: int = 2000  # Minimum number of tiles per slide
+    min_tiles_per_slide: int = 3000  # Minimum number of tiles per slide
 
     def __init__(self, save_dir: str) -> None:
         super().__init__()
@@ -55,6 +55,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
+                # ("is_cancer", pa.float64()),
                 ("luminal_id", pa.float64()),
                 ("mammaprint", pa.float64()),
             ]
@@ -168,6 +169,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "center_size": self._preprocess_data(metadata["center_size"]),
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
+            # "is_cancer": self._preprocess_data(metadata["is_cancer"]),
             "luminal_id": self._preprocess_data(metadata["luminal_id"]),
             "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
@@ -189,7 +191,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         # Create the record batch directly from arrays
         batch = pa.RecordBatch.from_arrays(
             [slide_names, coord_x, coord_y, model_output, class_id, mammaprint_value],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"]
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
 
         self.writer.write(batch)
