@@ -33,6 +33,8 @@ class AttMILModel(nn.Module):
     def __init__(self):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
+        # Layer normalization for input stability
+        self.norm = nn.LayerNorm(512)
         self.attention = GatedAttention(512)
         self.classifier = nn.Linear(512, 1)
         self.classifier = nn.Sequential(
@@ -52,6 +54,9 @@ class AttMILModel(nn.Module):
     def forward(self, x):
         self.logger.debug(f'Original input to classifier: {x.shape}')
         batch_size, num_tiles, features = x.shape
+
+        # Layer normalization for input stability
+        x = self.norm(x)  # [B, N, C]
         
         # Flatten to process each tile individually
         x_flat = x.view(batch_size * num_tiles, features)  # Shape: [batch_size * num_tiles, features]
