@@ -154,8 +154,8 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer.write(batch)
         
         # If the slide has reached its final batch, add padding if necessary
-        if new_tile_count < self.min_tiles_per_slide:
-            self._add_padding(slide_name, self.min_tiles_per_slide - new_tile_count)
+        # if new_tile_count < self.min_tiles_per_slide:
+        #     self._add_padding(slide_name, self.min_tiles_per_slide - new_tile_count)
 
         # Save slide metadata
         new_slide_record = pd.DataFrame({
@@ -177,25 +177,25 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         self.writer2.write_table(table_slide)
         logger.info("Batch data and slide metadata successfully written.")
 
-    def _add_padding(self, slide_name: str, padding_needed: int) -> None:
-        """Add empty tiles to reach the minimum tile count."""
-        logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
+    # def _add_padding(self, slide_name: str, padding_needed: int) -> None:
+    #     """Add empty tiles to reach the minimum tile count."""
+    #     logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
 
-        slide_names = pa.array([slide_name] * padding_needed, pa.string())
-        coord_x = pa.array([0] * padding_needed, pa.int64())
-        coord_y = pa.array([0] * padding_needed, pa.int64())
-        model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
-        class_id = pa.array([0] * padding_needed, pa.int64())
-        mammaprint_value = pa.array([0] * padding_needed, pa.float32())
+    #     slide_names = pa.array([slide_name] * padding_needed, pa.string())
+    #     coord_x = pa.array([0] * padding_needed, pa.int64())
+    #     coord_y = pa.array([0] * padding_needed, pa.int64())
+    #     model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
+    #     class_id = pa.array([0] * padding_needed, pa.int64())
+    #     mammaprint_value = pa.array([0] * padding_needed, pa.float32())
 
-        # Create the record batch directly from arrays
-        batch = pa.RecordBatch.from_arrays(
-            [slide_names, coord_x, coord_y, model_output, class_id, mammaprint_value],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
-        )
+    #     # Create the record batch directly from arrays
+    #     batch = pa.RecordBatch.from_arrays(
+    #         [slide_names, coord_x, coord_y, model_output, class_id, mammaprint_value],
+    #         names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
+    #     )
 
-        self.writer.write(batch)
-        logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
+    #     self.writer.write(batch)
+    #     logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
 
 
     def pool_features_by_slide(self, aggregation_function="max"):
