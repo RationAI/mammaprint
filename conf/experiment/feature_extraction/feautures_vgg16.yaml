@@ -20,7 +20,7 @@ datamodule:
       data_uris:
         # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset  # mammaprint another dataset
-        - mlflow-artifacts:/17/db4c904d67524e068c4bcfc7601914f5/artifacts/dataset # mammaprint test dataset
+        - mlflow-artifacts:/17/fb42c5d94099425587cc053a11da2165/artifacts/dataset # mammaprint test dataset
         # - mlflow-artifacts:/17/29498aa547514d0c969d8e2646b31e7c/artifacts/dataset # mammaprint train dataset
         # - mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset #prostate dataset
       splits:
@@ -47,8 +47,9 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Mammaprint features extraction using VGG16, test dataset
+  run_name: Mammaprint features extraction using VGG16, train dataset, After TC VGG16
   description: |
-    Compute features using VGG16 model.
+   TC Luminal-type train dataset - from best model, sample level 1, level 0, threshold 128 
+  Compute features using VGG16 model.
   hyperparameters:
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
