@@ -3,7 +3,7 @@ defaults:
   - /experiment/mammaprint_bc: test
   - /trainer/callbacks:
     - slide_predictor
-#    - heatmap_visualizer
+    - heatmap_visualizer
   - _self_
 
 
@@ -16,8 +16,8 @@ datamodule:
       label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 10
-      batch_size: 40
+      num_workers: 8
+      batch_size: 32
 
 ml:
   net:
@@ -30,8 +30,8 @@ trainer:
       mask_size: 20
       threshold: 0.212661
       ground_truth_col: luminal_id
-#    heatmap_visualizer:
-#      save_dir: test_heatmaps
+    heatmap_visualizer:
+      save_dir: test_heatmaps
 
 metadata:
   experiment_name: Mamma-print
