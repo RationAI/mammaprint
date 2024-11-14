@@ -20,7 +20,7 @@ datamodule:
       data_uris:
         # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset  # mammaprint another dataset
-        - mlflow-artifacts:/17/00413950e8e8481bb9c86a53ced2cd68/artifacts/data # mammaprint test dataset
+        - mlflow-artifacts:/17/63d7f1dfd79f48128b7be96a1837f126/artifacts/data # mammaprint test dataset
         # - mlflow-artifacts:/17/29498aa547514d0c969d8e2646b31e7c/artifacts/dataset # mammaprint train dataset
         # - mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset #prostate dataset
       splits:
