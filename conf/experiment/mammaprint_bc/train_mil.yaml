@@ -34,12 +34,14 @@ datamodule:
       data_uris:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
       # Prostate dataset
-      - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
-      - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
-      - mlflow-artifacts:/17/e4dbafc779604085974b6ea97cfa527e/artifacts/dataset
-      - mlflow-artifacts:/17/dd1ce182cf0c4d07aeb243c830e08894/artifacts/dataset
+      # - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
+      # - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
+      # - mlflow-artifacts:/17/e4dbafc779604085974b6ea97cfa527e/artifacts/dataset
+      # - mlflow-artifacts:/17/dd1ce182cf0c4d07aeb243c830e08894/artifacts/dataset
       #  - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset
       #  - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset
+      #mammaprint dataset
+      - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -50,13 +52,13 @@ datamodule:
         epoch_size: 128
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_di"
     valid:
       sampler:
         epoch_size: 32
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
 
   dataloaders_kwargs:
     train:
@@ -95,9 +97,9 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL gated attention simple prostate binary classification
+  run_name: MIL gated attention Luminal binary classification
   description: |
-   Prostate binary classification. MIL approach
+   Luminal binary classification. MIL approach
   hyperparameters:
     # Scaled for V40 GPU
     # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)

@@ -6,10 +6,11 @@ from mammaprint.datamodule.samplers import BaseSampler
 import torch
 
 class MILDataset(BaseDataset):
-    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "is_cancer") -> None:
+    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "luminal_id") -> None:
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
         self.label = label
+        self.max_tiles = 3000
     
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]
@@ -19,6 +20,13 @@ class MILDataset(BaseDataset):
             model_output = s.get('model_output', None)
             model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
             images.append(model_output_tensor)
+
+        # Pad or truncate the number of tiles
+        num_tiles = len(images)
+        if num_tiles < self.max_tiles:
+            # Add zero-padding for missing tiles
+            padding = [torch.zeros_like(images[0]) for _ in range(self.max_tiles - num_tiles)]
+            images.extend(padding)
 
         # Stack images into a tensor
         images_tensor = torch.stack(images)
