@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/d79edc51a0334507aa4c35bb08d6205d/artifacts/model/MLFlowModelCheckpoint/last
+    model_uri: mlflow-artifacts:/17/8d3ae32b3a5b43b9b08712fb777b3dd7/artifacts/model/MLFlowModelCheckpoint/last
 
 datamodule:
   datasets:
@@ -29,14 +29,14 @@ datamodule:
   dataloaders_kwargs:
     test:
       num_workers: 15
-      batch_size: 16
+      batch_size: 32
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL test whole slide images
+  run_name: MIL test prostate with gated attention model whole slide images
   description: |
     Binary classification.
   hyperparameters:
     num_workers: 15
-    batch_size: 16
+    batch_size: 32
    
