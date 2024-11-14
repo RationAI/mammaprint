@@ -365,14 +365,35 @@ class MILRandomTreeSampler(TreeSampler):
                 break
             if self.active_node.data is None:
                 self.active_node.load_data()  # Ensure this method exists or is correctly implemented
-            
+
             chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
-            if len(chosen_tiles) > self.tiles_per_bag:
+             # Check if padding is needed
+            if len(chosen_tiles) < self.tiles_per_bag:
+                log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
+                
+                current_slide_name = self.active_node.node_name  # Set to the current slide name
+
+                # Use an example tile to create an empty tile with the same structure
+                example_tile = chosen_tiles.iloc[0].to_dict()  # Get an example tile structure from the real data
+                empty_tile = example_tile.copy()  # Make a copy of example_tile to preserve structure
+
+                # Update specific fields to placeholders
+                empty_tile["slide_name"] = current_slide_name  # Use current slide name
+                empty_tile["coord_x"] = 0
+                empty_tile["coord_y"] = 0
+                empty_tile["model_output"] = [0.0] * len(example_tile["model_output"])  # Zero vector for model_output
+                empty_tile["class_id"] = 0  # Placeholder for class_id
+
+                padding_needed = self.tiles_per_bag - len(chosen_tiles)
+                
+                # Convert chosen tiles to list of dicts and add empty tiles as padding
+                chosen_tiles = chosen_tiles.to_dict("records")
+                chosen_tiles.extend([empty_tile] * padding_needed)
+                
+                log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
+            else:
                 # Sample exactly tiles_per_bag tiles without replacement
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
-            else:
-                # Use all available tiles
-                chosen_tiles = chosen_tiles.to_dict("records")
             samples.append(chosen_tiles)
             self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
