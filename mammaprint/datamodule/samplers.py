@@ -370,6 +370,9 @@ class MILRandomTreeSampler(TreeSampler):
             if len(chosen_tiles) > self.tiles_per_bag:
                 # Sample exactly tiles_per_bag tiles without replacement
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
+            else:
+                # Use all available tiles
+                chosen_tiles = chosen_tiles.to_dict("records")
             samples.append(chosen_tiles)
             self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
