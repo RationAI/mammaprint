@@ -3,7 +3,7 @@ defaults:
   - /experiment/mammaprint_bc: test
   - /trainer/callbacks:
     - slide_predictor
-    - heatmap_visualizer
+#    - heatmap_visualizer
   - _self_
 
 
@@ -30,12 +30,12 @@ trainer:
       mask_size: 20
       threshold: 0.212661
       ground_truth_col: luminal_id
-    heatmap_visualizer:
-      save_dir: test_heatmaps
+#    heatmap_visualizer:
+#      save_dir: test_heatmaps
 
 metadata:
   experiment_name: Mamma-print
-  run_name: After TC VGG16 Test heatmaps # Luminal-type ResNet101 after segmentation Testing slide prediction with Heatmaps
+  run_name: After TC VGG16 Test # Luminal-type ResNet101 after segmentation Testing slide prediction with Heatmaps
   description: |
     Luminal binary classification test VGG16, Mask 20 with prediction heatmap generation, sample level 1, level 0, threshold 128
   hyperparameters:
