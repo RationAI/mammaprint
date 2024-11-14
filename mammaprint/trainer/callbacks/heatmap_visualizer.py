@@ -126,20 +126,10 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
             }
             logger.debug(f"Constructed tile_metadata for batch {i+1}: {tile_metadata}")
 
-            # Apply logarithmic scaling and normalization
-
             # Scale weights for better visualization
             scaling_factor = 2000
             data = torch.mul(data, scaling_factor)
 
-            # Optional: Normalize to [0, 1] for consistent visualization
-            data_min = data.min()
-            data_max = data.max()
-            data = (data - data_min) / (data_max - data_min + 1e-8)
-
-            logger.debug(f"Data after scaling and normalization: min={data.min()}, max={data.max()}")
-            logger.debug(f"Data shape after scaling and normalization: {data.shape}")
-            
             # Update the image builder with arrays of data and metadata
             logger.debug(f"Updating image builder for batch {i+1}.")
             self.image_builder.update(data=data, metadata=tile_metadata)
