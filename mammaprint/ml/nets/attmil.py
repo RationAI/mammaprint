@@ -36,7 +36,6 @@ class AttMILModel(nn.Module):
         # Layer normalization for input stability
         self.norm = nn.LayerNorm(512)
         self.attention = GatedAttention(512)
-        self.classifier = nn.Linear(512, 1)
         self.classifier = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU(),
