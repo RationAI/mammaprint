@@ -49,13 +49,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 32
+        epoch_size: 64
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 8
+        epoch_size: 16
         index_levels:
           - slide_name
       label: "luminal_id"
