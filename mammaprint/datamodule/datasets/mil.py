@@ -10,7 +10,7 @@ class MILDataset(BaseDataset):
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
         self.label = label
-        self.max_tiles = 3000
+        self.max_tiles = 2000
     
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]
