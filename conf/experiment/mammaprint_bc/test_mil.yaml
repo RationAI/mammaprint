@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8d3ae32b3a5b43b9b08712fb777b3dd7/artifacts/model/MLFlowModelCheckpoint/last
+    model_uri: mlflow-artifacts:/17/c8b0e94206a44216b615ecfbb8348fcb/artifacts/dataset
 
 datamodule:
   datasets:
@@ -25,11 +25,11 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 15
-      batch_size: 32
+      num_workers: 12
+      batch_size: 8
 
 metadata:
   experiment_name: mammaprint
@@ -37,6 +37,6 @@ metadata:
   description: |
     Binary classification.
   hyperparameters:
-    num_workers: 15
-    batch_size: 32
+    num_workers: 12
+    batch_size: 8
    

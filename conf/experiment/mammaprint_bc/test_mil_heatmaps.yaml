@@ -7,18 +7,18 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8d3ae32b3a5b43b9b08712fb777b3dd7/artifacts/model/MLFlowModelCheckpoint/last
+    model_uri: mlflow-artifacts:/17/2ccc1446e1a042cf968d9558a720c73d/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 datamodule:
   datasets:
     test:
       sampler:
         index_levels:
           - slide_name
-      label: "is_cancer"
+      label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 15
-      batch_size: 16
+      num_workers: 12
+      batch_size: 8
 
 trainer:
   callbacks:
@@ -27,9 +27,9 @@ trainer:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL Prostate test whole slide images with Heatmaps, using the gated attention model
+  run_name: MIL Luminal test whole slide images with Heatmaps, using the gated attention model
   description: |
-    Prostate binary classification.
+    Luminal binary classification.
   hyperparameters:
     num_workers: 15
     batch_size: 16
