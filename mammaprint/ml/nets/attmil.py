@@ -14,7 +14,7 @@ import torchvision.models as models
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
   
 class GatedAttention(nn.Module):
-    def __init__(self, feature_dim, attention_dim=256):
+    def __init__(self, feature_dim, attention_dim=128):
         super(GatedAttention, self).__init__()
         self.attention_V = nn.Linear(feature_dim, attention_dim)
         self.attention_U = nn.Linear(feature_dim, attention_dim)
