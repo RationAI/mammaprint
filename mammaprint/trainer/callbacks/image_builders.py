@@ -200,8 +200,8 @@ class DiskMappedPatchAssembler(ImageAssembler):
     def update(self, data: torch.Tensor, metadata: dict) -> None:
         logger.debug("Pasting tiles.")
         xs, ys = (
-            metadata["coord_x"] // self.scale_factor,
-            metadata["coord_y"] // self.scale_factor,
+            metadata["coord_x"],
+            metadata["coord_y"],
         )
         data = self._preprocess_data(data)
         data = self._resize_to_tile_size(data)
