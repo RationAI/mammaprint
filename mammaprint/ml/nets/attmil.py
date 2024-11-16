@@ -51,7 +51,7 @@ class AttMILModel(nn.Module):
                     nn.init.zeros_(layer.bias)
 
     def forward(self, x):
-        self.logger.debug(f'Original input to classifier: {x.shape}')
+        # self.logger.debug(f'Original input to classifier: {x.shape}')
         batch_size, num_tiles, features = x.shape
 
         # Layer normalization for input stability
@@ -63,23 +63,23 @@ class AttMILModel(nn.Module):
         # Get attention weights
         attention_weights = self.attention(x_flat)  # Shape: [batch_size * num_tiles, 1]
         attention_weights = attention_weights.view(batch_size, num_tiles)  # Shape: [batch_size, num_tiles]
-        self.logger.debug(f'Attention weights shape: {attention_weights.shape}')
+        # self.logger.debug(f'Attention weights shape: {attention_weights.shape}')
         
         # Normalize attention weights
         attention_weights = torch.softmax(attention_weights, dim=1)  # Shape: [batch_size, num_tiles]
         
         # Reshape weights to apply to each feature vector
         weights = attention_weights.view(batch_size, num_tiles, 1)  # Shape: [batch_size, num_tiles, 1]
-        self.logger.debug(f'Attention weights after unsqueeze: {weights.shape}')
+        # self.logger.debug(f'Attention weights after unsqueeze: {weights.shape}')
         
         # Weighted sum of features across the tiles
         weighted_features = torch.sum(x * weights, dim=1)  # Shape: [batch_size, features]
-        self.logger.debug(f'Weighted features shape: {weighted_features.shape}')
+        # self.logger.debug(f'Weighted features shape: {weighted_features.shape}')
         
         # Final classification
         output = self.classifier(weighted_features)  # Shape: [batch_size, 1]
-        self.logger.debug(f'Bag-level predictions: {output.shape}')
-        self.logger.debug(f'Prediction: {output}')
+        # self.logger.debug(f'Bag-level predictions: {output.shape}')
+        # self.logger.debug(f'Prediction: {output}')
         return output, attention_weights
 
 # import torch

@@ -372,8 +372,8 @@ class MILRandomTreeSampler(TreeSampler):
                 # Sample exactly tiles_per_bag tiles without replacement
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=True).to_dict("records")
 
-                log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
-                log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
+                # log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
+                # log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
                 
                 # current_slide_name = self.active_node.node_name  # Set to the current slide name
 
@@ -401,7 +401,7 @@ class MILRandomTreeSampler(TreeSampler):
             samples.append(chosen_tiles)
             self.next()  # Move to the next node
         total_tiles = sum(len(slide) for slide in samples)
-        log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
+        # log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
 
         return samples
 
@@ -415,7 +415,7 @@ class MILRandomTreeSampler(TreeSampler):
             
             # Randomly select a node from the chosen category
             self.active_node = self._rng.choice(self.categories[random_category])
-            log.info(f"Randomly selected new active node from category '{random_category}'.")
+            # log.info(f"Randomly selected new active node from category '{random_category}'.")
 
 
 class MILSequentialTreeSampler(TreeSampler):

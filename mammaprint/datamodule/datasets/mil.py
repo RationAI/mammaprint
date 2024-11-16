@@ -10,7 +10,6 @@ class MILDataset(BaseDataset):
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
         self.label = label
-        self.max_tiles = 2000
     
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
         sample = self._epoch_samples[index]
@@ -28,7 +27,7 @@ class MILDataset(BaseDataset):
         # label_value = float(sample[0].get(self.label, 0.0))  # Default label if missing
         # Check if any tile in `sample` has `self.label` not 0.0
         label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
-        logging.info(f"label value found: {label_value}")
+        # logging.info(f"label value found: {label_value}")
         label = torch.tensor([label_value])
 
         return images_tensor, label, sample
