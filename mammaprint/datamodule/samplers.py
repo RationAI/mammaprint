@@ -479,7 +479,7 @@ class MILSequentialTreeSampler(TreeSampler):
                 else:
                     # logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
                     # chosen_tiles = res.to_dict("records")
-                    chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=True).to_dict("records")
+                    chosen_tiles = res.sample(n=2000, replace=True).to_dict("records")
                     # logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
             else:
