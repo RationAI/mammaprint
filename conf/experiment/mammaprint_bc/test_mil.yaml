@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/c8b0e94206a44216b615ecfbb8348fcb/artifacts/dataset
+    model_uri: mlflow-artifacts:/17/2ccc1446e1a042cf968d9558a720c73d/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -33,7 +33,7 @@ datamodule:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL test prostate with gated attention model whole slide images
+  run_name: MIL test luminal with gated attention model whole slide images
   description: |
     Binary classification.
   hyperparameters:
