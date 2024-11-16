@@ -469,17 +469,17 @@ class MILSequentialTreeSampler(TreeSampler):
                 # logging.debug(f"Sample of `res` content:\n{res.head()}")
                 
                 # Log the number of tiles in `res`
-                if len(res) >= 2000:
+                if len(res) >= 3000:
                     # logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
                     
                     # Sample 2000 tiles and log a preview of `chosen_tiles`
-                    chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
+                    chosen_tiles = res.sample(n=3000, replace=False).to_dict("records")
                     # logging.debug(f"Sampled tiles (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
                 else:
                     # logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
                     # chosen_tiles = res.to_dict("records")
-                    chosen_tiles = res.sample(n=2000, replace=True).to_dict("records")
+                    chosen_tiles = res.sample(n=3000, replace=True).to_dict("records")
                     # logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
             else:
