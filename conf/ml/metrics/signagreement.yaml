@@ -1,2 +1,2 @@
 SignAgreement:
-  _target_: histopipe.ml.metrics.SignAgreement
+  _target_: mammaprint.ml.metrics.SignAgreement
