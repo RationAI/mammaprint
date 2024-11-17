@@ -55,7 +55,7 @@ datamodule:
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 20
+        epoch_size: 16
         index_levels:
           - slide_name
       label: "luminal_id"
@@ -71,7 +71,7 @@ datamodule:
 ml:
   optimizer:
     lr: 1e-5
-    weight_decay: 1e-05
+    weight_decay: 5e-05
   lr_scheduler:
     monitor: valid/loss
     scheduler:
