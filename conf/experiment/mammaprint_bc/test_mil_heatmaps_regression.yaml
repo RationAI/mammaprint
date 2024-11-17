@@ -1,0 +1,36 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test_mil_regression
+  - /trainer/callbacks:
+    - heatmap_visualizer
+  - _self_
+
+ml:
+  net:
+    model_uri:  mlflow-artifacts:/17/316199660dc84fe38d6d29c0631ecd9b/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "mammaprint"
+  dataloaders_kwargs:
+    test:
+      num_workers: 12
+      batch_size: 8
+
+trainer:
+  callbacks:
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+
+metadata:
+  experiment_name: mammaprint
+  run_name: MIL mammaprint test whole slide images with Heatmaps, using the gated attention model
+  description: |
+    mammaprint Heatmaps.
+  hyperparameters:
+    num_workers: 15
+    batch_size: 16
+   
