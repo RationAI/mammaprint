@@ -9,7 +9,6 @@ defaults:
   - /ml/net: saved_model
   - /ml/output_activation: tanh
   - /ml/metrics:
-    - r2_score
     - pearson_corr_coef
     - spearman_corr_coef
     - mse
