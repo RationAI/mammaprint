@@ -1,0 +1,45 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: mil_luminal_test
+  - /datamodule/datasets@datamodule.datasets.test: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: mammaprint
+  - /ml/net: saved_model
+  - /ml/output_activation: tanh
+  - /ml/metrics:
+    - r2_score
+    - pearson_corr_coef
+    - spearman_corr_coef
+    - mse
+    - mae
+    - predictions
+    - signagreement
+  - _self_
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/17/316199660dc84fe38d6d29c0631ecd9b/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "mammaprint"
+  dataloaders_kwargs:
+    test:
+      num_workers: 12
+      batch_size: 8
+
+metadata:
+  experiment_name: mammaprint
+  run_name: MIL test mammaprint with gated attention model whole slide images
+  description: |
+    MIL Regression test. MIL approach
+  hyperparameters:
+    num_workers: 12
+    batch_size: 8
+   
