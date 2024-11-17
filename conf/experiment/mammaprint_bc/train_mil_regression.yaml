@@ -12,7 +12,7 @@ defaults:
   - /ml: mammaprint
   - /ml/optimizer: adam
   - /ml/net: attmil
-  - /ml/output_activation: identity
+  - /ml/output_activation: tanh
   - /ml/loss: mse
   - /ml/metrics:
     - r2_score
