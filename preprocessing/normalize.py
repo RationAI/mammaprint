@@ -68,7 +68,7 @@ def process_file(input_path: Path, output_path: Path, Io=240, alpha=1, beta=0.15
     normalizeStaining(img, saveFile=str(output_path), Io=Io, alpha=alpha, beta=beta)
 
 
-def process_files_in_parallel(input_dir: Path, output_dir: Path, max_workers: int = 16):
+def process_files_in_parallel(input_dir: Path, output_dir: Path, max_workers: int = 4):
     '''Process all TIFF files in the input directory using parallel workers'''
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
@@ -95,5 +95,5 @@ def process_files_in_parallel(input_dir: Path, output_dir: Path, max_workers: in
 if __name__ == '__main__':
     input_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/")
     output_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_normalized_tiff/")
-    process_files_in_parallel(input_dir, output_dir, max_workers=16)
+    process_files_in_parallel(input_dir, output_dir, max_workers=4)
 
