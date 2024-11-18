@@ -2,6 +2,8 @@ import os
 import argparse
 import numpy as np
 import pyvips
+from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor
 
 
 def normalizeStaining(img, saveFile=None, Io=240, alpha=1, beta=0.15):
@@ -34,8 +36,7 @@ def normalizeStaining(img, saveFile=None, Io=240, alpha=1, beta=0.15):
     Inorm[Inorm > 255] = 254
     Inorm = np.reshape(Inorm.T, (h, w, 3)).astype(np.uint8)
     if saveFile is not None:
-        from PIL import Image
-        Image.fromarray(Inorm).save(saveFile + '.png')
+        save_image_with_pyvips(Inorm, saveFile + ".tiff")
     return Inorm
 
 
@@ -47,22 +48,52 @@ def load_large_image_pyvips(img_path):
                       shape=(image.height, image.width, image.bands))
 
 
-def batch_normalize(input_dir, output_dir, Io=240, alpha=1, beta=0.15):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+def save_image_with_pyvips(img: np.ndarray, output_path: str):
+    '''Save normalized image as tiled and pyramidal TIFF using pyvips'''
+    vips_img = pyvips.Image.new_from_memory(
+        img.tobytes(), img.shape[1], img.shape[0], img.shape[2], "uchar"
+    )
+    vips_img.tiffsave(
+        str(output_path), 
+        pyramid=True,
+        tile=True,
+        tile_width=256,
+        tile_height=256
+    )
 
-    for file_name in os.listdir(input_dir):
-        if file_name.endswith(".tiff"):
-            img_path = os.path.join(input_dir, file_name)
-            output_path = os.path.join(output_dir, os.path.splitext(file_name)[0])
-            print(f"Processing {file_name}...")
-            img = load_large_image_pyvips(img_path)  # Load using pyvips
-            normalizeStaining(img, saveFile=output_path, Io=Io, alpha=alpha, beta=beta)
-    print("Batch normalization complete!")
 
+def process_file(input_path: Path, output_path: Path, Io=240, alpha=1, beta=0.15):
+    '''Process a single TIFF file'''
+    img = load_large_image_pyvips(str(input_path))
+    normalizeStaining(img, saveFile=str(output_path), Io=Io, alpha=alpha, beta=beta)
+
+
+def process_files_in_parallel(input_dir: Path, output_dir: Path, max_workers: int = 16):
+    '''Process all TIFF files in the input directory using parallel workers'''
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    tiff_files = list(input_dir.glob("*.tiff"))
+    
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(
+                process_file,
+                tiff_file,
+                output_dir / tiff_file.stem
+            )
+            for tiff_file in tiff_files
+        ]
+        for future in futures:
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Error processing file: {e}")
 
 
 if __name__ == '__main__':
-    input_dir = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
-    output_dir = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint_normalized_tiff/"
-    batch_normalize(input_dir, output_dir, Io=240, alpha=1, beta=0.15)
+    input_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/")
+    output_dir = Path("/mnt/data/Projects/MOU/Mamaprint/Learning_set_mamaprint_normalized_tiff/")
+    process_files_in_parallel(input_dir, output_dir, max_workers=32)
+
