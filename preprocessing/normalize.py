@@ -94,6 +94,6 @@ def process_files_in_parallel(input_dir: Path, output_dir: Path, max_workers: in
 
 if __name__ == '__main__':
     input_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/")
-    output_dir = Path("/mnt/data/Projects/MOU/Mamaprint/Learning_set_mamaprint_normalized_tiff/")
-    process_files_in_parallel(input_dir, output_dir, max_workers=32)
+    output_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_normalized_tiff/")
+    process_files_in_parallel(input_dir, output_dir, max_workers=16)
 
