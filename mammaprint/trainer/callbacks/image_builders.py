@@ -200,8 +200,8 @@ class DiskMappedPatchAssembler(ImageAssembler):
     def update(self, data: torch.Tensor, metadata: dict) -> None:
         logger.debug("Pasting tiles.")
         xs, ys = (
-            metadata["coord_x"],
-            metadata["coord_y"],
+            metadata["coord_x"] // self.scale_factor,
+            metadata["coord_y"] // self.scale_factor,
         )
         data = self._preprocess_data(data)
         data = self._resize_to_tile_size(data)
@@ -312,8 +312,8 @@ class InMemoryHeatmapAssembler(ImageAssembler):
         logger.debug("Pasting tiles.")
 
         # Get base tile coordinates for uncompressed accumulator
-        xs_accum = metadata["coord_x"] // self.level_coord_multiplier
-        ys_accum = metadata["coord_y"] // self.level_coord_multiplier
+        xs_accum = metadata["coord_x"]
+        ys_accum = metadata["coord_y"]
         data = self._preprocess_data(data)
 
         # compress overlap counter coordinates
