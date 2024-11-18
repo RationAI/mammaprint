@@ -12,7 +12,7 @@ def normalizeStaining(img, saveFile=None, Io=240, alpha=1, beta=0.15):
     maxCRef = np.array([1.9705, 1.0308])
     h, w, c = img.shape
     img = img.reshape((-1, 3))
-    OD = -np.log((img.astype(np.float) + 1) / Io)
+    OD = -np.log((img.astype(float) + 1) / Io)
     ODhat = OD[~np.any(OD < beta, axis=1)]
     eigvals, eigvecs = np.linalg.eigh(np.cov(ODhat.T))
     That = ODhat.dot(eigvecs[:, 1:3])
