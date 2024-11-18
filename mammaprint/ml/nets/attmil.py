@@ -37,9 +37,12 @@ class AttMILModel(nn.Module):
         self.norm = nn.LayerNorm(512)
         self.attention = GatedAttention(512)
         self.classifier = nn.Sequential(
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.2),
             nn.Linear(256, 1)
         )
         
