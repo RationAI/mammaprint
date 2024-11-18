@@ -1,141 +1,68 @@
+import os
+import argparse
 import numpy as np
 import pyvips
-import logging
-from pathlib import Path
-from datetime import datetime
 
-# Hardcoded directories
-INPUT_DIR = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/'
-OUTPUT_DIR = '/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_normalized/'
 
-# Ensure the output directory exists
-Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def macenko_normalization(image_np, Io=240, alpha=1, beta=0.15):
-    """
-    Perform Macenko stain normalization on a NumPy image array.
-    """
+def normalizeStaining(img, saveFile=None, Io=240, alpha=1, beta=0.15):
+    ''' Normalize staining appearance of H&E stained images '''
     HERef = np.array([[0.5626, 0.2159],
                       [0.7201, 0.8012],
                       [0.4062, 0.5581]])
     maxCRef = np.array([1.9705, 1.0308])
-
-    h, w, c = image_np.shape
-    if c != 3:
-        raise ValueError("Input image must have 3 channels (RGB).")
-
-    # Reshape image
-    image_np = image_np.reshape((-1, 3))
-
-    # Convert RGB to optical density (OD)
-    OD = -np.log((image_np.astype(np.float32) + 1) / Io)
-
-    # Remove transparent pixels (where any channel is less than beta)
+    h, w, c = img.shape
+    img = img.reshape((-1, 3))
+    OD = -np.log((img.astype(np.float) + 1) / Io)
     ODhat = OD[~np.any(OD < beta, axis=1)]
-
-    if ODhat.size == 0:
-        logging.warning("Insufficient data for normalization, returning original image.")
-        return image_np.reshape((h, w, 3))
-
-    # Compute eigenvectors
     eigvals, eigvecs = np.linalg.eigh(np.cov(ODhat.T))
-    idx = np.argsort(eigvals)[::-1]
-    eigvecs = eigvecs[:, idx]
-
-    # Project onto the plane spanned by the eigenvectors corresponding to the two largest eigenvalues
-    That = ODhat.dot(eigvecs[:, :2])
-
-    # Calculate angle and robust extremes
+    That = ODhat.dot(eigvecs[:, 1:3])
     phi = np.arctan2(That[:, 1], That[:, 0])
     minPhi = np.percentile(phi, alpha)
     maxPhi = np.percentile(phi, 100 - alpha)
-
-    vMin = eigvecs[:, :2].dot([np.cos(minPhi), np.sin(minPhi)])
-    vMax = eigvecs[:, :2].dot([np.cos(maxPhi), np.sin(maxPhi)])
-
-    # Create the stain matrix
+    vMin = eigvecs[:, 1:3].dot(np.array([(np.cos(minPhi), np.sin(minPhi))]).T)
+    vMax = eigvecs[:, 1:3].dot(np.array([(np.cos(maxPhi), np.sin(maxPhi))]).T)
     if vMin[0] > vMax[0]:
-        HE = np.array((vMin, vMax)).T
+        HE = np.array((vMin[:, 0], vMax[:, 0])).T
     else:
-        HE = np.array((vMax, vMin)).T
-
-    # Compute concentrations of the stains
-    Y = np.dot(OD, np.linalg.pinv(HE))
-    C = np.maximum(Y, 0)
-
-    # Normalize stain concentrations
-    maxC = np.array([np.percentile(C[:, 0], 99), np.percentile(C[:, 1], 99)])
-    C2 = (C / maxC) * maxCRef
-
-    # Recreate the normalized image
-    Inorm = Io * np.exp(-np.dot(C2, HERef.T))
-    Inorm = np.clip(Inorm, 0, 255).astype(np.uint8).reshape((h, w, 3))
-
+        HE = np.array((vMax[:, 0], vMin[:, 0])).T
+    Y = np.reshape(OD, (-1, 3)).T
+    C = np.linalg.lstsq(HE, Y, rcond=None)[0]
+    maxC = np.array([np.percentile(C[0, :], 99), np.percentile(C[1, :], 99)])
+    tmp = np.divide(maxC, maxCRef)
+    C2 = np.divide(C, tmp[:, np.newaxis])
+    Inorm = np.multiply(Io, np.exp(-HERef.dot(C2)))
+    Inorm[Inorm > 255] = 254
+    Inorm = np.reshape(Inorm.T, (h, w, 3)).astype(np.uint8)
+    if saveFile is not None:
+        from PIL import Image
+        Image.fromarray(Inorm).save(saveFile + '.png')
     return Inorm
 
-def process_image(input_file, output_file):
-    """
-    Read a TIFF file, apply Macenko normalization, and save the result as a normalized TIFF image.
-    """
-    start_time = datetime.now()
-    logging.info(f"Processing {input_file}...")
 
-    # Read the image using pyvips
-    image = pyvips.Image.new_from_file(input_file, access='sequential')
+def load_large_image_pyvips(img_path):
+    ''' Load large images using pyvips '''
+    image = pyvips.Image.new_from_file(img_path, access="sequential")
+    return np.ndarray(buffer=image.write_to_memory(),
+                      dtype=np.uint8,
+                      shape=(image.height, image.width, image.bands))
 
-    logging.info(f"Image {input_file} has {image.bands} bands")
 
-    # Handle images with 4 bands in sRGB color space (likely RGBA)
-    if image.bands == 4 and image.interpretation == 'srgb':
-        # Extract the first 3 bands (RGB) and discard the alpha channel
-        image = image.extract_band(0, n=3)
-        logging.info(f"Extracted RGB channels from RGBA image.")
-    elif image.bands == 3:
-        # Image is already RGB, no action needed
-        logging.info(f"Image is already in RGB format.")
-    else:
-        logging.warning(f"Image {input_file} has {image.bands} bands which is not supported. Skipping.")
-        return
+def batch_normalize(input_dir, output_dir, Io=240, alpha=1, beta=0.15):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    # Convert pyvips image to numpy array
-    memory_array = image.write_to_memory()
-    image_np = np.frombuffer(memory_array, dtype=np.uint8).reshape(image.height, image.width, image.bands)
+    for file_name in os.listdir(input_dir):
+        if file_name.endswith(".tiff"):
+            img_path = os.path.join(input_dir, file_name)
+            output_path = os.path.join(output_dir, os.path.splitext(file_name)[0])
+            print(f"Processing {file_name}...")
+            img = load_large_image_pyvips(img_path)  # Load using pyvips
+            normalizeStaining(img, saveFile=output_path, Io=Io, alpha=alpha, beta=beta)
+    print("Batch normalization complete!")
 
-    # Apply Macenko normalization
-    Inorm = macenko_normalization(image_np)
 
-    # Convert normalized numpy array back to pyvips image
-    normalized_image = pyvips.Image.new_from_memory(
-        Inorm.tobytes(),
-        Inorm.shape[1],
-        Inorm.shape[0],
-        Inorm.shape[2],
-        'uchar'
-    )
-
-    # Save the normalized image as a TIFF
-    normalized_image.tiffsave(output_file, compression='deflate', bigtiff=True)
-    logging.info(f"Saved normalized image to {output_file}")
-    logging.info(f"Processing completed in {datetime.now() - start_time}")
-
-def main():
-    input_dir = Path(INPUT_DIR)
-    output_dir = Path(OUTPUT_DIR)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    file_paths = list(input_dir.glob('*.tif*'))  # Match .tif and .tiff
-    total_files = len(file_paths)
-
-    for index, path in enumerate(file_paths, start=1):
-        output_file = output_dir / (path.stem + '_normalized.tiff')
-
-        if not output_file.exists():
-            logging.info(f"Processing file {index} of {total_files} ({(index/total_files)*100:.2f}%)")
-            process_image(str(path), str(output_file))
-        else:
-            logging.info(f"File {output_file} already exists. Skipping conversion.")
 
 if __name__ == '__main__':
-    main()
+    input_dir = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
+    output_dir = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint_normalized_tiff/"
+    batch_normalize(input_dir, output_dir, Io=240, alpha=1, beta=0.15)
