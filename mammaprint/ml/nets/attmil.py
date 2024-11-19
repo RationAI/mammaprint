@@ -14,7 +14,7 @@ import torchvision.models as models
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
   
 class GatedAttention(nn.Module):
-    def __init__(self, feature_dim, attention_dim=512):
+    def __init__(self, feature_dim, attention_dim=1024):
         super(GatedAttention, self).__init__()
         self.attention_V = nn.Linear(feature_dim, attention_dim)
         self.attention_U = nn.Linear(feature_dim, attention_dim)
@@ -37,12 +37,14 @@ class AttMILModel(nn.Module):
         self.norm = nn.LayerNorm(512)
         self.attention = GatedAttention(512)
         self.classifier = nn.Sequential(
-            nn.Linear(512, 512),
+            nn.Linear(512, 1024),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(256, 1)
         )
         
