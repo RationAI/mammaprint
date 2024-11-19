@@ -20,6 +20,7 @@ defaults:
     - spearman_corr_coef
     - mse
     - mae
+    - signagreement
   - /ml/lr_scheduler: reduce_lr_on_plateau
   - /trainer/callbacks:
     - log_best_model
@@ -56,10 +57,10 @@ datamodule:
 
   dataloaders_kwargs:
     train:
-      num_workers: 12
+      num_workers: 8
       batch_size: 8
     valid:
-      num_workers: 12
+      num_workers: 8
       batch_size: 8
 
 ml:
