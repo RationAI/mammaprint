@@ -54,7 +54,7 @@ datamodule:
 
 metadata:
   experiment_name: Tissue Classification
-  run_name: VGG16 - tumor masks - Predictions, Another dataset part 2
+  run_name: VGG16 - tumor masks - Predictions, Another dataset part 3
   description: Tissue classification predictions on TCGA dataset and a VGG16 model trained on ${datamodule.datasets.test.sampler.target_label} class.
   hyperparameters:
     batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}
