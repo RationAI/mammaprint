@@ -6,8 +6,8 @@ prostate:
     # - mlflow-artifacts:/17/34960f7abb55464cb8d9266cacb62836/artifacts/dataset # mammaprint small validation dataset
 #    - mlflow-artifacts:/17/294101f7fb194114bef0809b9c7c634c/artifacts/dataset # mammaprint full dataset
 #    - mlflow-artifacts:/17/76c070338fe4407ca1e395c6ddbd3cca/artifacts/dataset # another part 2
-    - mlflow-artifacts:/17/d2b3a6fcefd54f8eba565f6ae5cd4a4a/artifacts/dataset # another part 3
-#    - mlflow-artifacts:/17/339ab29eaaa54a538d3d471dae921122/artifacts/dataset # another part 4
+#    - mlflow-artifacts:/17/d2b3a6fcefd54f8eba565f6ae5cd4a4a/artifacts/dataset # another part 3
+    - mlflow-artifacts:/17/339ab29eaaa54a538d3d471dae921122/artifacts/dataset # another part 4
 #    - mlflow-artifacts:/17/b5a4ac2a703547baa3bb967fac2616b6/artifacts/dataset # another part 5
   splits:
     test: 1.0
