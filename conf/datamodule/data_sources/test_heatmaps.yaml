@@ -9,6 +9,7 @@ prostate:
 #    - mlflow-artifacts:/17/d2b3a6fcefd54f8eba565f6ae5cd4a4a/artifacts/dataset # another part 3
 #    - mlflow-artifacts:/17/339ab29eaaa54a538d3d471dae921122/artifacts/dataset # another part 4
 #    - mlflow-artifacts:/17/b5a4ac2a703547baa3bb967fac2616b6/artifacts/dataset # another part 5
-    - mlflow-artifacts:/17/ae23184512fd47e89060e5aab6bb5ec0/artifacts/dataset # atother part 6
+#    - mlflow-artifacts:/17/ae23184512fd47e89060e5aab6bb5ec0/artifacts/dataset # atother part 6
+    - mlflow-artifacts:/17/ad027750620b450db7e5977d777cb651/artifacts/dataset # atother part 7
   splits:
     test: 1.0
