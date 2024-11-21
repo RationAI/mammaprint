@@ -3,8 +3,8 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
 # Input and output directories
-input_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_tissue_classification_tumor_masks/test_heatmaps")
-output_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks_resized/")
+input_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_classification_tumor_masks/test_heatmaps")
+output_dir = Path("/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_classification_tumor_masks_resized/")
 output_dir.mkdir(parents=True, exist_ok=True)
 scaling_factor = 0.5
 
@@ -27,7 +27,7 @@ def downsize_tiff(input_path: Path, scale: float) -> None:
     )
     print(f"Downsized, pyramid, and saved: {output_path}")
 
-def process_files_in_parallel(input_dir: Path, scale: float, max_workers: int = 32) -> None:
+def process_files_in_parallel(input_dir: Path, scale: float, max_workers: int = 40) -> None:
     """Process all TIFF files in input_dir using up to max_workers in parallel."""
     tiff_files = list(input_dir.glob("*.tiff"))
     
@@ -43,4 +43,4 @@ def process_files_in_parallel(input_dir: Path, scale: float, max_workers: int = 
 
 # Run the parallel processing
 if __name__ == "__main__":
-    process_files_in_parallel(input_dir, scaling_factor, max_workers=32)
+    process_files_in_parallel(input_dir, scaling_factor, max_workers=40)
