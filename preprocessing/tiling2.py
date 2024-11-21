@@ -21,9 +21,9 @@ logging.basicConfig(
 )
 
 # Define paths
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tiff/"
-TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks/"
-ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks_resized/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/"
+TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
+ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_classification_tumor_masks_resized/"
 
 @dataclass
 class PipelineTileMetadata(TileMetadata):
@@ -76,7 +76,7 @@ class CancerMask(PyvipsMask[PipelineTileMetadata]):
 
 
 # Initialize tile source and mask
-source = OpenSlideTileSource(mpp=0.50, tile_extent=512, stride=256)
+source = OpenSlideTileSource(mpp=0.25, tile_extent=512, stride=256)
 tissue_mask = TissueMask(
     tile_extent=source.tile_extent, absolute_roi_extent=256, relative_roi_offset=0
 )
@@ -88,7 +88,7 @@ cancer_mask = CancerMask(
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
 # Define the path to Learning_set.csv relative to the script's directory
-LABELS_FILE = SCRIPT_DIR / 'Learning_set.csv'
+LABELS_FILE = SCRIPT_DIR / 'another_wsi.csv'
 
 # Verify if LABELS_FILE exists
 if not LABELS_FILE.exists():
