@@ -24,7 +24,7 @@ datamodule:
 #        - mlflow-artifacts:/17/c2b8a16746f844e1a790b0a48402e23b/artifacts/data # mammaprint test dataset
         # - mlflow-artifacts:/17/29498aa547514d0c969d8e2646b31e7c/artifacts/dataset # mammaprint train dataset
         # - mlflow-artifacts:/4/42a6acd9b91942b4838646b6e9a2c158/artifacts/dataset #prostate dataset
-        - mlflow-artifacts:/17/fb50193c10d34495a5bb7214952887f4/artifacts/dataset #mammaprint another dataset
+        - mlflow-artifacts:/17/a25ebbedecb146968f4ce935a2d96f71/artifacts/data #mammaprint another dataset
       splits:
         test: 1.0
   datasets:
