@@ -19,7 +19,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/316199660dc84fe38d6d29c0631ecd9b/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
+    model_uri: mlflow-artifacts:/17/ab4e99e8d2ca4bf998f4358b9eb6cde9/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
 
 datamodule:
   datasets:
