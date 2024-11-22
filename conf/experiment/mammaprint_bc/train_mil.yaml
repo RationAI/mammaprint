@@ -89,7 +89,7 @@ trainer:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 5
+      patience: 10
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
