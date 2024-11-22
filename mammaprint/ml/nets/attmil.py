@@ -95,7 +95,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=512, num_heads=8, dropout=0.1):
+    def __init__(self, feature_dim=512, num_heads=8, dropout=0.5):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         
@@ -111,9 +111,12 @@ class AttMILModel(nn.Module):
         
         # Classifier
         self.classifier = nn.Sequential(
-            nn.Linear(feature_dim, 256),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Dropout(0.5),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
             nn.Linear(256, 1)
         )
         
