@@ -144,8 +144,8 @@ class AttMILModel(nn.Module):
         batch_size, num_tiles, feature_dim = x.shape
         
         # Normalize input features
-        x = self.norm(x)  # [B, N, C]
-        self.logger.debug(f'Normalized input shape: {x.shape}')
+        # x = self.norm(x)  # [B, N, C]
+        # self.logger.debug(f'Normalized input shape: {x.shape}')
         
         # Expand the query to match the batch size
         query = self.query.expand(batch_size, -1, -1)  # [B, 1, C]
