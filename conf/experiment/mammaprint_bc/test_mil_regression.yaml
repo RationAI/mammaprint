@@ -19,7 +19,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/ab4e99e8d2ca4bf998f4358b9eb6cde9/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
+    model_uri: mlflow-artifacts:/17/18e39d1b6c8747ed8939b7343db2ce70/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
 
 datamodule:
   datasets:
@@ -30,7 +30,7 @@ datamodule:
       label: "mammaprint"
   dataloaders_kwargs:
     test:
-      num_workers: 12
+      num_workers: 6
       batch_size: 8
 
 metadata:
@@ -39,6 +39,6 @@ metadata:
   description: |
     MIL Regression test. MIL approach
   hyperparameters:
-    num_workers: 12
+    num_workers: 6
     batch_size: 8
    
