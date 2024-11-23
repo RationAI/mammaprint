@@ -334,7 +334,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 2500  # Fixed number of tiles per bag
+        self.tiles_per_bag = 2000 # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
@@ -371,9 +371,9 @@ class MILRandomTreeSampler(TreeSampler):
             if len(chosen_tiles) < self.tiles_per_bag:
                 # log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
                 # log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
-                
+
+                empty_tile = chosen_tiles.iloc[0].to_dict().copy()  # Get an example tile structure from the real data
                 empty_tile = {
-                    "slide_name": self.active_node.node_name,  # Use current slide name
                     "coord_x": 0,
                     "coord_y": 0,
                     "model_output": [0.0] * 512,  # Zero vector for model_output
