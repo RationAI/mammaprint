@@ -106,8 +106,14 @@ class AttMILModel(nn.Module):
         self.query = nn.Parameter(torch.randn(1, 1, feature_dim))
         nn.init.xavier_uniform_(self.query)
         
-        # Multihead Attention layer
-        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, dropout=dropout, batch_first=True)
+        # Multihead Attention layers
+        self.attention = nn.Sequential(
+            nn.MultiheadAttention(embed_dim=feature_dim, num_heads=8, dropout=dropout, batch_first=True),
+            nn.LayerNorm(feature_dim),
+            nn.MultiheadAttention(embed_dim=feature_dim, num_heads=8, dropout=dropout, batch_first=True)
+        )
+
+        # self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, dropout=dropout, batch_first=True)
         
         # Classifier
         self.classifier = nn.Sequential(
