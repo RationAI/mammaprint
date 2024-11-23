@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/ad3cc86534e641a2b7379c02fe612348/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/5319a72353a54ed49a7997158f3917df/artifacts/model/MLFlowModelCheckpoint/last
 
 datamodule:
   datasets:
@@ -28,7 +28,7 @@ datamodule:
       label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 12
+      num_workers: 8
       batch_size: 8
 
 metadata:
@@ -37,6 +37,6 @@ metadata:
   description: |
     Binary classification.
   hyperparameters:
-    num_workers: 12
+    num_workers: 8
     batch_size: 8
    
