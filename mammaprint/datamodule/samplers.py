@@ -385,10 +385,10 @@ class MILRandomTreeSampler(TreeSampler):
                 padding_tiles = [base_tile for _ in range(padding_needed)]
 
                 # Convert padding tiles to DataFrame for compatibility
-                padding_tiles_df = pd.DataFrame(padding_tiles)
+                padding_tiles_df = pandas.DataFrame(padding_tiles)
 
                 # Combine real and padding tiles
-                combined_tiles = pd.concat([chosen_tiles, padding_tiles_df], ignore_index=True)
+                combined_tiles = pandas.concat([chosen_tiles, padding_tiles_df], ignore_index=True)
 
                 # Convert back to list of dictionaries if needed
                 chosen_tiles = combined_tiles.to_dict("records")
