@@ -372,28 +372,8 @@ class MILRandomTreeSampler(TreeSampler):
 
             # Check if padding is needed
             if len(chosen_tiles) < self.tiles_per_bag:
-                # Use the first tile as a base for empty tiles
-                base_tile = chosen_tiles.iloc[0].to_dict().copy()
-
-                # Modify fields for empty tiles
-                base_tile["coord_x"] = 0
-                base_tile["coord_y"] = 0
-                base_tile["model_output"] = np.zeros(512, dtype=np.float32).tolist()
-
-                # Create padding tiles
-                padding_needed = self.tiles_per_bag - len(chosen_tiles)
-                padding_tiles = [base_tile for _ in range(padding_needed)]
-
-                # Convert padding tiles to DataFrame for compatibility
-                padding_tiles_df = pandas.DataFrame(padding_tiles)
-
-                # Combine real and padding tiles
-                combined_tiles = pandas.concat([chosen_tiles, padding_tiles_df], ignore_index=True)
-
-                # Convert back to list of dictionaries if needed
-                chosen_tiles = combined_tiles.to_dict("records")
-
-                log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
+                # Sample with replacement to reach tiles_per_bag tiles
+                chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=True).to_dict("records")
             else:
                 # Sample exactly tiles_per_bag tiles without replacement
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
