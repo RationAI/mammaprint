@@ -358,7 +358,7 @@ class MILRandomTreeSampler(TreeSampler):
             self.categories[cur_node.data[self.label_column].iloc[0]].append(cur_node)
             cur_node = cur_node.next
 
-        def get_sample(self) -> list[dict]:
+    def get_sample(self) -> list[dict]:
             samples = []
 
             for _ in range(self.num_slides):
