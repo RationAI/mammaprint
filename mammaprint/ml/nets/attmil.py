@@ -95,7 +95,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=512, num_heads=8, dropout=0.5):
+    def __init__(self, feature_dim=512, num_heads=16, dropout=0.5):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         
