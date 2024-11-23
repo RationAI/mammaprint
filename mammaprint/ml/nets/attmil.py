@@ -39,10 +39,10 @@ class AttMILModel(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
             nn.Linear(256, 1)
         )
         
@@ -95,7 +95,7 @@ class AttMILModel(nn.Module):
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # class AttMILModel(nn.Module):
-#     def __init__(self, feature_dim=512, num_heads=16, dropout=0.5):
+#     def __init__(self, feature_dim=512, num_heads=8, dropout=0.1):
 #         super(AttMILModel, self).__init__()
 #         self.logger = logging.getLogger(self.__class__.__name__)
         
@@ -106,17 +106,14 @@ class AttMILModel(nn.Module):
 #         self.query = nn.Parameter(torch.randn(1, 1, feature_dim))
 #         nn.init.xavier_uniform_(self.query)
         
-#         # Multihead Attention layers
+#         # Multihead Attention layer
 #         self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, dropout=dropout, batch_first=True)
         
 #         # Classifier
 #         self.classifier = nn.Sequential(
-#             nn.Linear(512, 512),
+#             nn.Linear(feature_dim, 256),
 #             nn.ReLU(),
-#             nn.Dropout(0.5),
-#             nn.Linear(512, 256),
-#             nn.ReLU(),
-#             nn.Dropout(0.5),
+#             nn.Dropout(dropout),
 #             nn.Linear(256, 1)
 #         )
         
@@ -144,8 +141,8 @@ class AttMILModel(nn.Module):
 #         batch_size, num_tiles, feature_dim = x.shape
         
 #         # Normalize input features
-#         # x = self.norm(x)  # [B, N, C]
-#         # self.logger.debug(f'Normalized input shape: {x.shape}')
+#         x = self.norm(x)  # [B, N, C]
+#         self.logger.debug(f'Normalized input shape: {x.shape}')
         
 #         # Expand the query to match the batch size
 #         query = self.query.expand(batch_size, -1, -1)  # [B, 1, C]
