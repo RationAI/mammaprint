@@ -44,6 +44,7 @@ datamodule:
       # - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
       # - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
       - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset
+      - mlflow-artifacts:/17/1921d6f126be4066bad354cbf5839e96/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -51,13 +52,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 80
+        epoch_size: 160
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 20
+        epoch_size: 40
         index_levels:
           - slide_name
       label: "luminal_id"
