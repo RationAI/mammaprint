@@ -22,7 +22,8 @@ datamodule:
         # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
         # - mlflow-artifacts:/17/a25ebbedecb146968f4ce935a2d96f71/artifacts/data #mammaprint another dataset
-        - mlflow-artifacts:/17/63d7f1dfd79f48128b7be96a1837f126/artifacts/data # mammaprint train dataset
+#        - mlflow-artifacts:/17/63d7f1dfd79f48128b7be96a1837f126/artifacts/data # mammaprint train dataset
+        - mlflow-artifacts:/17/c2b8a16746f844e1a790b0a48402e23b/artifacts/data # mammaprint test dataset
       splits:
         test: 1.0
   datasets:
@@ -47,7 +48,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Features extraction using Resnet50, train set after tissue classification
+  run_name: Features extraction using Resnet50, test set after tissue classification
   description: |
     Compute features using Resnet50 model.
   hyperparameters:
