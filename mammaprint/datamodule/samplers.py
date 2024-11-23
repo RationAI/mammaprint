@@ -369,32 +369,22 @@ class MILRandomTreeSampler(TreeSampler):
             chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
              # Check if padding is needed
             if len(chosen_tiles) < self.tiles_per_bag:
-                # Sample exactly tiles_per_bag tiles without replacement
-                # chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=True).to_dict("records")
-
-                log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
-                log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
+                # log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
+                # log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
                 
-                current_slide_name = self.active_node.node_name  # Set to the current slide name
+                empty_tile = {
+                    "slide_name": self.active_node.node_name,  # Use current slide name
+                    "coord_x": 0,
+                    "coord_y": 0,
+                    "model_output": [0.0] * 512,  # Zero vector for model_output
+                    "class_id": 0,  # Placeholder for class_id
+                    "mammaprint_value": 0.0  # Placeholder for mammaprint_value
+                }
+                padding_needed  = self.tiles_per_bag - len(chosen_tiles)
+                # Add padding tiles
+                padding_tiles = [empty_tile] * padding_needed
+                chosen_tiles = chosen_tiles.to_dict("records") + padding_tiles
 
-                # Use an example tile to create an empty tile with the same structure
-                example_tile = chosen_tiles.iloc[0].to_dict()  # Get an example tile structure from the real data
-                empty_tile = example_tile.copy()  # Make a copy of example_tile to preserve structure
-
-                # Update specific fields to placeholders
-                empty_tile["slide_name"] = current_slide_name  # Use current slide name
-                empty_tile["coord_x"] = 0
-                empty_tile["coord_y"] = 0
-                empty_tile["model_output"] = [0.0] * len(example_tile["model_output"])  # Zero vector for model_output
-                empty_tile["class_id"] = 0  # Placeholder for class_id
-                empty_tile["mammaprint_value"] = 0.0  # Placeholder for mammaprint_value 
-
-                padding_needed = self.tiles_per_bag - len(chosen_tiles)
-                
-                # Convert chosen tiles to list of dicts and add empty tiles as padding
-                chosen_tiles = chosen_tiles.to_dict("records")
-                chosen_tiles.extend([empty_tile] * padding_needed)
-                
                 log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
             else:
                 # Sample exactly tiles_per_bag tiles without replacement
