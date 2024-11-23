@@ -334,7 +334,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 2000 # Fixed number of tiles per bag
+        self.tiles_per_bag = 1000 # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
@@ -358,44 +358,48 @@ class MILRandomTreeSampler(TreeSampler):
             self.categories[cur_node.data[self.label_column].iloc[0]].append(cur_node)
             cur_node = cur_node.next
 
-    def get_sample(self) -> list[dict]:
-        samples = []
-        for _ in range(self.num_slides):
-            if self.active_node is None:  # If there are no more nodes, break the loop
-                break
-            if self.active_node.data is None:
-                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
+        def get_sample(self) -> list[dict]:
+            samples = []
 
-            chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
-             # Check if padding is needed
-            if len(chosen_tiles) < self.tiles_per_bag:
-                # Use the first tile as a base for empty tiles
-                base_tile = chosen_tiles.iloc[0].to_dict().copy()
+            for _ in range(self.num_slides):
+                if self.active_node is None:  # If there are no more nodes, break the loop
+                    break
 
-                # Modify only the required fields for empty tiles
-                base_tile["coord_x"] = 0
-                base_tile["coord_y"] = 0
-                base_tile["model_output"] = [0.0] * 512  # Zero vector for model_output
+                if self.active_node.data is None:
+                    self.active_node.load_data()  # Ensure this method exists or is correctly implemented
 
-                # Calculate how many tiles need to be padded
-                padding_needed = self.tiles_per_bag - len(chosen_tiles)
+                chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
 
-                # Create the padding tiles using the modified base tile
-                padding_tiles = [base_tile] * padding_needed
+                # Check if padding is needed
+                if len(chosen_tiles) < self.tiles_per_bag:
+                    # Use the first tile as a base for empty tiles
+                    base_tile = chosen_tiles.iloc[0].to_dict().copy()
 
-                # Combine real and padding tiles
-                chosen_tiles = chosen_tiles.to_dict("records") + padding_tiles
+                    # Modify fields for empty tiles using numpy
+                    base_tile["coord_x"] = 0
+                    base_tile["coord_y"] = 0
+                    base_tile["model_output"] = np.zeros(512, dtype=np.float32).tolist()  # Efficient zero vector
+                    padding_needed = self.tiles_per_bag - len(chosen_tiles)
 
-                log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
-            else:
-                # Sample exactly tiles_per_bag tiles without replacement
-                chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
-            samples.append(chosen_tiles)
-            self.next()  # Move to the next node
-        total_tiles = sum(len(slide) for slide in samples)
-        # log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")    
+                    # Create the padding tiles using a list comprehension
+                    padding_tiles = [base_tile for _ in range(padding_needed)]
 
-        return samples
+                    # Combine real and padding tiles
+                    chosen_tiles = np.concatenate([chosen_tiles.to_numpy(), np.array(padding_tiles)], axis=0)
+                    chosen_tiles = chosen_tiles.tolist()  # Convert back to a list of dictionaries if needed
+
+                    log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
+                else:
+                    # Sample exactly tiles_per_bag tiles without replacement
+                    chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
+
+                samples.append(chosen_tiles)
+                self.next()  # Move to the next node
+
+            total_tiles = sum(len(slide) for slide in samples)
+            log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
+
+            return samples
 
     def next(self) -> None:
         """Randomly selects the next leaf from a randomly chosen category to balance class sampling."""
