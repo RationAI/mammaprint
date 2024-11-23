@@ -50,13 +50,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 160
+        epoch_size: 64
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 40
+        epoch_size: 16
         index_levels:
           - slide_name
       label: "luminal_id"
@@ -64,10 +64,10 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 6
-      batch_size: 10
+      batch_size: 8
     valid:
       num_workers: 6
-      batch_size: 10
+      batch_size: 8
 
 ml:
   optimizer:
@@ -89,7 +89,7 @@ trainer:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 10
+      patience: 6
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
