@@ -369,20 +369,21 @@ class MILRandomTreeSampler(TreeSampler):
             chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
              # Check if padding is needed
             if len(chosen_tiles) < self.tiles_per_bag:
-                # log.info(f"Node {self.active_node.node_name} has fewer than {self.tiles_per_bag} tiles.")
-                # log.info(f"Sampled {len(chosen_tiles)} tiles with replacement.")
+                # Use the first tile as a base for empty tiles
+                base_tile = chosen_tiles.iloc[0].to_dict().copy()
 
-                empty_tile = chosen_tiles.iloc[0].to_dict().copy()  # Get an example tile structure from the real data
-                empty_tile = {
-                    "coord_x": 0,
-                    "coord_y": 0,
-                    "model_output": [0.0] * 512,  # Zero vector for model_output
-                    "class_id": 0,  # Placeholder for class_id
-                    "mammaprint_value": 0.0  # Placeholder for mammaprint_value
-                }
-                padding_needed  = self.tiles_per_bag - len(chosen_tiles)
-                # Add padding tiles
-                padding_tiles = [empty_tile] * padding_needed
+                # Modify only the required fields for empty tiles
+                base_tile["coord_x"] = 0
+                base_tile["coord_y"] = 0
+                base_tile["model_output"] = [0.0] * 512  # Zero vector for model_output
+
+                # Calculate how many tiles need to be padded
+                padding_needed = self.tiles_per_bag - len(chosen_tiles)
+
+                # Create the padding tiles using the modified base tile
+                padding_tiles = [base_tile] * padding_needed
+
+                # Combine real and padding tiles
                 chosen_tiles = chosen_tiles.to_dict("records") + padding_tiles
 
                 log.info(f"Added {padding_needed} empty tiles to reach {self.tiles_per_bag} tiles.")
