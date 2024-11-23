@@ -18,9 +18,10 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-        - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset #another dataset no overlap
+        # - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset #another dataset no overlap
         # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
         # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
+        - mlflow-artifacts:/17/a25ebbedecb146968f4ce935a2d96f71/artifacts/data #mammaprint another dataset
       splits:
         test: 1.0
   datasets:
@@ -33,7 +34,7 @@ datamodule:
   dataloaders_kwargs:
     test:
       num_workers: 10
-      batch_size: 40
+      batch_size: 60
 ml:
   net:
     features:
@@ -45,7 +46,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: No overlap another set features extraction using Resnet50
+  run_name: Features extraction using Resnet50, another set after tissue classification
   description: |
     Compute features using Resnet50 model.
   hyperparameters:
