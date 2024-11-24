@@ -66,15 +66,15 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 6
-      batch_size: 8
+      batch_size: 10
     valid:
       num_workers: 6
-      batch_size: 8
+      batch_size: 10
 
 ml:
   optimizer:
-    lr: 5e-5
-    weight_decay: 5e-05
+    lr: 1e-4
+    weight_decay: 1e-04
   lr_scheduler:
     monitor: valid/loss
     scheduler:

@@ -39,10 +39,10 @@ class AttMILModel(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(2048, 512),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
             nn.Linear(256, 1)
         )
         
