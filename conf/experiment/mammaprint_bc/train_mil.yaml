@@ -52,7 +52,7 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 180
+        epoch_size: 240
         index_levels:
           - slide_name
       label: "luminal_id"
