@@ -22,7 +22,7 @@ datamodule:
 
 trainer:
   callbacks:
-    heatmap_visualizer:
+    attention_visualizer:
       save_dir: test_heatmaps
 
 metadata:
