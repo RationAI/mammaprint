@@ -73,7 +73,7 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 5e-4
+    lr: 1e-3
     weight_decay: 5e-04
   lr_scheduler:
     monitor: valid/loss
@@ -91,7 +91,7 @@ trainer:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 6
+      patience: 5
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
