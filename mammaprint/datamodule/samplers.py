@@ -450,7 +450,7 @@ class MILSequentialTreeSampler(TreeSampler):
                 # logging.debug(f"Sample of `res` content:\n{res.head()}")
                 
                 # Log the number of tiles in `res`
-                if len(res) >= 2000:
+                if len(res) >= 1000:
                     # logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
                     
                     # Sample 1000 tiles and log a preview of `chosen_tiles`
