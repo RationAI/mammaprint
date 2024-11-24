@@ -3,7 +3,7 @@ mammaprint_test:
   seed: ${seed}
   data_uris: 
     # - mlflow-artifacts:/17/1cb6c6cd67c94694b5491018c2e7a8c2/artifacts/dataset # mil prostate dataset for test
-    # - mlflow-artifacts:/17/c8b0e94206a44216b615ecfbb8348fcb/artifacts/dataset # mil luminal dataset for test
-    - mlflow-artifacts:/17/fa9ba0bdef194b64b136fb4d1b2a7197/artifacts/dataset # mil luminal dataset for test resnet50 features
+    - mlflow-artifacts:/17/c8b0e94206a44216b615ecfbb8348fcb/artifacts/dataset # mil luminal dataset for test
+    # - mlflow-artifacts:/17/fa9ba0bdef194b64b136fb4d1b2a7197/artifacts/dataset # mil luminal dataset for test resnet50 features
   splits:
     test: 1.0
