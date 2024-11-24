@@ -34,12 +34,9 @@ class AttMILModel(nn.Module):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         # Layer normalization for input stability
-        self.norm = nn.LayerNorm(2048)
-        self.attention = GatedAttention(2048)
+        self.norm = nn.LayerNorm(512)
+        self.attention = GatedAttention(512)
         self.classifier = nn.Sequential(
-            nn.Linear(2048, 512),
-            nn.ReLU(),
-            nn.Dropout(0.2),
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Dropout(0.2),
