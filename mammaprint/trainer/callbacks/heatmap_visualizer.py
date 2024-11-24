@@ -6,7 +6,6 @@ from typing import Any
 
 import lightning
 import mlflow
-import torch
 
 from mammaprint.trainer.callbacks.dataloader_agnostic import (
     DataloaderAgnosticCallback,
@@ -65,73 +64,5 @@ class HeatmapVisualizer(DataloaderAgnosticCallback):
         super().on_test_batch_end(
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
-        logger.debug("Starting on_test_batch_end.")
-
-        # Extract attention weights and metadata
-        attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
-        logger.debug(f"Extracted attention_weights with shape: {attention_weights.shape}")
-
-        metadata_list = batch[2]  # list of per-tile metadata dicts
-        logger.debug(f"Extracted metadata_list with length: {len(metadata_list)}")
-
-        batch_size = attention_weights.shape[0]
-        num_tiles = attention_weights.shape[1]
-        logger.debug(f"Batch size: {batch_size}, Number of tiles: {num_tiles}")
-
-        for i in range(batch_size):
-            data = attention_weights[i]  # shape [num_tiles]
-            logger.debug(f"Processing batch {i+1}/{batch_size}. Data shape: {data.shape}")
-
-            # Reshape data to [num_tiles, 1]
-            data = data.unsqueeze(1)  # Now data shape is [num_tiles, 1]
-            logger.debug(f"Reshaped data to: {data.shape}")
-
-            # Aggregate per-tile metadata
-            per_tile_metadata_list = metadata_list
-            logger.debug(f"Type of per_tile_metadata_list: {type(per_tile_metadata_list)}")
-            logger.debug(f"First per-tile metadata: {per_tile_metadata_list[0]}")
-
-            # Initialize lists to collect per-tile metadata
-            coord_x_list = []
-            coord_y_list = []
-            # Add other per-tile metadata fields as needed
-
-            for tile_meta in per_tile_metadata_list:
-                coord_x_list.append(tile_meta['coord_x'].item())
-                coord_y_list.append(tile_meta['coord_y'].item())
-                # Extract other fields if necessary
-
-            # Convert lists to tensors
-            coord_x = torch.tensor(coord_x_list, device=data.device)
-            coord_y = torch.tensor(coord_y_list, device=data.device)
-
-            # Use the first tile's metadata for shared fields
-            tile_size = per_tile_metadata_list[0]['tile_size']
-            sample_level = per_tile_metadata_list[0]['sample_level']
-            slide_name = per_tile_metadata_list[0]['slide_name']
-            slide_width = per_tile_metadata_list[0]['slide_width']
-            slide_height = per_tile_metadata_list[0]['slide_height']
-            slide_channels = 1
-
-            # Construct the aggregated metadata dictionary
-            tile_metadata = {
-                'coord_x': coord_x,
-                'coord_y': coord_y,
-                'tile_size': tile_size,
-                'sample_level': sample_level,
-                'slide_name': slide_name,
-                'slide_width': slide_width,
-                'slide_height': slide_height,
-                'slide_channels': slide_channels,
-            }
-            logger.debug(f"Constructed tile_metadata for batch {i+1}: {tile_metadata}")
-
-            # Scale weights for better visualization
-            scaling_factor = 2000
-            data = torch.mul(data, scaling_factor)
-
-            # Update the image builder with arrays of data and metadata
-            logger.debug(f"Updating image builder for batch {i+1}.")
-            self.image_builder.update(data=data, metadata=tile_metadata)
-
-        logger.debug("Completed on_test_batch_end.")
+        _, _, metadata = batch
+        self.image_builder.update(data=outputs["outputs"], metadata=metadata)

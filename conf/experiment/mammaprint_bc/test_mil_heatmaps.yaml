@@ -2,7 +2,7 @@
 defaults:
   - /experiment/mammaprint_bc: test_mil
   - /trainer/callbacks:
-    - heatmap_visualizer
+    - attention_visualizer
   - _self_
 
 ml:
@@ -27,7 +27,7 @@ trainer:
 
 metadata:
   experiment_name: mammaprint
-  run_name: MIL Luminal test whole slide images with Heatmaps, using the gated attention model
+  run_name: MIL Luminal test whole slide images with attention heatmaps, using the gated attention model
   description: |
     Luminal binary classification.
   hyperparameters:
