@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/1d102becfaf840b99dc76869c5a0fac3/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/1ef85707a8334f6c94c1cf9a987c55d8/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -28,8 +28,8 @@ datamodule:
       label: "luminal_id"
   dataloaders_kwargs:
     test:
-      num_workers: 8
-      batch_size: 10
+      num_workers: 6
+      batch_size: 16
 
 metadata:
   experiment_name: mammaprint
@@ -37,6 +37,6 @@ metadata:
   description: |
     Binary classification.
   hyperparameters:
-    num_workers: 8
-    batch_size: 10
+    num_workers: 6
+    batch_size: 16
    
