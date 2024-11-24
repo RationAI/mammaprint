@@ -5,6 +5,7 @@ from mammaprint.trainer.callbacks.dataloader_agnostic import (
     DataloaderAgnosticCallback,
 )
 from mammaprint.trainer.callbacks.heatmap_visualizer import HeatmapVisualizer
+from mammaprint.trainer.callbacks.attention_visualizer import AttentionVisualizer
 from mammaprint.trainer.callbacks.image_builders import (
     DiskMappedPatchAssembler,
     ImageBuilder,
@@ -28,4 +29,5 @@ __all__ = [
     "SlidePredictor",
     "SlidePredictionOptimizer",
     "ParquetPredictionSaver",
+    "AttentionVisualizer",
 ]
