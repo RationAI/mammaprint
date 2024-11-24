@@ -74,7 +74,7 @@ datamodule:
 ml:
   optimizer:
     lr: 1e-3
-    weight_decay: 5e-04
+    weight_decay: 1e-03
   lr_scheduler:
     monitor: valid/loss
     scheduler:
