@@ -38,7 +38,9 @@ datamodule:
       # - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset
       # - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
       # - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
-        - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset
+        # - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset
+        - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
+        - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
@@ -46,13 +48,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 64
+        epoch_size: 240
         index_levels:
           - slide_name
       label: "mammaprint"
     valid:
       sampler:
-        epoch_size: 16
+        epoch_size: 60
         index_levels:
           - slide_name
       label: "mammaprint"
@@ -60,15 +62,15 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 6
-      batch_size: 8
+      batch_size: 16
     valid:
       num_workers: 6
-      batch_size: 8
+      batch_size: 16
 
 ml:
   optimizer:
-    lr: 5e-5
-    weight_decay: 5e-05
+    lr: 1e-3
+    weight_decay: 1e-3
   lr_scheduler:
     monitor: valid/loss
     scheduler:
