@@ -52,13 +52,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 128
+        epoch_size: 240
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 32
+        epoch_size: 60
         index_levels:
           - slide_name
       label: "luminal_id"
@@ -73,8 +73,8 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 5e-5
-    weight_decay: 5e-05
+    lr: 1e-3
+    weight_decay: 1e-03
   lr_scheduler:
     monitor: valid/loss
     scheduler:
@@ -91,7 +91,7 @@ trainer:
     early_stopping:
       monitor: valid/binary_auroc
       mode: max
-      patience: 5
+      patience: 10
     log_best_model:
       monitor: valid/binary_auroc
       mode: max
@@ -100,7 +100,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL gated attention Luminal binary classification - Baseline whole train set
+  run_name: MIL gated attention Luminal binary classification
   description: |
    Luminal binary classification. MIL approach
   hyperparameters:
