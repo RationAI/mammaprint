@@ -38,13 +38,14 @@ datamodule:
       # - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
       # - mlflow-artifacts:/17/e4dbafc779604085974b6ea97cfa527e/artifacts/dataset
       # - mlflow-artifacts:/17/dd1ce182cf0c4d07aeb243c830e08894/artifacts/dataset
-      #  - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset
-      #  - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset
+      #  - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset #another set no overlap
+      #  - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset #train set no overlap
       #mammaprint dataset
-      - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
+      # - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
+      - mlflow-artifacts:/17/beba84b0eb1640de94577eec70c62e7e/artifacts/dataset
       # - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
-      # - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset
-      # - mlflow-artifacts:/17/1921d6f126be4066bad354cbf5839e96/artifacts/dataset
+      # - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset #another set resnet50 features after TC
+      # - mlflow-artifacts:/17/1921d6f126be4066bad354cbf5839e96/artifacts/dataset #train set resnet50 features after TC
       splits:
         train: 0.8
         valid: 0.2
@@ -100,7 +101,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: MIL gated attention Luminal binary classification - Baseline whole train set
+  run_name: MIL gated attention Luminal binary classification - Baseline whole train + another set, baseline set
   description: |
    Luminal binary classification. MIL approach
   hyperparameters:
