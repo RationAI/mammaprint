@@ -52,13 +52,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 120
+        epoch_size: 240
         index_levels:
           - slide_name
       label: "is_cancer"
     valid:
       sampler:
-        epoch_size: 30
+        epoch_size: 60
         index_levels:
           - slide_name
       label: "is_cancer"
