@@ -48,13 +48,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 240
+        epoch_size: 280
         index_levels:
           - slide_name
       label: "mammaprint"
     valid:
       sampler:
-        epoch_size: 60
+        epoch_size: 70
         index_levels:
           - slide_name
       label: "mammaprint"
@@ -69,8 +69,8 @@ datamodule:
 
 ml:
   optimizer:
-    lr: 1e-3
-    weight_decay: 1e-3
+    lr: 5e-3
+    weight_decay: 5e-3
   lr_scheduler:
     monitor: valid/mae
     scheduler:
