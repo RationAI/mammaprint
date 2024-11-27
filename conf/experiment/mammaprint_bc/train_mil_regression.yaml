@@ -48,13 +48,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 280
+        epoch_size: 400
         index_levels:
           - slide_name
       label: "mammaprint"
     valid:
       sampler:
-        epoch_size: 70
+        epoch_size: 100
         index_levels:
           - slide_name
       label: "mammaprint"
