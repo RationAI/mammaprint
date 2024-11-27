@@ -1,0 +1,42 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: mil_prostate_test
+  - /datamodule/datasets@datamodule.datasets.test: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: mammaprint
+  - /ml/net: saved_model
+  - /ml/output_activation: sigmoid
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+  - _self_
+
+ml:
+  net:
+    model_uri: mlflow-artifacts:/17/02b905ebddb244129a7e1857f4a68a3d/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "is_cancer"
+  dataloaders_kwargs:
+    test:
+      num_workers: 6
+      batch_size: 16
+
+metadata:
+  experiment_name: mammaprint
+  run_name: MIL test prostate with gated attention model whole slide images
+  description: |
+    Binary classification.
+  hyperparameters:
+    num_workers: 6
+    batch_size: 16
+   
