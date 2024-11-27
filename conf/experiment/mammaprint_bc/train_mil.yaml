@@ -54,13 +54,13 @@ datamodule:
   datasets:
     train:
       sampler:
-        epoch_size: 240
+        epoch_size: 320
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
-        epoch_size: 60
+        epoch_size: 80
         index_levels:
           - slide_name
       label: "luminal_id"
@@ -68,10 +68,10 @@ datamodule:
   dataloaders_kwargs:
     train:
       num_workers: 6
-      batch_size: 16
+      batch_size: 24
     valid:
       num_workers: 6
-      batch_size: 16
+      batch_size: 24
 
 ml:
   optimizer:
