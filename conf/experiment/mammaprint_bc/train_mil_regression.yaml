@@ -72,9 +72,9 @@ ml:
     lr: 1e-3
     weight_decay: 1e-3
   lr_scheduler:
-    monitor: valid/SignAgreement
+    monitor: valid/mae
     scheduler:
-      mode: max
+      mode: min
       factor: 0.5
       patience: 3
 
@@ -85,12 +85,12 @@ trainer:
     log_model: all
   callbacks:
     early_stopping:
-      monitor: valid/SignAgreement
-      mode: max
+      monitor: valid/mae
+      mode: min
       patience: 5
     log_best_model:
-      monitor: valid/SignAgreement
-      mode: max
+      monitor: valid/mae
+      mode: min
       filename: MIL_Mammaprint_value_best
 
 
