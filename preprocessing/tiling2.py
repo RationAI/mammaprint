@@ -40,6 +40,10 @@ class PipelineSlideMetadata(SlideMetadata):
     slide_fp: str
     sample_level: int
     tile_size: int
+    slide_width: int
+    slide_height: int
+    step_size: int
+    center_size: int
     # from OpenSlideMetadata:
     path: str
     level: int
