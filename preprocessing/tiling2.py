@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 # Define paths
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tiff/"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs/"
 TISSUE_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks/"
 ANNOTATION_MASKS_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_classification_tumor_masks_resized/"
 
@@ -139,8 +139,12 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
         luminal_id=slide_label,
         slide_name=slide_name,
         slide_fp=slide.path,
-        sample_level=1,
+        sample_level=0,
         tile_size=slide.tile_extent_x,
+        slide_width=slide.extent_x,
+        slide_height=slide.extent_y,
+        step_size=slide.stride_x,
+        center_size=slide.stride_x,
     )
     logging.info(f"Slide metadata: {slide_metadata}")
 
@@ -180,7 +184,7 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     return slide_metadata, tiles_metadata
 
 def main() -> None:
-    all_slides = list(Path(SLIDES_PATH).rglob("*.tiff"))
+    all_slides = list(Path(SLIDES_PATH).rglob("*.mrxs"))
     labeled_slides_names = set(labels_df['slide_name'].to_list())
     labeled_slides = [slide for slide in all_slides if slide.stem in labeled_slides_names]
 
