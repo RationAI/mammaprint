@@ -6,7 +6,7 @@ from mammaprint.datamodule.samplers import BaseSampler
 import torch
 
 class MILDataset(BaseDataset):
-    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "luminal_id") -> None:
+    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "class_id") -> None:
         super().__init__(sampler=sampler, seed=seed)
         self.transforms = augmentations
         self.label = label
@@ -26,8 +26,11 @@ class MILDataset(BaseDataset):
         # Ensure label is provided correctly, fallback to zero if missing
         # label_value = float(sample[0].get(self.label, 0.0))  # Default label if missing
         # Check if any tile in `sample` has `self.label` not 0.0
-        label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
-        # logging.info(f"label value found: {label_value}")
-        label = torch.tensor([label_value])
+        # label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
+        # # logging.info(f"label value found: {label_value}")
+        # label = torch.tensor([label_value])
+        label = torch.tensor([float(sample[0]['is_cancer'])])  # Encapsulate the float in a list
+        logging.debug(f"Label: {label}")
+
 
         return images_tensor, label, sample
