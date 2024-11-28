@@ -34,10 +34,10 @@ datamodule:
       data_uris:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
       # Prostate dataset
-      - mlflow-artifacts:/17/3220ae78cb7043608730d5ac00007d95/artifacts/dataset
-      - mlflow-artifacts:/17/f0251bfc7bbe41d8a43c469e62115965/artifacts/dataset
-      - mlflow-artifacts:/17/e4dbafc779604085974b6ea97cfa527e/artifacts/dataset
-      - mlflow-artifacts:/17/dd1ce182cf0c4d07aeb243c830e08894/artifacts/dataset
+      - mlflow-artifacts:/17/da9f024af5ec48d0a41c8e2f43a5529a/artifacts/activations
+      - mlflow-artifacts:/17/854fc86cef41492784a04ff54f358e02/artifacts/activations
+      - mlflow-artifacts:/17/c8826a9fe46c4c349a30e222b523314f/artifacts/activations
+      - mlflow-artifacts:/17/10467994f85b4a118efb446ee5ae3852/artifacts/activations
       #  - mlflow-artifacts:/17/4edc051a929648e78186b9ebe5cdd23d/artifacts/dataset #another set
       #  - mlflow-artifacts:/17/32b5b152dba44ae1a753b51016308251/artifacts/dataset #train set
       #mammaprint dataset - after TC
