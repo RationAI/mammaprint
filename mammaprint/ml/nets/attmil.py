@@ -30,18 +30,22 @@ class GatedAttention(nn.Module):
         return A
 
 class AttMILModel(nn.Module):
-    def __init__(self):
+    def __init__(self, feature_dim=512, classifier_dims=[1024, 512, 256, 128, 1], dropout=0.5):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         # Layer normalization for input stability
-        self.norm = nn.LayerNorm(512)
-        self.attention = GatedAttention(512)
-        self.classifier = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(256, 1)
-        )
+        self.norm = nn.LayerNorm(feature_dim)
+        self.attention = GatedAttention(feature_dim)
+        # Build classifier layers
+        layers = []
+        input_dim = feature_dim
+        for i, dim in enumerate(classifier_dims):
+            layers.append(nn.Linear(input_dim, dim))
+            if i < len(classifier_dims) - 1:  # Skip activation/dropout for the last layer
+                layers.append(nn.ReLU())
+                layers.append(nn.Dropout(dropout))
+            input_dim = dim
+        self.classifier = nn.Sequential(*layers)
         
         # Initialize classifier weights
         for layer in self.classifier:
