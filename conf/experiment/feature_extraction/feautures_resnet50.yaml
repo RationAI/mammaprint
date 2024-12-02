@@ -19,8 +19,6 @@ datamodule:
       seed: ${seed}
       data_uris:
         - mlflow-artifacts:/17/c45e6afffccc490fa3a4bf1be2c986bd/artifacts/dataset #another dataset no overlap
-        # - mlflow-artifacts:/17/9685f514faf245309a7236df050b373d/artifacts/dataset  # segmentation mammaprint test dataset
-        # - mlflow-artifacts:/17/f0a1d1b8cfc84493bb3924ad085e7c08/artifacts/dataset  # mammaprint another dataset
       splits:
         test: 1.0
   datasets:

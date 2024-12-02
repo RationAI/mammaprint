@@ -109,10 +109,6 @@ metadata:
   description: |
    Luminal binary classification. MIL approach
   hyperparameters:
-    # Scaled for V40 GPU
-    # tested with 24 GiB Memory, 8 cpus (set request=limits in k8s)
-    # Expect around 50tiles/s
-    # most time is spent in reading WSI regions (tiles) from disk
     max_epochs: ${trainer.max_epochs}
     train_epoch_size: ${datamodule.datasets.train.sampler.epoch_size}
     valid_epoch_size: ${datamodule.datasets.valid.sampler.epoch_size}
