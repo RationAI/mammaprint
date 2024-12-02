@@ -366,9 +366,9 @@ class MILRandomTreeSampler(TreeSampler):
                 break
 
             if self.active_node.data is None:
-                self.active_node.load_data()  # Ensure this method exists or is correctly implemented
+                self.active_node.load_data()
 
-            chosen_tiles = self.active_node.data  # Assuming data is a DataFrame
+            chosen_tiles = self.active_node.data
 
             # Check if padding is needed
             if len(chosen_tiles) < self.tiles_per_bag:
@@ -379,7 +379,7 @@ class MILRandomTreeSampler(TreeSampler):
                 chosen_tiles = chosen_tiles.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
 
             samples.append(chosen_tiles)
-            self.next()  # Move to the next node
+            self.next()
 
         total_tiles = sum(len(slide) for slide in samples)
         log.info(f"Sampled {len(samples)} slides with a total of {total_tiles} tiles successfully.")
@@ -391,12 +391,9 @@ class MILRandomTreeSampler(TreeSampler):
         if self.active_node is None:
             raise StopIteration("Reached the end of available nodes.")
         else:
-            # Randomly select a category
             random_category = self._rng.choice(list(self.categories.keys()))
-            
             # Randomly select a node from the chosen category
             self.active_node = self._rng.choice(self.categories[random_category])
-            # log.info(f"Randomly selected new active node from category '{random_category}'.")
 
 
 class MILSequentialTreeSampler(TreeSampler):
@@ -440,40 +437,23 @@ class MILSequentialTreeSampler(TreeSampler):
         res = None if self.active_node is None else self.active_node.data
         samples = []
 
-        # Log details about `res`
         if res is not None:
-            # logging.debug(f"`res` data type: {type(res)}")
-            
-            # If `res` is a DataFrame, log its shape and a sample of its content
             if isinstance(res, pandas.DataFrame):
-                logging.debug(f"`res` is a DataFrame with shape: {res.shape}")
-                # logging.debug(f"Sample of `res` content:\n{res.head()}")
-                
-                # Log the number of tiles in `res`
-                if len(res) >= 2000:
-                    # logging.info(f"Sampling 2000 tiles from `res` with {len(res)} tiles available.")
-                    
-                    # Sample 1000 tiles and log a preview of `chosen_tiles`
+                if len(res) >= 2000:    
                     chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
-                    # logging.debug(f"Sampled tiles (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
                 else:
-                    # logging.info(f"Using all {len(res)} tiles in `res` as it contains fewer than 2000 tiles.")
-                    # chosen_tiles = res.to_dict("records")
                     chosen_tiles = res.sample(n=2000, replace=True).to_dict("records")
-                    # logging.debug(f"Tiles in `res` (first 5 entries):\n{chosen_tiles[:5]}")
                     samples.append(chosen_tiles)
             else:
                 logging.warning(f"Unexpected type for `res`: {type(res)}; expected a DataFrame.")
         else:
             logging.info("`res` is None, no data available in the current node.")
 
-        # Advance to the next node if necessary
         if self.advance_to_next:
             self.next()
             logging.debug("Sampler advanced to next node...")
 
-        # Log summary of sampling results
         total_tiles = sum(len(tiles) for tiles in samples)
         logging.info(f"Sampled data contains {len(samples)} entries with a total of {total_tiles} tiles.")
         
