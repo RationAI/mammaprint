@@ -14,7 +14,7 @@ import torchvision.models as models
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
   
 class GatedAttention(nn.Module):
-    def __init__(self, feature_dim, attention_dim=512):
+    def __init__(self, feature_dim, attention_dim=1024):
         super(GatedAttention, self).__init__()
         self.attention_V = nn.Linear(feature_dim, attention_dim)
         self.attention_U = nn.Linear(feature_dim, attention_dim)
@@ -30,7 +30,7 @@ class GatedAttention(nn.Module):
         return A
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=512, classifier_dims=[1024, 512, 256, 128, 1], dropout=0.2):
+    def __init__(self, feature_dim=2048, classifier_dims= [512, 256, 1], dropout=0.1):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         # Layer normalization for input stability
