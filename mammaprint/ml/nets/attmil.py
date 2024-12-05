@@ -59,7 +59,7 @@ class AttMILModel(nn.Module):
         batch_size, num_tiles, features = x.shape
 
         # Layer normalization for input stability
-        # x = self.norm(x)  # [B, N, C]
+        x = self.norm(x)  # [B, N, C]
         
         # Flatten to process each tile individually
         x_flat = x.view(batch_size * num_tiles, features)  # Shape: [batch_size * num_tiles, features]
