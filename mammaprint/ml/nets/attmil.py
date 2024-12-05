@@ -29,17 +29,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 #         A = self.attention_weights(A)  # Shape: [batch_size * num_tiles, 1]
 #         return A
 
-class MultiheadAttentionWrapper(nn.Module):
-    def __init__(self, feature_dim, num_heads=32):
-        super(MultiheadAttentionWrapper, self).__init__()
-        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, batch_first=True)
-
-    def forward(self, x):
-        # x shape: [batch_size, num_tiles, feature_dim]
-        # Self-attention requires query, key, value. Here, they are all the same (self-attention).
-        attention_output, attention_weights = self.attention(x, x, x)
-        return attention_output, attention_weights
-
 class AttMILModel(nn.Module):
     def __init__(self, feature_dim=512, dropout=0.2):
         super(AttMILModel, self).__init__()
@@ -47,7 +36,9 @@ class AttMILModel(nn.Module):
         # Layer normalization for input stability
         self.norm = nn.LayerNorm(feature_dim)
         # self.attention = GatedAttention(feature_dim)
-        self.attention = MultiheadAttentionWrapper(feature_dim)
+        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=16, batch_first=True)
+        self.query = nn.Parameter(torch.randn(1, 1, feature_dim))  # Learnable query vector
+
         self.classifier = nn.Sequential(
             nn.Linear(feature_dim, 256),
             nn.ReLU(),
