@@ -57,12 +57,14 @@ datamodule:
   datasets:
     train:
       sampler:
+        seed: 437345005
         epoch_size: 240
         index_levels:
           - slide_name
       label: "luminal_id"
     valid:
       sampler:
+        seed: 437345005
         epoch_size: 60
         index_levels:
           - slide_name
