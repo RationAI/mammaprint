@@ -101,12 +101,12 @@ class MultiheadAttentionWrapper(nn.Module):
         return attention_output, attention_weights
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=512, classifier_dims=[512, 256, 1], dropout=0.1, num_heads=8):
+    def __init__(self, feature_dim=2048, classifier_dims=[512, 256, 1], dropout=0.5, num_heads=8):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
-        # Layer normalization for input stability
         self.norm = nn.LayerNorm(feature_dim)
-        self.attention = MultiheadAttentionWrapper(feature_dim, num_heads=num_heads)
+        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, batch_first=True)
+        self.query = nn.Parameter(torch.randn(1, 1, feature_dim))  # Learnable query vector
         # Build classifier layers
         layers = []
         input_dim = feature_dim
@@ -126,17 +126,41 @@ class AttMILModel(nn.Module):
                     nn.init.zeros_(layer.bias)
 
     def forward(self, x):
-        batch_size, num_tiles, features = x.shape
+        """
+        Forward pass of the AttMILModel.
 
-        # Layer normalization for input stability
+        Args:
+            x (Tensor): Input tensor of shape [batch_size, num_tiles, feature_dim]
+
+        Returns:
+            output (Tensor): Predictions of shape [batch_size, 1]
+            attention_weights (Tensor): Attention weights of shape [batch_size, num_tiles]
+        """
+        self.logger.debug(f'Input shape: {x.shape}')  # [B, N, C]
+        
+        # Extract dimensions
+        batch_size, num_tiles, feature_dim = x.shape
+        
+        # Normalize input features
         x = self.norm(x)  # [B, N, C]
-
-        # Apply multihead attention
-        attention_output, attention_weights = self.attention(x)  # Output: [B, N, C], Weights: [B, N, N]
-
-        # Summing the attention output across tiles for a single representation
-        weighted_features = torch.sum(attention_output, dim=1)  # Shape: [batch_size, features]
-
-        # Final classification
-        output = self.classifier(weighted_features)  # Shape: [batch_size, 1]
-        return output, attention_weights
+        
+        # Expand the query to match the batch size
+        query = self.query.expand(batch_size, -1, -1)  # [B, 1, C]
+        
+        # Apply Multihead Attention with the learnable query
+        attn_output, attn_weights = self.attention(query=query, key=x, value=x)  # attn_weights: [B, 1, N]
+        
+        # Squeeze to remove the sequence dimension
+        attn_weights = attn_weights.squeeze(1)  # [B, N]
+        
+        # Normalize attention weights
+        attn_weights = torch.softmax(attn_weights, dim=1)  # [B, N]
+        
+        # Weighted sum of features
+        weights = attn_weights.unsqueeze(-1)  # [B, N, 1]
+        weighted_features = torch.sum(x * weights, dim=1)  # [B, C]
+        
+        # Classification
+        output = self.classifier(weighted_features)  # [B, 1]
+        
+        return output, attn_weights
