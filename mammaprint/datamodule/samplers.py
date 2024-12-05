@@ -334,7 +334,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 2000 # Fixed number of tiles per bag
+        self.tiles_per_bag = 1000 # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
@@ -439,11 +439,11 @@ class MILSequentialTreeSampler(TreeSampler):
 
         if res is not None:
             if isinstance(res, pandas.DataFrame):
-                if len(res) >= 2000:    
-                    chosen_tiles = res.sample(n=2000, replace=False).to_dict("records")
+                if len(res) >= 1000:    
+                    chosen_tiles = res.sample(n=1000, replace=False).to_dict("records")
                     samples.append(chosen_tiles)
                 else:
-                    chosen_tiles = res.sample(n=2000, replace=True).to_dict("records")
+                    chosen_tiles = res.sample(n=1000, replace=True).to_dict("records")
                     samples.append(chosen_tiles)
             else:
                 logging.warning(f"Unexpected type for `res`: {type(res)}; expected a DataFrame.")
