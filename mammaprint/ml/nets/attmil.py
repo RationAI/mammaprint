@@ -13,29 +13,41 @@ import torchvision.models as models
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
   
-class GatedAttention(nn.Module):
-    def __init__(self, feature_dim, attention_dim=2048):
-        super(GatedAttention, self).__init__()
-        self.attention_V = nn.Linear(feature_dim, attention_dim)
-        self.attention_U = nn.Linear(feature_dim, attention_dim)
-        self.attention_weights = nn.Linear(attention_dim, 1)
-        self.sigmoid = nn.Sigmoid()
+# class GatedAttention(nn.Module):
+#     def __init__(self, feature_dim, attention_dim=2048):
+#         super(GatedAttention, self).__init__()
+#         self.attention_V = nn.Linear(feature_dim, attention_dim)
+#         self.attention_U = nn.Linear(feature_dim, attention_dim)
+#         self.attention_weights = nn.Linear(attention_dim, 1)
+#         self.sigmoid = nn.Sigmoid()
+
+#     def forward(self, x):
+#         # x shape: [batch_size * num_tiles, features]
+#         A_V = self.attention_V(x)  # Shape: [batch_size * num_tiles, attention_dim]
+#         A_U = self.attention_U(x)  # Shape: [batch_size * num_tiles, attention_dim]
+#         A = torch.tanh(A_V) * self.sigmoid(A_U)  # Shape: [batch_size * num_tiles, attention_dim]
+#         A = self.attention_weights(A)  # Shape: [batch_size * num_tiles, 1]
+#         return A
+
+class MultiheadAttentionWrapper(nn.Module):
+    def __init__(self, feature_dim, num_heads=32):
+        super(MultiheadAttentionWrapper, self).__init__()
+        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, batch_first=True)
 
     def forward(self, x):
-        # x shape: [batch_size * num_tiles, features]
-        A_V = self.attention_V(x)  # Shape: [batch_size * num_tiles, attention_dim]
-        A_U = self.attention_U(x)  # Shape: [batch_size * num_tiles, attention_dim]
-        A = torch.tanh(A_V) * self.sigmoid(A_U)  # Shape: [batch_size * num_tiles, attention_dim]
-        A = self.attention_weights(A)  # Shape: [batch_size * num_tiles, 1]
-        return A
+        # x shape: [batch_size, num_tiles, feature_dim]
+        # Self-attention requires query, key, value. Here, they are all the same (self-attention).
+        attention_output, attention_weights = self.attention(x, x, x)
+        return attention_output, attention_weights
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=2048, dropout=0.2):
+    def __init__(self, feature_dim=512, dropout=0.2):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         # Layer normalization for input stability
         self.norm = nn.LayerNorm(feature_dim)
-        self.attention = GatedAttention(feature_dim)
+        # self.attention = GatedAttention(feature_dim)
+        self.attention = MultiheadAttentionWrapper(feature_dim)
         self.classifier = nn.Sequential(
             nn.Linear(feature_dim, 256),
             nn.ReLU(),
@@ -57,22 +69,23 @@ class AttMILModel(nn.Module):
         # Layer normalization for input stability
         x = self.norm(x)  # [B, N, C]
         
-        # Flatten to process each tile individually
-        x_flat = x.view(batch_size * num_tiles, features)  # Shape: [batch_size * num_tiles, features]
+        # Expand the query to match the batch size
+        query = self.query.expand(batch_size, -1, -1)  # [B, 1, C]
         
-        # Get attention weights
-        attention_weights = self.attention(x_flat)  # Shape: [batch_size * num_tiles, 1]
-        attention_weights = attention_weights.view(batch_size, num_tiles)  # Shape: [batch_size, num_tiles]
+        # Apply Multihead Attention with the learnable query
+        attn_output, attn_weights = self.attention(query=query, key=x, value=x)  # attn_weights: [B, 1, N]
+        
+        # Squeeze to remove the sequence dimension
+        attn_weights = attn_weights.squeeze(1)  # [B, N]
         
         # Normalize attention weights
-        attention_weights = torch.softmax(attention_weights, dim=1)  # Shape: [batch_size, num_tiles]
+        attn_weights = torch.softmax(attn_weights, dim=1)  # [B, N]
         
-        # Reshape weights to apply to each feature vector
-        weights = attention_weights.view(batch_size, num_tiles, 1)  # Shape: [batch_size, num_tiles, 1]
+        # Weighted sum of features
+        weights = attn_weights.unsqueeze(-1)  # [B, N, 1]
+        weighted_features = torch.sum(x * weights, dim=1)  # [B, C]
         
-        # Weighted sum of features across the tiles
-        weighted_features = torch.sum(x * weights, dim=1)  # Shape: [batch_size, features]
+        # Classification
+        output = self.classifier(weighted_features)  # [B, 1]
         
-        # Final classification
-        output = self.classifier(weighted_features)  # Shape: [batch_size, 1]
-        return output, attention_weights
+        return output, attn_weights
