@@ -46,10 +46,10 @@ datamodule:
       # - mlflow-artifacts:/17/beba84b0eb1640de94577eec70c62e7e/artifacts/dataset
       # - mlflow-artifacts:/17/734fb8d27df7422eb0e13b6dfd36034d/artifacts/dataset # segmentation small train set 200+ slides
       # - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
-      - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset #another set resnet50 features after TC
-      - mlflow-artifacts:/17/1921d6f126be4066bad354cbf5839e96/artifacts/dataset #train set resnet50 features after TC
-      # - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
-      # - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
+      # - mlflow-artifacts:/17/00a50cc0a7b14184a4afe62b7b3bdbe2/artifacts/dataset #another set resnet50 features after TC
+      # - mlflow-artifacts:/17/1921d6f126be4066bad354cbf5839e96/artifacts/dataset #train set resnet50 features after TC
+      - mlflow-artifacts:/17/7b8d9f92a8c848cf9fc3c69d736fdab8/artifacts/dataset
+      - mlflow-artifacts:/17/6540f50753da42aea24f7d77641c293e/artifacts/dataset
       splits:
         train: 0.8
         valid: 0.2
