@@ -36,7 +36,7 @@ class AttMILModel(nn.Module):
         # Layer normalization for input stability
         self.norm = nn.LayerNorm(feature_dim)
         # self.attention = GatedAttention(feature_dim)
-        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=32, batch_first=True)
+        self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=8, batch_first=True)
         self.query = nn.Parameter(torch.randn(1, 1, feature_dim))  # Learnable query vector
 
         self.classifier = nn.Sequential(
