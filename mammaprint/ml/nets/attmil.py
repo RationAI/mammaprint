@@ -101,7 +101,7 @@ class MultiheadAttentionWrapper(nn.Module):
         return attention_output, attention_weights
 
 class AttMILModel(nn.Module):
-    def __init__(self, feature_dim=2048, classifier_dims=[512, 256, 1], dropout=0.5, num_heads=8):
+    def __init__(self, feature_dim=512, classifier_dims=[512, 256, 1], dropout=0.5, num_heads=8):
         super(AttMILModel, self).__init__()
         self.logger = logging.getLogger(self.__class__.__name__)
         self.norm = nn.LayerNorm(feature_dim)
