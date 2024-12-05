@@ -90,7 +90,7 @@ import torchvision.models as models
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
   
 class MultiheadAttentionWrapper(nn.Module):
-    def __init__(self, feature_dim, num_heads=8):
+    def __init__(self, feature_dim, num_heads=16):
         super(MultiheadAttentionWrapper, self).__init__()
         self.attention = nn.MultiheadAttention(embed_dim=feature_dim, num_heads=num_heads, batch_first=True)
 
