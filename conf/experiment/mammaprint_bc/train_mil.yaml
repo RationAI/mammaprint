@@ -30,6 +30,7 @@ datamodule:
   data_sources:
     blue-print:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
+      seed: ${seed}
       # seed: 437345005
       data_uris:
       # - mlflow-artifacts:/17/f2e3497d086c4849b331a05ecbe0f1fb/artifacts/dataset #resnet50 features
