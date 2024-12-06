@@ -17,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8fff0d5500ea4ab596aa6262018a14de/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/da30487f9e38488bb1e2190704ef0970/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
