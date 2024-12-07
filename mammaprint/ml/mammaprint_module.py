@@ -88,21 +88,9 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
         if "slide_name" in metadata[0]:
             slide_name = metadata[0]["slide_name"][0]
-        # # Update and log metrics
-        # if "slide_name" in metadata:
-        #     slide_name = metadata["slide_name"][0]
         else:
             slide_name = dataloader_idx
 
-        # # Process attention weights here
-        # attention_weights_flat = attention_weights.view(-1).detach().cpu().numpy()
-        # coord_x = np.concatenate([md['coord_x'] for md in metadata])
-        # coord_y = np.concatenate([md['coord_y'] for md in metadata])
-        # attention_data = {
-        #     'weights': attention_weights_flat,
-        #     'coord_x': coord_x,
-        #     'coord_y': coord_y
-        # }
         self.metrics.update("test", y_pred, y, slide_name)
         self.log_dict(self.metrics.get("test", slide_name), add_dataloader_idx=False)
 
@@ -119,7 +107,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, _ = batch
         y_pred, attention_weights = self(x)  # Extract both output and attention weights
-        return {"outputs": y_pred, "attention_weights": attention_weights}  # Return attention weights too
+        return {"outputs": y_pred, "attention_weights": attention_weights}
 
     def configure_optimizers(self):
         if self.optimizer is None:
