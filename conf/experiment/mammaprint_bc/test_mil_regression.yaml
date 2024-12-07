@@ -5,6 +5,8 @@ defaults:
   - /datamodule/datasets@datamodule.datasets.test: mil_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /trainer/callbacks:
+    - bag_prediction_saver
   - /ml: mammaprint
   - /ml/net: saved_model
   - /ml/output_activation: tanh
@@ -19,7 +21,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/18e39d1b6c8747ed8939b7343db2ce70/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
+    model_uri: mlflow-artifacts:/17/830aa070a7d34f50964a4094e83446fd/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
 
 datamodule:
   datasets:
@@ -33,9 +35,14 @@ datamodule:
       num_workers: 6
       batch_size: 8
 
+trainer:
+  callbacks:
+    bag_prediction_saver:
+      save_dir: predictions
+
 metadata:
   experiment_name: mammaprint
-  run_name: MIL test mammaprint with gated attention model whole slide images
+  run_name: MIL test mammaprint with gated attention model whole slide images, prediction saver
   description: |
     MIL Regression test. MIL approach
   hyperparameters:
