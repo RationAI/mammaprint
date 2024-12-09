@@ -3,6 +3,7 @@ defaults:
   - /experiment/mammaprint_bc: test_mil_regression
   - /trainer/callbacks:
     - attention_visualizer
+    - bag_prediction_saver
   - _self_
 
 ml:
@@ -24,6 +25,8 @@ trainer:
   callbacks:
     attention_visualizer:
       save_dir: test_heatmaps
+    bag_prediction_saver:
+      save_dir: predictions
 
 metadata:
   experiment_name: mammaprint

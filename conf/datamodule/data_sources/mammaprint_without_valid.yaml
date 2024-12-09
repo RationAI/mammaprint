@@ -1,9 +1,0 @@
-mammaprint:
-  _target_: mammaprint.datamodule.datasources.WSIDataSource
-  seed: ${seed}
-  data_uris:
-    - mlflow-artifacts:/17/888562b2d4b04d6e9b41be8c8685f1b3/artifacts/dataset
-  stratified_keys:
-    - xlA
-  splits:
-    train: ??
