@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - /experiment/mammaprint_bc: test_mil
+  - /experiment/mammaprint_bc: test_mil_regression
   - /trainer/callbacks:
     - attention_visualizer
     - bag_prediction_saver
@@ -8,18 +8,18 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8fff0d5500ea4ab596aa6262018a14de/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/830aa070a7d34f50964a4094e83446fd/artifacts/model/MLFlowModelCheckpoint/MIL_Mammaprint_value_best
 datamodule:
   datasets:
     test:
       sampler:
         index_levels:
           - slide_name
-      label: "luminal_id"
+      label: "mammaprint"
   dataloaders_kwargs:
     test:
-      num_workers: 6
-      batch_size: 16
+      num_workers: 12
+      batch_size: 8
 
 trainer:
   callbacks:
@@ -29,11 +29,11 @@ trainer:
       save_dir: predictions
 
 metadata:
-  experiment_name: mammaprint
-  run_name: MIL Luminal test whole slide images with attention heatmaps, using the gated attention model
+  experiment_name: Mamma-print
+  run_name: MIL mammaprint test whole slide images with Heatmaps, using the gated attention model, best model configuration
   description: |
-    Luminal binary classification.
+    mammaprint Heatmaps.
   hyperparameters:
-    num_workers: 6
+    num_workers: 15
     batch_size: 16
    

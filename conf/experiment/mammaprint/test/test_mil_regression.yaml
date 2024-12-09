@@ -39,7 +39,7 @@ trainer:
       save_dir: predictions
 
 metadata:
-  experiment_name: mammaprint
+  experiment_name: Mamma-print
   run_name: MIL test mammaprint with gated attention model whole slide images, prediction saver
   description: |
     MIL Regression test. MIL approach

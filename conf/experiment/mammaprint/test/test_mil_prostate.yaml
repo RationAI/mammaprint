@@ -1,12 +1,10 @@
 # @package _global_
 defaults:
   - /datamodule: wsi
-  - /datamodule/data_sources: mil_luminal_test
+  - /datamodule/data_sources: mil_prostate_test
   - /datamodule/datasets@datamodule.datasets.test: mil_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
-  - /trainer/callbacks:
-    - bag_prediction_saver
   - /ml: mammaprint
   - /ml/net: saved_model
   - /ml/output_activation: sigmoid
@@ -19,7 +17,7 @@ defaults:
 
 ml:
   net:
-    model_uri: mlflow-artifacts:/17/8fff0d5500ea4ab596aa6262018a14de/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
+    model_uri: mlflow-artifacts:/17/db63633d8a374fb499bae242f8a775ff/artifacts/model/MLFlowModelCheckpoint/MIL_binary_best
 
 datamodule:
   datasets:
@@ -27,20 +25,15 @@ datamodule:
       sampler:
         index_levels:
           - slide_name
-      label: "luminal_id"
+      label: "is_cancer"
   dataloaders_kwargs:
     test:
       num_workers: 6
       batch_size: 16
 
-trainer:
-  callbacks:
-    bag_prediction_saver:
-      save_dir: predictions
-
 metadata:
-  experiment_name: mammaprint
-  run_name: MIL test luminal with gated attention model whole slide images, prediction saver
+  experiment_name: Mamma-print
+  run_name: MIL test prostate with gated attention model whole slide images
   description: |
     Binary classification.
   hyperparameters:

@@ -31,7 +31,7 @@ datamodule:
       batch_size: 40
 
 metadata:
-  experiment_name: mammaprint
+  experiment_name: Mamma-print
   run_name: VGG16 test whole slide images
   description: |
     Luminal binary classification.
