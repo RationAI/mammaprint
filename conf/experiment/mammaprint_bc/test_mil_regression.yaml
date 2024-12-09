@@ -11,8 +11,6 @@ defaults:
   - /ml/net: saved_model
   - /ml/output_activation: tanh
   - /ml/metrics:
-    # - pearson_corr_coef
-    # - spearman_corr_coef
     - mse
     - mae
     - predictions

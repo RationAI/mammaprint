@@ -46,8 +46,7 @@ class BagPredictionSaver(DataloaderAgnosticCallback):
         
         # Log artifact using MLflow
         mlflow.log_artifact(local_path=csv_path, artifact_path="")
-        artifact_uri = mlflow.get_artifact_uri(str(self.save_dir))
-        logger.info(f"Predictions CSV saved to {csv_path} and logged as MLflow artifact.")
+        logger.info(f"Predictions saved to {csv_path} and logged to MLflow.")
 
     def on_test_batch_end(
         self,
@@ -67,11 +66,6 @@ class BagPredictionSaver(DataloaderAgnosticCallback):
 
         model_output = self._preprocess_data(outputs["outputs"], target_dtype=np.float32)
 
-        # Assume model_output is a single prediction per slide. If it’s multiple,
-        # you may need to iterate or summarize. Here we assume a 1D array.
         for slidename, pred in zip(slide_name, model_output):
-            # If pred is more than one value, handle accordingly.
-            # For this example, we assume a single value per slide.
             self.predictions.append((slidename, pred.item() if hasattr(pred, 'item') else pred))
-
-        logger.info("Batch predictions successfully appended to internal list.")
+            logger.debug(f"Prediction for slide {slidename}: {pred}")

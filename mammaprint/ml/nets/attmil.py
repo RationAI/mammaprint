@@ -1,9 +1,6 @@
-# Inspired by: https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/master/model.py 
-# Attention-based Deep Multiple Instance Learning
-# by Maximilian Ilse (ilse.maximilian@gmail.com), Jakub M. Tomczak (jakubmkt@gmail.com) and Max Welling
-# Overview
-# PyTorch implementation of paper "Attention-based Deep Multiple Instance Learning":
-# Ilse, M., Tomczak, J. M., & Welling, M. (2018). Attention-based Deep Multiple Instance Learning. arXiv preprint arXiv:1802.04712.
+# Code is inspired by: https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/master/model.py 
+# Attention-based Deep Multiple Instance Learning by Ilse et al.
+# arXiv preprint arXiv:1802.04712.
 
 import torch
 from torch import nn
