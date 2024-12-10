@@ -25,16 +25,13 @@ The following implementations were developed by **Oliver Rainoch** as part of th
     Added classes:
      - `MILRandomTreeSampler`
      - `MILSequentialTreeSampler`
-  - Input to model preparation for MIL:
+  - Inputpreparation for MIL model:
      - `mammaprint/datamodule/datasets/mil.py`
 
-### **Training and Experimentation**
+### ** MIL Training and Experimentation**
 - **Training Pipelines**:
-  - Configurable training and evaluation pipelines:
-    - `ml/train/train_pipeline.py`
-  - Custom learning rate schedulers and loss functions:
-    - `ml/schedulers/lr_scheduler.py`
-    - `ml/loss/custom_loss.py`
+  - Training and evaluation pipeline module adjusted for MIL:
+    - `mammaprint/ml/mammaprint_module.py`
   
 ### **Evaluation and Visualization**
 - **Slide-Level Aggregation and Evaluation**:
@@ -48,8 +45,40 @@ The following implementations were developed by **Oliver Rainoch** as part of th
     - `mammaprint/trainer/callbacks/attention_visualizer.py`
 
 - **Experiment Configurations**:
+  - Feature extraction using VGG16 or ResNet50 models:
+    - `conf/experiment/feature_extraction/features_vgg16.yaml`
+    - `conf/experiment/feature_extraction/features_resnet50.yaml`
   - Training configurations for different experimental setups:
-    - `conf/experiments/{train_mil, train_baseline}.yaml`
+    - `conf/experiment/train/train_mil.yaml`
+    - `conf/experiment/train/train_mil_regression.yaml`
+    - `conf/experiment/train/train_resnet50.yaml`
+    - `conf/experiment/train/train_resnet101.yaml`
+    - `conf/experiment/train/train_resnet152.yaml`
+    - `conf/experiment/train/train.yaml`
+  - Testing configurations for different experimental setups:
+    - `conf/experiment/test/test_mil.yaml`
+    - `conf/experiment/test/test_mil_regression.yaml`
+    - `conf/experiment/test/test_mil_heatmaps.yaml`
+    - `conf/experiment/test/test_optimizer.yaml`
+    - `conf/experiment/test/test.yaml`
+  - Sampling and dataset configurations: 
+    - `conf/datamodule/datasets/sampler/mil_tree.yaml`
+    - `conf/datamodule/datasets/sampler/mil_test_tree.yaml`
+    - `conf/datamodule/datasets/mil_dataset.yaml`
+  - Models configurations:
+    - `conf/ml/net/attmil.yaml`
+    - `conf/ml/net/resnet152.yaml`
+    - `conf/ml/net/vgg16_feature_extractor.yaml`
+    - `conf/ml/net/resnet50_feature_extractor.yaml`
+  - Callbacks and custom metrics:
+    - `conf/trainer/callbacks/attention_visualizer.yaml`
+    - `conf/trainer/callbacks/bag_prediction_saver.yaml`
+    - `conf/trainer/callbacks/bag_prediction_saver.yaml`
+    - `conf/ml/metrics/signagreement.yaml`
+    - `conf/ml/metrics/predictions.yaml`
+
+
+
 ---
 
 ## **Execution**
