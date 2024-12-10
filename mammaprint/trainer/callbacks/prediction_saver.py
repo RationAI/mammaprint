@@ -10,7 +10,6 @@ import pyarrow as pa
 from pyarrow.parquet import ParquetWriter
 from pyarrow.parquet import read_table, write_table
 import torch
-from nptyping import NDArray
 import pandas as pd
 import numpy as np
 
@@ -23,13 +22,11 @@ logger = logging.getLogger("callbacks/prediction_saver")
 class ParquetPredictionSaver(DataloaderAgnosticCallback):
     writer: ParquetWriter
     writer2: ParquetWriter
-    min_tiles_per_slide: int = 2000  # Minimum number of tiles per slide
 
     def __init__(self, save_dir: str) -> None:
         super().__init__()
         self.save_dir = save_dir
         os.makedirs(save_dir)
-        self.tile_counts = {}  # Track tile counts per slide
 
         schema = pa.schema(
             [
@@ -38,7 +35,7 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("coord_y", pa.int64()),
                 ("model_output", pa.list_(pa.float32())),
                 ("class_id", pa.int64()),
-                # ("mammaprint_value", pa.float32()),
+                ("mammaprint_value", pa.float32()),
             ]
         )
         self.writer = ParquetWriter(self.save_dir + "/tiles.parquet", schema)
@@ -55,9 +52,8 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 ("center_size", pa.float64()),
                 ("year", pa.string()),
                 ("patient_id", pa.string()),
-                ("is_cancer", pa.float64()),
-                # ("luminal_id", pa.float64()),
-                # ("mammaprint", pa.float64()),
+                ("luminal_id", pa.float64()),
+                ("mammaprint", pa.float64()),
             ]
         )
         self.writer2 = ParquetWriter(self.save_dir + "/slides_batch.parquet", schema_slides)
@@ -86,9 +82,6 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             self.writer.close()
         if self.writer2:
             self.writer2.close()
-
-        # Handling pooled features
-        #self.pool_features_by_slide("mean")
 
         # Clean up duplicate slides
         slides_file_path = os.path.join(self.save_dir, "slides_batch.parquet")
@@ -119,24 +112,15 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         )
         _, _, metadata = batch
 
-        slide_name = metadata["slide_name"][0]
-        # Update tile count for the current slide
-        tile_count = self.tile_counts.get(slide_name, 0)
-        new_tile_count = tile_count + len(metadata["coord_x"])
-        self.tile_counts[slide_name] = new_tile_count
-
         # Write actual tiles with enforced float32 type for model_output
         model_output_processed = self._preprocess_data(outputs["outputs"], target_dtype=np.float32)
         
-        # Debug print statement to verify data type consistency
-        print("Data type of model_output_processed:", type(model_output_processed[0][0]))
-        
-        # # Extract mammaprint_value and ensure it is not a tensor
-        # mammaprint_value = metadata["mammaprint_value"]
+        # Extract mammaprint_value and ensure it is not a tensor
+        mammaprint_value = metadata["mammaprint_value"]
 
-        # if isinstance(mammaprint_value, torch.Tensor):
-        #     # Convert tensor to a list or float
-        #     mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
+        if isinstance(mammaprint_value, torch.Tensor):
+            # Convert tensor to a list or float
+            mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
 
         # Proceed with pyarrow conversion after ensuring it’s not a tensor
         batch = pa.record_batch(
@@ -146,17 +130,13 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
                 pa.array(metadata["coord_y"], pa.int64()),
                 pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
                 pa.array(metadata["class_id"], pa.int64()),
-                # pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
+                pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
             ],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"],
+            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )
 
         self.writer.write(batch)
         
-        # If the slide has reached its final batch, add padding if necessary
-        if new_tile_count < self.min_tiles_per_slide:
-            self._add_padding(slide_name, self.min_tiles_per_slide - new_tile_count)
-
         # Save slide metadata
         new_slide_record = pd.DataFrame({
             "slide_name": metadata["slide_name"],
@@ -169,69 +149,9 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
             "center_size": self._preprocess_data(metadata["center_size"]),
             "year": metadata["year"],
             "patient_id": metadata["patient_id"],
-            "is_cancer": self._preprocess_data(metadata["is_cancer"]),
-            # "luminal_id": self._preprocess_data(metadata["luminal_id"]),
-            # "mammaprint": self._preprocess_data(metadata["mammaprint"]),
+            "luminal_id": self._preprocess_data(metadata["luminal_id"]),
+            "mammaprint": self._preprocess_data(metadata["mammaprint"]),
         })
         table_slide = pa.Table.from_pandas(new_slide_record)
         self.writer2.write_table(table_slide)
         logger.info("Batch data and slide metadata successfully written.")
-
-    def _add_padding(self, slide_name: str, padding_needed: int) -> None:
-        """Add empty tiles to reach the minimum tile count."""
-        logger.info(f"Adding {padding_needed} empty tiles for slide {slide_name}.")
-
-        slide_names = pa.array([slide_name] * padding_needed, pa.string())
-        coord_x = pa.array([0] * padding_needed, pa.int64())
-        coord_y = pa.array([0] * padding_needed, pa.int64())
-        model_output = pa.array([[0.0] * 512] * padding_needed, pa.list_(pa.float32()))  # Explicitly float32
-        class_id = pa.array([0] * padding_needed, pa.int64())
-        # mammaprint_value = pa.array([0] * padding_needed, pa.float32())
-
-        # Create the record batch directly from arrays
-        batch = pa.RecordBatch.from_arrays(
-            [slide_names, coord_x, coord_y, model_output, class_id],
-            names=["slide_name", "coord_x", "coord_y", "model_output", "class_id"]
-        )
-
-        self.writer.write(batch)
-        logger.info(f"{padding_needed} empty tiles added for slide {slide_name}.")
-
-
-    def pool_features_by_slide(self, aggregation_function="max"):
-        """
-        Reads data from a Parquet file, pools features by slide name using the specified aggregation function,
-        and saves the pooled data back to a new Parquet file.
-        :param aggregation_function: str or dict, aggregation function to use ('mean', 'max', 'min', or a dictionary for custom aggregation).
-        """
-        # Read the input Parquet file into a DataFrame
-        df = pd.read_parquet(self.save_dir + "/tiles.parquet")
-
-        # Check the aggregation function
-        if isinstance(aggregation_function, str):
-            if aggregation_function == "mean":
-                # Group by slide name and compute the mean of numeric columns
-                pooled_df = df.groupby("slide_name").mean()
-            elif aggregation_function == "max":
-                pooled_df = df.groupby("slide_name").max()
-            elif aggregation_function == "min":
-                pooled_df = df.groupby("slide_name").min()
-            else:
-                raise ValueError(f"Unsupported aggregation function: {aggregation_function}")
-        elif isinstance(aggregation_function, dict):
-            # Group by slide name and apply the custom aggregation
-            pooled_df = df.groupby("slide_name").agg(aggregation_function)
-        else:
-            raise ValueError("Aggregation function must be a string or dictionary.")
-        # Reset the index to make 'slide_name' a regular column
-
-        # Reset the index to make 'slide_name' a regular column
-        pooled_df = pooled_df.reset_index()
-
-        # Ensure the output file path is correct
-        pooled_file_path = os.path.join(self.save_dir, "pooled_predictions.parquet")
-
-        # Save the pooled DataFrame to the output Parquet file
-        pooled_df.to_parquet(pooled_file_path)
-
-        print(f"Pooled data saved to: {pooled_file_path}")
