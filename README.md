@@ -1,8 +1,49 @@
 # MammaPrint and Luminal-Type Prediction
 
-This repository contains supplementary material for the master’s thesis **"Using Machine Learning Methods for Predicting Results of MammaPrint and Luminal-Type Tests"** by **Oliver Rainoch**.
+This repository contains supplementary material for the master’s thesis **Using Machine Learning Methods for Predicting Results of MammaPrint and Luminal-Type Tests** by **Oliver Rainoch**.
 
 The provided code is designed for research purposes and depends on sensitive medical data and a proprietary machine learning platform, **RationAI MLflow**, for managing ML experiments. Due to confidentiality and security concerns, specific configuration details have been redacted. Access to these resources must be formally requested before executing the pipeline.
+
+---
+## **Execution**
+
+If you have been granted access to the required data and MLflow platform, follow these steps:
+
+### Installation
+If you do not have the `pdm` package manager installed, install it using:
+```bash
+pip install pdm
+```
+
+Install [PDM](https://pdm.fming.dev/) package manager and install all the dependencies using the following command:
+```bash
+pdm install
+```
+
+
+### Preprocessing
+
+```bash
+export MLFLOW_TRACKING_USERNAME=<YOUR_USERNAME>
+pdm run preprocessing/generate_tissue_mask.py
+pdm run preprocessing/generate_annotation_masks.py
+pdm run preprocessing/tiling.py
+pdm run preprocessing/calculate_mean_std.py
+```
+
+### Training
+
+```bash
+pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train
+```
+<NAME> denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train the some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
+
+
+### Testing
+
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+```
 
 ---
 
@@ -28,7 +69,7 @@ The following implementations were developed by **Oliver Rainoch** as part of th
   - Inputpreparation for MIL model:
      - `mammaprint/datamodule/datasets/mil.py`
 
-### ** MIL Training and Experimentation**
+### **MIL Training and Experimentation**
 - **Training Pipelines**:
   - Training and evaluation pipeline module adjusted for MIL:
     - `mammaprint/ml/mammaprint_module.py`
@@ -76,47 +117,3 @@ The following implementations were developed by **Oliver Rainoch** as part of th
     - `conf/trainer/callbacks/bag_prediction_saver.yaml`
     - `conf/ml/metrics/signagreement.yaml`
     - `conf/ml/metrics/predictions.yaml`
-
-
-
----
-
-## **Execution**
-
-If you have been granted access to the required data and MLflow platform, follow these steps:
-
-### Installation**
-If you do not have the `pdm` package manager installed, install it using:
-```bash
-pip install pdm
-```
-
-Install [PDM](https://pdm.fming.dev/) package manager and install all the dependencies using the following command:
-```bash
-pdm install
-```
-
-
-### Preprocessing
-
-```bash
-export MLFLOW_TRACKING_USERNAME=<YOUR_USERNAME>
-pdm run preprocessing/generate_tissue_mask.py
-pdm run preprocessing/generate_annotation_masks.py
-pdm run preprocessing/tiling.py
-pdm run preprocessing/calculate_mean_std.py
-```
-
-### Training
-
-```bash
-pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train
-```
-<NAME> denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train the some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
-
-
-### Testing
-
-```bash
-pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
-```
