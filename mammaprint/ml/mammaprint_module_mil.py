@@ -13,10 +13,10 @@ import numpy as np
 from mammaprint.ml.metrics import MetricDictionary
 
 
-logger = logging.getLogger("mammaprint_module")
+logger = logging.getLogger("mammaprint_module_mil")
 
 
-class mammaprintModule(lightning.pytorch.LightningModule):
+class mammaprintModuleMIL(lightning.pytorch.LightningModule):
     def __init__(
         self,
         net: torch.nn.Module | dict[str, torch.nn.Module],

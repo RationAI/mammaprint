@@ -48,6 +48,28 @@ pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_h
 ```
 
 ---
+## Multi instance learning
+Similar execution to above, however using mammaprint_mil module for training and testing.
+
+### Feature extraction
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=feature_extraction/feautures_{vgg16|resnet50}
+```
+
+### Training
+```bash
+pdm run python -m mammaprint_mil.fit user=<NAME> +experiment=mammaprint/train/train_mil
+```
+NAME denotes username in MLflow. This will launch the binary classification training. If you wish to train regression task, use +experiment=mammaprint/train/train_mil_{regression} instead.
+
+### Testing
+
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+```
+If you wish to test regression task, use +experiment=mammaprint/test/test_mil_heatmaps_{regression} instead.
+
+---
 
 ## **Contribution**
 The following implementations were developed and adjusted by **Oliver Rainoch** as part of this thesis:
@@ -57,10 +79,11 @@ The following implementations were developed and adjusted by **Oliver Rainoch** 
   - Implementation of MIL models for weakly supervised learning using gated attention mechanisms:
     - `mammaprint/ml/nets/attmil.py`
 
-### **Data Processing and Preprocessing**
-- **Tiling and Feature Extraction**:
+### **Tiling and Feature Extraction**:
   - Slide tiling and tile filtering implemented in:
-    - `data_processing/tiler.py`
+    - `mammaprint/trainer/callbacks/prediction_saver.py`
+    - `preprocessing/tiling.py`
+
 
 ### **Sampling**
   - Sampling for MIL experiments:
@@ -74,7 +97,7 @@ The following implementations were developed and adjusted by **Oliver Rainoch** 
 ### **MIL Training and Experimentation**
 - **Training Pipelines**:
   - Training and evaluation pipeline module adjusted for MIL:
-    - `mammaprint/ml/mammaprint_module.py`
+    - `mammaprint/ml/mammaprint_module_mil.py`
   
 ### **Evaluation and Visualization**
 - **Slide-Level Aggregation and Evaluation**:
