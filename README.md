@@ -38,7 +38,7 @@ pdm run preprocessing/tiling.py
 ```bash
 pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train
 ```
-NAME denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train the some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
+NAME denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
 
 
 ### Testing
@@ -49,7 +49,7 @@ pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_h
 
 ---
 ## Multi instance learning
-Similar execution to above, however using mammaprint_mil module for training and testing.
+Similar execution as above, however using mammaprint_mil module for training and testing.
 
 ### Feature extraction
 ```bash
