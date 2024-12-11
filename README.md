@@ -22,7 +22,7 @@ pdm install
 
 
 ### Preprocessing
-Preprocessing and tiling was mainly performed using the module available from a private repository https://gitlab.ics.muni.cz/rationai/digital-pathology/tools/slide-tiler.
+Preprocessing and tiling was mainly performed using the module available from RationAI private repository https://gitlab.ics.muni.cz/rationai/digital-pathology/tools/slide-tiler.
 
 However, it is possible to use tools in the preprocessing folder or custom tools, provided the metadata of datasets and tiles remains consistent across the entire project. Currently, the project works with Parquet format files and metadata fields such as [slide_name, coord_x, coord_y, slide_width, slide_height, step_size, tile_size], among others.
 
