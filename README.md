@@ -36,7 +36,7 @@ pdm run preprocessing/calculate_mean_std.py
 ```bash
 pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train
 ```
-<NAME> denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train the some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
+NAME denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train the some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
 
 
 ### Testing
@@ -48,7 +48,7 @@ pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_h
 ---
 
 ## **Contribution**
-The following implementations were developed by **Oliver Rainoch** as part of this thesis:
+The following implementations were developed and adjusted by **Oliver Rainoch** as part of this thesis:
 
 ### **Model Implementations**
 - **Multiple Instance Learning (MIL) Models**:
@@ -113,7 +113,6 @@ The following implementations were developed by **Oliver Rainoch** as part of th
     - `conf/ml/net/resnet50_feature_extractor.yaml`
   - Callbacks and custom metrics:
     - `conf/trainer/callbacks/attention_visualizer.yaml`
-    - `conf/trainer/callbacks/bag_prediction_saver.yaml`
     - `conf/trainer/callbacks/bag_prediction_saver.yaml`
     - `conf/ml/metrics/signagreement.yaml`
     - `conf/ml/metrics/predictions.yaml`
