@@ -417,6 +417,7 @@ class MILSequentialTreeSampler(TreeSampler):
     def __init__(self, index_levels: list[str], advance_to_next: bool) -> None:
         super().__init__(index_levels=index_levels)
         self.advance_to_next = advance_to_next
+        self.tiles_per_bag = 1000
 
     def build_inner_structure(self, data_source: BaseDataSource) -> None:
         """Builds the sampling tree and sets the active node to the left-most leaf.
@@ -439,11 +440,11 @@ class MILSequentialTreeSampler(TreeSampler):
 
         if res is not None:
             if isinstance(res, pandas.DataFrame):
-                if len(res) >= 1000:    
-                    chosen_tiles = res.sample(n=1000, replace=False).to_dict("records")
+                if len(res) >= self.tiles_per_bag:    
+                    chosen_tiles = res.sample(n=self.tiles_per_bag, replace=False).to_dict("records")
                     samples.append(chosen_tiles)
                 else:
-                    chosen_tiles = res.sample(n=1000, replace=True).to_dict("records")
+                    chosen_tiles = res.sample(n=self.tiles_per_bag, replace=True).to_dict("records")
                     samples.append(chosen_tiles)
             else:
                 logging.warning(f"Unexpected type for `res`: {type(res)}; expected a DataFrame.")

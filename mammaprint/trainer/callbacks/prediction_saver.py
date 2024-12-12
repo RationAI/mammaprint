@@ -115,22 +115,20 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         # Write actual tiles with enforced float32 type for model_output
         model_output_processed = self._preprocess_data(outputs["outputs"], target_dtype=np.float32)
         
-        # Extract mammaprint_value and ensure it is not a tensor
         mammaprint_value = metadata["mammaprint_value"]
 
         if isinstance(mammaprint_value, torch.Tensor):
             # Convert tensor to a list or float
             mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
 
-        # Proceed with pyarrow conversion after ensuring it’s not a tensor
         batch = pa.record_batch(
             [
                 pa.array(metadata["slide_name"]),
                 pa.array(metadata["coord_x"], pa.int64()),
                 pa.array(metadata["coord_y"], pa.int64()),
-                pa.array(model_output_processed, pa.list_(pa.float32())),  # Ensure float32 for model_output
+                pa.array(model_output_processed, pa.list_(pa.float32())),
                 pa.array(metadata["class_id"], pa.int64()),
-                pa.array(mammaprint_value, pa.float32()),  # Now mammaprint_value should be converted
+                pa.array(mammaprint_value, pa.float32()),
             ],
             names=["slide_name", "coord_x", "coord_y", "model_output", "class_id", "mammaprint_value"],
         )

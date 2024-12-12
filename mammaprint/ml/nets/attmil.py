@@ -1,11 +1,10 @@
-# Code is inspired by: https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/master/model.py 
-# Attention-based Deep Multiple Instance Learning by Ilse et al.
+# Code is inspired by: Attention-based Deep Multiple Instance Learning by Ilse et al.
+# https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/master/model.py 
 # arXiv preprint arXiv:1802.04712.
 
 import torch
 from torch import nn
 import logging
-import torchvision.models as models
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

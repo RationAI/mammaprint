@@ -66,8 +66,7 @@ class AttentionVisualizer(DataloaderAgnosticCallback):
             trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
         )
         # Extract attention weights and metadata
-        attention_weights = outputs["attention_weights"]  # shape [batch_size, num_tiles]
-        logger.debug(f"Extracted attention_weights with shape: {attention_weights.shape}")
+        attention_weights = outputs["attention_weights"]
 
         metadata_list = batch[2]  # list of per-tile metadata dicts
         logger.debug(f"Extracted metadata_list with length: {len(metadata_list)}")
@@ -78,9 +77,7 @@ class AttentionVisualizer(DataloaderAgnosticCallback):
 
         for i in range(batch_size):
             data = attention_weights[i]  # shape [num_tiles]
-            logger.debug(f"Processing batch {i+1}/{batch_size}. Data shape: {data.shape}")
             data = data.unsqueeze(1)  # Now data shape is [num_tiles, 1]
-            logger.debug(f"Reshaped data to: {data.shape}")
 
             # Aggregate per-tile metadata
             per_tile_metadata_list = metadata_list
