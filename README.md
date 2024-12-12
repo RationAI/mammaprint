@@ -65,7 +65,7 @@ NAME denotes username in MLflow. This will launch the binary classification trai
 ### Testing
 
 ```bash
-pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+pdm run python -m mammaprint_mil.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
 ```
 If you wish to test regression task, use +experiment=mammaprint/test/test_mil_heatmaps_{regression} instead.
 

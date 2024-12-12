@@ -23,7 +23,7 @@ class MILDataset(BaseDataset):
         # Stack images into a tensor
         images_tensor = torch.stack(images)
         
-        label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
+        label_value = next((tile[self.label] for tile in sample if tile.get(self.label, 0.0)), 0.0)
         label = torch.tensor([label_value])
 
         logging.debug(f"Label: {label}")
