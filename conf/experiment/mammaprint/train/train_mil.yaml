@@ -1,0 +1,100 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  # Train dataset
+  - /datamodule/datasets@datamodule.datasets.train: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.train.sampler: mil_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.train.augmentations: train_transforms
+  # Valid dataset
+  - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
+  - /ml: mammaprint
+  - /ml/optimizer: adam
+  - /ml/net: attmil
+  - /ml/output_activation: sigmoid
+  - /ml/loss: bce
+  - /ml/metrics:
+    - binary_accuracy
+    - binary_auroc
+    - binary_recall
+    - binary_specificity
+  - /ml/lr_scheduler: reduce_lr_on_plateau
+  - /trainer/callbacks:
+    - log_best_model
+    - early_stopping
+    - lr_monitor
+  - _self_
+
+datamodule:
+  data_sources:
+    blue-print:
+      _target_: mammaprint.datamodule.datasources.WSIDataSource
+      seed: ${seed}
+      data_uris:
+        - ???
+      splits:
+        train: 0.8
+        valid: 0.2
+
+  datasets:
+    train:
+      sampler:
+        epoch_size: 240
+        index_levels:
+          - slide_name
+      label: "luminal_id"
+    valid:
+      sampler:
+        epoch_size: 60
+        index_levels:
+          - slide_name
+      label: "luminal_id"
+
+  dataloaders_kwargs:
+    train:
+      num_workers: 6
+      batch_size: 16
+    valid:
+      num_workers: 6
+      batch_size: 16
+
+ml:
+  optimizer:
+    lr: 1e-3
+    weight_decay: 1e-03
+  lr_scheduler:
+    monitor: valid/loss
+    scheduler:
+      mode: min
+      factor: 0.5
+      patience: 3
+
+trainer:
+  max_epochs: 300
+  log_every_n_steps: 1
+  logger:
+    log_model: all
+  callbacks:
+    early_stopping:
+      monitor: valid/binary_auroc
+      mode: max
+      patience: 10
+    log_best_model:
+      monitor: valid/binary_auroc
+      mode: max
+      filename: MIL_binary_best
+
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: MIL gated attention Luminal binary classification - training on features from VGG16
+  description: |
+   Luminal binary classification. MIL approach
+  hyperparameters:
+    max_epochs: ${trainer.max_epochs}
+    train_epoch_size: ${datamodule.datasets.train.sampler.epoch_size}
+    valid_epoch_size: ${datamodule.datasets.valid.sampler.epoch_size}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    batch_size: ${datamodule.dataloaders_kwargs.train.batch_size}

@@ -1,0 +1,3 @@
+prediction_saver:
+  _target_: mammaprint.trainer.callbacks.ParquetPredictionSaver
+  save_dir: ???

@@ -1,0 +1,7 @@
+mammaprint_validation:
+  _target_: mammaprint.datamodule.datasources.WSIDataSource
+  seed: ${seed}
+  data_uris:
+    - ???
+  splits:
+    test: 1.0

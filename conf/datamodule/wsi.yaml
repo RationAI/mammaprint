@@ -1,0 +1,4 @@
+_target_: mammaprint.datamodule.WSIDataModule
+data_sources: ???
+datasets: ???
+dataloaders_kwargs: ???

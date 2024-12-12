@@ -1,0 +1,2 @@
+SignAgreement:
+  _target_: mammaprint.ml.metrics.SignAgreement

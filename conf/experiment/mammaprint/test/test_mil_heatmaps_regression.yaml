@@ -1,0 +1,39 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test_mil_regression
+  - /trainer/callbacks:
+    - attention_visualizer
+    - bag_prediction_saver
+  - _self_
+
+ml:
+  net:
+    model_uri: ???
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "mammaprint"
+  dataloaders_kwargs:
+    test:
+      num_workers: 12
+      batch_size: 8
+
+trainer:
+  callbacks:
+    attention_visualizer:
+      save_dir: test_heatmaps
+    bag_prediction_saver:
+      save_dir: predictions
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: MIL mammaprint test whole slide images with Heatmaps
+  description: |
+    mammaprint Heatmaps
+  hyperparameters:
+    num_workers: 15
+    batch_size: 16
+   

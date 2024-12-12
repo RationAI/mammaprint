@@ -1,0 +1,2 @@
+spearman_corr_coef:
+  _target_: torchmetrics.regression.SpearmanCorrCoef

@@ -1,93 +1,143 @@
-# MammaPrint
+# MammaPrint and Luminal-Type Prediction
 
+This repository contains supplementary material for the master’s thesis **Using Machine Learning Methods for Predicting Results of MammaPrint and Luminal-Type Tests** by **Oliver Rainoch**.
 
+The provided code is designed for research purposes and depends on sensitive medical data and a proprietary machine learning platform, **RationAI MLflow**, for managing ML experiments. Due to confidentiality and security concerns, specific configuration details have been redacted. Access to these resources must be formally requested before executing the pipeline.
 
-## Getting started
+---
+## **Execution**
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+If you have been granted access to the required data and MLflow platform, follow these steps:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint.git
-git branch -M master
-git push -uf origin master
+### Installation
+If you do not have the `pdm` package manager installed, install it using:
+```bash
+pip install pdm
 ```
 
-## Integrate with your tools
+Install [PDM](https://pdm.fming.dev/) package manager and install all the dependencies using the following command:
+```bash
+pdm install
+```
 
-- [ ] [Set up project integrations](https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint/-/settings/integrations)
 
-## Collaborate with your team
+### Preprocessing
+Preprocessing and tiling was mainly performed using the module available from RationAI private repository https://gitlab.ics.muni.cz/rationai/digital-pathology/tools/slide-tiler.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+However, it is possible to use tools in the preprocessing folder or custom tools, provided the metadata of datasets and tiles remains consistent across the entire project. Currently, the project works with Parquet format files and metadata fields such as [slide_name, coord_x, coord_y, slide_width, slide_height, step_size, tile_size], among others.
 
-## Test and Deploy
+```bash
+export MLFLOW_TRACKING_USERNAME=<YOUR_USERNAME>
+pdm run preprocessing/generate_tissue_mask.py
+pdm run preprocessing/generate_annotation_masks.py
+pdm run preprocessing/tiling.py
+```
 
-Use the built-in continuous integration in GitLab.
+### Training
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```bash
+pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train
+```
+NAME denotes username in MLflow. This will launch the training of a VGG16 model. If you wish to train some of the ResNet models, use +experiment=mammaprint/train/train_{resnet50, resnet101, resnet152} instead.
 
-***
 
-# Editing this README
+### Testing
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+```
 
-## Suggestions for a good README
+---
+## Multi instance learning
+Similar execution as above, however using mammaprint_mil module for training and testing.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### Feature extraction
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=feature_extraction/feautures_{vgg16|resnet50}
+```
 
-## Name
-Choose a self-explaining name for your project.
+### Training
+```bash
+pdm run python -m mammaprint_mil.fit user=<NAME> +experiment=mammaprint/train/train_mil
+```
+NAME denotes username in MLflow. This will launch the binary classification training. If you wish to train regression task, use +experiment=mammaprint/train/train_mil_{regression} instead.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Testing
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+```
+If you wish to test regression task, use +experiment=mammaprint/test/test_mil_heatmaps_{regression} instead.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+---
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## **Contribution**
+The following implementations were developed and adjusted by **Oliver Rainoch** as part of this thesis:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### **Model Implementations**
+- **Multiple Instance Learning (MIL) Models**:
+  - Implementation of MIL models for weakly supervised learning using gated attention mechanisms:
+    - `mammaprint/ml/nets/attmil.py`
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### **Tiling and Feature Extraction**:
+  - Slide tiling and tile filtering implemented in:
+    - `mammaprint/trainer/callbacks/prediction_saver.py`
+    - `preprocessing/tiling.py`
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### **Sampling**
+  - Sampling for MIL experiments:
+    - `mammaprint/datamodule/samplers.py`
+    Added classes:
+     - `MILRandomTreeSampler`
+     - `MILSequentialTreeSampler`
+  - Inputpreparation for MIL model:
+     - `mammaprint/datamodule/datasets/mil.py`
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### **MIL Training and Experimentation**
+- **Training Pipelines**:
+  - Training and evaluation pipeline module adjusted for MIL:
+    - `mammaprint/ml/mammaprint_module_mil.py`
+  
+### **Evaluation and Visualization**
+- **Slide-Level Aggregation and Evaluation**:
+  - Sign agreement metric and predictions metric:
+    - `mammaprint/ml/metrics/signagreement.py`
+    - `mammaprint/ml/metrics/predictions.py`
+    
+  - Implementation of saving of bag predictions for whole slide:
+    - `mammaprint/trainer/callbacks/bag_prediction_saver.py`
+  - Visualizations of attention-based heatmaps:
+    - `mammaprint/trainer/callbacks/attention_visualizer.py`
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+- **Experiment Configurations**:
+  - Feature extraction using VGG16 or ResNet50 models:
+    - `conf/experiment/feature_extraction/features_vgg16.yaml`
+    - `conf/experiment/feature_extraction/features_resnet50.yaml`
+  - Training configurations for different experimental setups:
+    - `conf/experiment/train/train_mil.yaml`
+    - `conf/experiment/train/train_mil_regression.yaml`
+    - `conf/experiment/train/train_resnet50.yaml`
+    - `conf/experiment/train/train_resnet101.yaml`
+    - `conf/experiment/train/train_resnet152.yaml`
+    - `conf/experiment/train/train.yaml`
+  - Testing configurations for different experimental setups:
+    - `conf/experiment/test/test_mil.yaml`
+    - `conf/experiment/test/test_mil_regression.yaml`
+    - `conf/experiment/test/test_mil_heatmaps.yaml`
+    - `conf/experiment/test/test_optimizer.yaml`
+    - `conf/experiment/test/test.yaml`
+  - Sampling and dataset configurations: 
+    - `conf/datamodule/datasets/sampler/mil_tree.yaml`
+    - `conf/datamodule/datasets/sampler/mil_test_tree.yaml`
+    - `conf/datamodule/datasets/mil_dataset.yaml`
+  - Models configurations:
+    - `conf/ml/net/attmil.yaml`
+    - `conf/ml/net/resnet152.yaml`
+    - `conf/ml/net/vgg16_feature_extractor.yaml`
+    - `conf/ml/net/resnet50_feature_extractor.yaml`
+  - Callbacks and custom metrics:
+    - `conf/trainer/callbacks/attention_visualizer.yaml`
+    - `conf/trainer/callbacks/bag_prediction_saver.yaml`
+    - `conf/ml/metrics/signagreement.yaml`
+    - `conf/ml/metrics/predictions.yaml`

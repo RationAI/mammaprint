@@ -1,0 +1,4 @@
+regression:
+  _target_: mammaprint.ml.nets.VGG16RegressionAdapter
+  width: ???
+  height: ???

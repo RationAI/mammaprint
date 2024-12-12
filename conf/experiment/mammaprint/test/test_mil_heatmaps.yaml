@@ -1,0 +1,39 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test_mil
+  - /trainer/callbacks:
+    - attention_visualizer
+    - bag_prediction_saver
+  - _self_
+
+ml:
+  net:
+    model_uri: ???
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "luminal_id"
+  dataloaders_kwargs:
+    test:
+      num_workers: 6
+      batch_size: 16
+
+trainer:
+  callbacks:
+    attention_visualizer:
+      save_dir: test_heatmaps
+    bag_prediction_saver:
+      save_dir: predictions
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: MIL Luminal test whole slide images with attention heatmaps
+  description: |
+    Luminal binary classification.
+  hyperparameters:
+    num_workers: 6
+    batch_size: 16
+   

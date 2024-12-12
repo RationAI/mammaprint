@@ -1,0 +1,41 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test
+  - /trainer/callbacks:
+    - slide_predictor
+    - heatmap_visualizer
+  - _self_
+
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 40
+
+ml:
+  net:
+    model_uri: ???
+
+trainer:
+  callbacks:
+    slide_predictor:
+      save_dir: slide_predictions
+      mask_size: 35
+      threshold: 0.475217
+      ground_truth_col: class_id
+    heatmap_visualizer:
+      save_dir: test_heatmaps
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: Test Luminal-type ResNet101 after segmentation Testing slide prediction with Heatmaps
+  description: |
+    Luminal binary classification test VGG16, Mask 38 with prediction heatmap generation.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

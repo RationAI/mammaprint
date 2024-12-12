@@ -1,0 +1,3 @@
+_target_: mammaprint.datamodule.samplers.MILSequentialTreeSampler
+index_levels: ???
+advance_to_next: true

@@ -1,0 +1,32 @@
+import torch
+import logging
+import albumentations
+from mammaprint.datamodule.datasets.base_wsi import BaseDataset, extract_tile
+from mammaprint.datamodule.samplers import BaseSampler
+import torch
+
+class MILDataset(BaseDataset):
+    def __init__(self, sampler: BaseSampler, seed, augmentations: albumentations.TemplateTransform | None = None, label: str = "luminal_id") -> None:
+        super().__init__(sampler=sampler, seed=seed)
+        self.transforms = augmentations
+        self.label = label
+    
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
+        sample = self._epoch_samples[index]
+        images = []
+
+        for s in sample:
+            model_output = s.get('model_output', None)
+            model_output_tensor = torch.tensor(model_output, dtype=torch.float32)
+            images.append(model_output_tensor)
+
+        # Stack images into a tensor
+        images_tensor = torch.stack(images)
+        
+        label_value = next((tile.get(self.label) for tile in sample if tile.get(self.label, 0.0) != 0.0), 0.0)
+        label = torch.tensor([label_value])
+
+        logging.debug(f"Label: {label}")
+
+
+        return images_tensor, label, sample

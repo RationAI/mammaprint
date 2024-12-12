@@ -1,0 +1,5 @@
+_target_: mammaprint.datamodule.datasets.Dataset
+sampler: ???
+augmentations: ???
+seed: ${seed}
+label: ???

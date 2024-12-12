@@ -1,0 +1,3 @@
+bag_prediction_saver:
+  _target_: mammaprint.trainer.callbacks.BagPredictionSaver
+  save_dir: ???

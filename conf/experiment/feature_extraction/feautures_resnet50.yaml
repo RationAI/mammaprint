@@ -1,0 +1,50 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/datasets@datamodule.datasets.test: base_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: sequential_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /ml: mammaprint
+  - /ml/net: resnet50_feature_extractor
+  - /ml/output_activation: identity
+  - /trainer/callbacks:
+    - prediction_saver
+  - _self_
+
+
+datamodule:
+  data_sources:
+    mammaprint:
+      _target_: mammaprint.datamodule.datasources.WSIDataSource
+      seed: ${seed}
+      data_uris:
+        - ???
+      splits:
+        test: 1.0
+  datasets:
+    test:
+      label: "class_id"
+      sampler:
+        index_levels:
+          - slide_name
+
+  dataloaders_kwargs:
+    test:
+      num_workers: 10
+      batch_size: 40
+ml:
+  net:
+    features:
+      weights: DEFAULT
+trainer:
+  callbacks:
+    prediction_saver:
+      save_dir: dataset
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: No overlap another set features extraction using Resnet50
+  description: |
+    Compute features using Resnet50 model.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

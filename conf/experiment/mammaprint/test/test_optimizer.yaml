@@ -1,0 +1,39 @@
+# @package _global_
+defaults:
+  - /experiment/mammaprint_bc: test
+  - /trainer/callbacks:
+    - slide_prediction_optimizer
+  - _self_
+
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+  dataloaders_kwargs:
+    test:
+      num_workers: 8
+      batch_size: 40
+
+ml:
+  net:
+    model_uri: ???
+
+trainer:
+  callbacks:
+    slide_prediction_optimizer:
+      save_dir: slide_predictions
+      mask_size_min: 1
+      mask_size_max: 100
+      ground_truth_col: class_id
+
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: Luminal-type VGG16 testing optimizer
+  description: |
+    Luminal binary classification test with finding best threshold and mask size for whole slide predictions.
+  hyperparameters:
+    batch_size: ${datamodule.dataloaders_kwargs.test.batch_size}

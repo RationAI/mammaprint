@@ -1,0 +1,4 @@
+features:
+  _target_: mammaprint.ml.nets.ResNet50
+global_max_pooling:
+  _target_: mammaprint.ml.nets.GMaxPool

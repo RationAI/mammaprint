@@ -1,0 +1,4 @@
+scheduler:
+  _target_: mammaprint.ml.lr.ListLR
+  _partial_: true
+  lr_list: ???

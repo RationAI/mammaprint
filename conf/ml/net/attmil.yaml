@@ -1,0 +1,2 @@
+features:
+  _target_: mammaprint.ml.nets.AttMILModel

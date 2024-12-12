@@ -1,0 +1,49 @@
+# @package _global_
+defaults:
+  - /datamodule: wsi
+  - /datamodule/data_sources: mil_luminal_test
+  - /datamodule/datasets@datamodule.datasets.test: mil_dataset
+  - /datamodule/datasets/sampler@datamodule.datasets.test.sampler: mil_test_tree
+  - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
+  - /trainer/callbacks:
+    - bag_prediction_saver
+  - /ml: mammaprint
+  - /ml/net: saved_model
+  - /ml/output_activation: tanh
+  - /ml/metrics:
+    - mse
+    - mae
+    - predictions
+    - signagreement
+  - _self_
+
+ml:
+  net:
+    model_uri: ???
+
+datamodule:
+  datasets:
+    test:
+      sampler:
+        index_levels:
+          - slide_name
+      label: "mammaprint"
+  dataloaders_kwargs:
+    test:
+      num_workers: 6
+      batch_size: 8
+
+trainer:
+  callbacks:
+    bag_prediction_saver:
+      save_dir: predictions
+
+metadata:
+  experiment_name: Mamma-print
+  run_name: MIL test mammaprint with gated attention model whole slide images, prediction saver
+  description: |
+    MIL Regression test. MIL approach
+  hyperparameters:
+    num_workers: 6
+    batch_size: 8
+   
