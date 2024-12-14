@@ -1,3 +1,5 @@
+# Copyright (c) The RationAI team.
+
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm

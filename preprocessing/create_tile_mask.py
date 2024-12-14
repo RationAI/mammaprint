@@ -1,3 +1,5 @@
+# Copyright (c) The RationAI team.
+
 from pathlib import Path
 from typing import Any
 

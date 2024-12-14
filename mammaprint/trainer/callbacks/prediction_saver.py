@@ -1,9 +1,9 @@
-# Standard Imports
+# Copyright (c) The RationAI team.
+
 import logging
 from typing import Any
 import os
 
-# Third-Party Imports
 import mlflow
 import lightning
 import pyarrow as pa
@@ -13,7 +13,6 @@ import torch
 import pandas as pd
 import numpy as np
 
-# Local Imports
 from mammaprint.trainer.callbacks import DataloaderAgnosticCallback
 
 logger = logging.getLogger("callbacks/prediction_saver")
@@ -60,16 +59,13 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
     
     @staticmethod
     def _preprocess_data(data: Any, target_dtype=np.float32) -> list:
-        # Convert to numpy array if data is a list
         if isinstance(data, list):
             data = np.array(data)
         elif isinstance(data, torch.Tensor):
             data = data.detach().cpu().numpy()
         
-        # Ensure the target dtype
         data = data.astype(target_dtype)
         
-        # Convert to list format expected by PyArrow
         return data.tolist()
 
 
@@ -112,13 +108,11 @@ class ParquetPredictionSaver(DataloaderAgnosticCallback):
         )
         _, _, metadata = batch
 
-        # Write actual tiles with enforced float32 type for model_output
         model_output_processed = self._preprocess_data(outputs["outputs"], target_dtype=np.float32)
         
         mammaprint_value = metadata["mammaprint_value"]
 
         if isinstance(mammaprint_value, torch.Tensor):
-            # Convert tensor to a list or float
             mammaprint_value = mammaprint_value.cpu().tolist() if mammaprint_value.dim() > 0 else mammaprint_value.item()
 
         batch = pa.record_batch(

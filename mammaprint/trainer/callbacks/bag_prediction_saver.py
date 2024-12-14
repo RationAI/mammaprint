@@ -1,9 +1,9 @@
-# Standard Imports
+# Copyright (c) The RationAI team.
+
 import logging
 from typing import Any
 import os
 
-# Third-Party Imports
 import mlflow
 import lightning
 import torch

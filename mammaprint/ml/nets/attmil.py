@@ -1,3 +1,4 @@
+# Copyright (c) The RationAI team.
 # Code is inspired by: Attention-based Deep Multiple Instance Learning by Ilse et al.
 # https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/master/model.py 
 # arXiv preprint arXiv:1802.04712.
@@ -47,7 +48,6 @@ class AttMILModel(nn.Module):
                     nn.init.zeros_(layer.bias)
 
     def forward(self, x):
-        # self.logger.debug(f'Original input to classifier: {x.shape}')
         batch_size, num_tiles, features = x.shape
 
         # Layer normalization for input stability

@@ -1,3 +1,5 @@
+# Copyright (c) The RationAI team.
+
 from collections.abc import Iterable
 from pathlib import Path
 from xml.etree import ElementTree as ET

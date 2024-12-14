@@ -1,3 +1,5 @@
+# Copyright (c) The RationAI team.
+
 import torch
 from torchmetrics import Metric
 

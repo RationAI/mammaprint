@@ -1,3 +1,5 @@
+# Copyright (c) The RationAI team.
+
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
@@ -14,7 +16,6 @@ from rationai.tiling.writers import save_mlflow_dataset
 from sklearn.model_selection import train_test_split
 import logging
 
-# Configure logging for better visibility
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -120,14 +121,14 @@ def handler(slide_path: Path) -> TiledSlideMetadata | None:
     logging.info(f"Number of tiles: {len(tiles)}")
 
     # Extract the slide name
-    slide_name = slide_path.stem  # Get the filename without the extension
+    slide_name = slide_path.stem
 
     # Efficient label lookup
     slide_label = labels_dict.get(slide_name, None)
 
     if slide_label is None:
         logging.warning(f"No label found for slide {slide_name}. Assigning default label.")
-        slide_label = 0  # Assign a default value or decide to skip
+        slide_label = 0
 
     # Create PipelineSlideMetadata
     slide_metadata = PipelineSlideMetadata(
@@ -188,7 +189,6 @@ def main() -> None:
     if unlabeled_slides:
         logging.info(f"Found {len(unlabeled_slides)} slides without labels. They will be skipped.")
 
-    # Initialize Ray
     ray.init(ignore_reinit_error=True)
 
     # Process labeled slides using tiling
