@@ -112,21 +112,11 @@ The following implementations were developed and adjusted by **Oliver Rainoch** 
 
 - **Experiment Configurations**:
   - Feature extraction using VGG16 or ResNet50 models:
-    - `conf/experiment/feature_extraction/features_vgg16.yaml`
-    - `conf/experiment/feature_extraction/features_resnet50.yaml`
+    - `conf/experiment/feature_extraction/*.yaml`
   - Training configurations for different experimental setups:
-    - `conf/experiment/train/train_mil.yaml`
-    - `conf/experiment/train/train_mil_regression.yaml`
-    - `conf/experiment/train/train_resnet50.yaml`
-    - `conf/experiment/train/train_resnet101.yaml`
-    - `conf/experiment/train/train_resnet152.yaml`
-    - `conf/experiment/train/train.yaml`
+    - `conf/experiment/train/*.yaml`
   - Testing configurations for different experimental setups:
-    - `conf/experiment/test/test_mil.yaml`
-    - `conf/experiment/test/test_mil_regression.yaml`
-    - `conf/experiment/test/test_mil_heatmaps.yaml`
-    - `conf/experiment/test/test_optimizer.yaml`
-    - `conf/experiment/test/test.yaml`
+    - `conf/experiment/test/*.yaml`
   - Sampling and dataset configurations: 
     - `conf/datamodule/datasets/sampler/mil_tree.yaml`
     - `conf/datamodule/datasets/sampler/mil_test_tree.yaml`
