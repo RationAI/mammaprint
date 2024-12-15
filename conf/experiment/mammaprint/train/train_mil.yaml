@@ -9,7 +9,7 @@ defaults:
   - /datamodule/datasets@datamodule.datasets.valid: mil_dataset
   - /datamodule/datasets/sampler@datamodule.datasets.valid.sampler: mil_tree
   - /datamodule/datasets/augmentations@datamodule.datasets.valid.augmentations: normalize
-  - /ml: mammaprint
+  - /ml: mammaprint_mil
   - /ml/optimizer: adam
   - /ml/net: attmil
   - /ml/output_activation: sigmoid

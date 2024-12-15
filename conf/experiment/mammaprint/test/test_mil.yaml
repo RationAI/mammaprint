@@ -7,7 +7,7 @@ defaults:
   - /datamodule/datasets/augmentations@datamodule.datasets.test.augmentations: normalize
   - /trainer/callbacks:
     - bag_prediction_saver
-  - /ml: mammaprint
+  - /ml: mammaprint_mil
   - /ml/net: saved_model
   - /ml/output_activation: sigmoid
   - /ml/metrics:
