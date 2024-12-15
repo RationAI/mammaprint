@@ -334,7 +334,7 @@ class MILRandomTreeSampler(TreeSampler):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
         self.num_slides = epoch_size  # Number of slides to sample each epoch
-        self.tiles_per_bag = 1000 # Fixed number of tiles per bag
+        self.tiles_per_bag = 2000 # Fixed number of tiles per bag
         self.active_node = None  # Start at the first node
         self.label_column = label_column
 
@@ -417,7 +417,7 @@ class MILSequentialTreeSampler(TreeSampler):
     def __init__(self, index_levels: list[str], advance_to_next: bool) -> None:
         super().__init__(index_levels=index_levels)
         self.advance_to_next = advance_to_next
-        self.tiles_per_bag = 1000
+        self.tiles_per_bag = 2000
 
     def build_inner_structure(self, data_source: BaseDataSource) -> None:
         """Builds the sampling tree and sets the active node to the left-most leaf.
