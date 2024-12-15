@@ -38,13 +38,13 @@ class mammaprintModule(lightning.pytorch.LightningModule):
         self.register_metric_dict("metrics", metrics)
 
     def forward(self, x):
-        x, attention_weights = self.model(x)
+        x = self.model(x)
         x = self.output_activation(x)
-        return x, attention_weights
+        return x
 
     def training_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred, attention_weights = self(x)
+        y_pred = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
@@ -62,7 +62,7 @@ class mammaprintModule(lightning.pytorch.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y, _ = batch
-        y_pred, attention_weights = self(x)
+        y_pred = self(x)
 
         # Update and log loss
         loss = self.loss(y_pred, y)
@@ -84,30 +84,25 @@ class mammaprintModule(lightning.pytorch.LightningModule):
     @torch.inference_mode()
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, metadata = batch
-        y_pred, attention_weights = self(x) 
+        y_pred = self(x)
 
-        if "slide_name" in metadata[0]:
-            slide_name = metadata[0]["slide_name"][0]
+        # Update and log metrics
+        if "slide_name" in metadata:
+            slide_name = metadata["slide_name"][0]
         else:
             slide_name = dataloader_idx
-
         self.metrics.update("test", y_pred, y, slide_name)
         self.log_dict(self.metrics.get("test", slide_name), add_dataloader_idx=False)
 
-        return {
-            "metrics": self.metrics.compute("test", slide_name),
-            "outputs": y_pred,
-            "attention_weights": attention_weights,
-            "metadata": metadata,
-        }
+        return {"metrics": self.metrics.compute("test", slide_name), "outputs": y_pred}
 
     def on_test_epoch_end(self):
         self.log_dict(self.metrics.get("test"))
 
     def predict_step(self, batch, batch_idx, dataloader_idx=None):
         x, y, _ = batch
-        y_pred, attention_weights = self(x)  # Extract both output and attention weights
-        return {"outputs": y_pred, "attention_weights": attention_weights}
+        y_pred = self(x)
+        return {"outputs": y_pred}
 
     def configure_optimizers(self):
         if self.optimizer is None:
