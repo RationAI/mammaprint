@@ -28,7 +28,7 @@ defaults:
 
 datamodule:
   data_sources:
-    blue-print:
+    mammaprint:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:

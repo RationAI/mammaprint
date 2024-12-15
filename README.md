@@ -58,14 +58,14 @@ pdm run python -m mammaprint.test user=<NAME> +experiment=feature_extraction/fea
 
 ### Training
 ```bash
-pdm run python -m mammaprint_mil.fit user=<NAME> +experiment=mammaprint/train/train_mil
+pdm run python -m mammaprint.fit user=<NAME> +experiment=mammaprint/train/train_mil datamodule.data_sources.mammaprint=[<DATA_URIS>]
 ```
 NAME denotes username in MLflow. This will launch the binary classification training. If you wish to train regression task, use +experiment=mammaprint/train/train_mil_{regression} instead.
 
 ### Testing
 
 ```bash
-pdm run python -m mammaprint_mil.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
+pdm run python -m mammaprint.test user=<NAME> +experiment=mammaprint/test/test_mil_heatmaps ml.net.model_uri=<MODEL_URI> datamodule.data_sources.mammaprint_test=[<DATA_URIS>]
 ```
 If you wish to test regression task, use +experiment=mammaprint/test/test_mil_heatmaps_{regression} instead.
 
