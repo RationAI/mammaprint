@@ -18,7 +18,7 @@ datamodule:
       _target_: mammaprint.datamodule.datasources.WSIDataSource
       seed: ${seed}
       data_uris:
-       - ???
+       - mlflow-artifacts:/17/63d7f1dfd79f48128b7be96a1837f126/artifacts/data
       splits:
         test: 1.0
   datasets:
@@ -31,7 +31,7 @@ datamodule:
   dataloaders_kwargs:
     test:
       num_workers: 10
-      batch_size: 80
+      batch_size: 60
 ml:
   net:
     features:
@@ -43,7 +43,7 @@ trainer:
 
 metadata:
   experiment_name: Mamma-print
-  run_name: Features extraction using VGG16
+  run_name: Features extraction using VGG16 and normalization
   description: |
     Compute features using VGG16 model.
   hyperparameters:
