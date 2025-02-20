@@ -1,6 +1,0 @@
-_target_: mammaprint.Task
-ml: ${ml}
-datamodule: ${datamodule}
-trainer: ${trainer}
-hyperparameters: ${metadata.hyperparameters}
-stage: ???

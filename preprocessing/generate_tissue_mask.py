@@ -1,5 +1,3 @@
-# Copyright (c) The RationAI team.
-
 from pathlib import Path
 
 import pyvips

@@ -1,11 +1,8 @@
-# Copyright (c) The RationAI team.
-
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from mammaprint.data.datasets import MammaprintPredict
-
 
 URIS = [
     # Train dataset (same as in `train.yaml`)

@@ -1,0 +1,14 @@
+defaults:
+  - hydra: default
+  - logger: mlflow
+  - /model: ???
+  - _self_
+
+seed: ${random_seed:}
+mode: ???
+checkpoint: null
+
+trainer: {}
+
+metadata:
+  experiment_name: MammaPrint

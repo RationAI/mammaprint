@@ -1,5 +1,3 @@
-# Copyright (c) The RationAI team.
-
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +7,6 @@ import pyvips
 import ray
 from PIL import Image
 from rationai.masks import process_items, tile_mask
-
 
 slides: pd.DataFrame = pd.read_parquet("data/dataset/slides.parquet")
 tiles: pd.DataFrame = pd.read_parquet("data/dataset/tiles.parquet")

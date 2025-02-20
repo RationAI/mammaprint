@@ -1,5 +1,3 @@
-# Copyright (c) The RationAI team.
-
 from collections.abc import Iterable
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -10,7 +8,6 @@ from openslide import PROPERTY_NAME_MPP_X, PROPERTY_NAME_MPP_Y, OpenSlide
 from PIL.ImageDraw import _Ink
 from rationai.masks import process_items, write_big_tiff
 from rationai.masks.annotations import XMLPolygonMask
-
 
 SLIDES_PATH = ""
 ANNOTATIONS_PATH = ""
