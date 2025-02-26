@@ -1,7 +1,8 @@
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pyarrow
+import pyvips
 from openslide import OpenSlide
 from pyvips import Image
 from rationai.masks import slide_resolution, tissue_mask
@@ -10,7 +11,7 @@ from ray.data.datasource import FilenameProvider
 from ray.data.datasource.file_datasink import RowBasedFileDatasink
 
 SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint"
-MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint_tissue_masks"
+MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks2"
 LEVEL = 5
 
 
@@ -18,7 +19,7 @@ class Filename(FilenameProvider):
     def get_filename_for_row(
         self, row: dict, task_index: int, block_index: int, row_index: int
     ) -> str:
-        return Path(row["item"]).with_suffix("tiff").name
+        return Path(row["item"]).with_suffix(".tiff").name
 
 
 class BigTIFFDatasink(RowBasedFileDatasink):
@@ -26,19 +27,22 @@ class BigTIFFDatasink(RowBasedFileDatasink):
         self,
         path: str,
         column: str,
-        tiffsave_kwargs: dict[str, Any] | None = None,
+        tiffsave_kwargs_column: str | None = None,
         **file_datasink_kwargs,
     ) -> None:
         super().__init__(path, file_format="tiff", **file_datasink_kwargs)
         self.column = column
-        self.tiffsave_kwargs = tiffsave_kwargs or {}
+        self.tiffsave_kwargs_column = tiffsave_kwargs_column
 
-    def write_row_to_file(self, row: Dict[str, Any], file: pyarrow.NativeFile) -> None:
+    def write_row_to_file(self, row: dict[str, Any], file: pyarrow.NativeFile) -> None:
         from pyvips import Image
 
         image = Image.new_from_array(row[self.column])
-        buffer = image.tiffsave_buffer(**self.tiffsave_kwargs)
-        file.write(buffer.getvalue())
+        if self.tiffsave_kwargs_column is None:
+            buffer = image.tiffsave_buffer()
+        else:
+            buffer = image.tiffsave_buffer(**row[self.tiffsave_kwargs_column])
+        file.write(buffer)
 
 
 def process_slide(row: dict[str, Any]) -> dict[str, Any]:
@@ -46,14 +50,29 @@ def process_slide(row: dict[str, Any]) -> dict[str, Any]:
         mpp_x, mpp_y = slide_resolution(slide, LEVEL)
 
     slide = Image.new_from_file(row["item"], level=LEVEL)
-    row["tissue_mask"] = tissue_mask(slide, mpp=(mpp_x + mpp_y) / 2)
+    row["tissue_mask"] = tissue_mask(slide, mpp=(mpp_x + mpp_y) / 2).numpy()
+    row["tiffsave_kwargs"] = {
+        "bigtiff": True,
+        "compression": pyvips.enums.ForeignTiffCompression.DEFLATE,
+        "tile": True,
+        "tile_width": 512,
+        "tile_height": 512,
+        "xres": mpp_x,
+        "yres": mpp_y,
+        "pyramid": True,
+    }
     return row
 
 
 def main() -> None:
     slides = Path(SLIDES_PATH).rglob("*.mrxs")
     data.from_items(list(slides)).map(process_slide).write_datasink(
-        BigTIFFDatasink("data", column="tissue_mask", filename_provider=Filename())
+        BigTIFFDatasink(
+            MASK_DEST,
+            column="tissue_mask",
+            tiffsave_kwargs_column="tiffsave_kwargs",
+            filename_provider=Filename(),
+        )
     )
 
 
