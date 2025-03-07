@@ -26,7 +26,7 @@ def process_slide(row: dict[str, Any]) -> dict[str, Any]:
     with OpenSlide(row["item"]) as slide:
         mpp_x, mpp_y = slide_resolution(slide, LEVEL)
 
-    slide = Image.new_from_file(row["item"], level=LEVEL)
+    slide = Image.new_from_file(row["item"], page=LEVEL)
     row["tissue_mask"] = tissue_mask(slide, mpp=mean((mpp_x, mpp_y))).numpy()
     row["options"] = {"xres": mpp_x, "yres": mpp_y}
     return row
