@@ -10,8 +10,8 @@ from rationai.masks import slide_resolution, tissue_mask
 from ray import data
 from ray.data.datasource import FilenameProvider
 
-SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Learnig_set_mamaprint"
-MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Learning_set_mamaprint_tissue_masks2"
+SLIDES_PATH = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs"
+MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks"
 LEVEL = 5
 
 
