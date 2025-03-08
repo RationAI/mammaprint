@@ -12,7 +12,7 @@ MASK_DEST = "/mnt/data/Projects/MOU/Mammaprint/Another_WSIs_tissue_masks"
 LEVEL = 5
 
 
-def process_slide(row: dict[str, Any]) -> None:
+def process_slide(row: dict[str, Any]) -> dict[str, Any]:
     with OpenSlide(row["item"]) as slide:
         mpp_x, mpp_y = slide_resolution(slide, LEVEL)
 
@@ -24,6 +24,7 @@ def process_slide(row: dict[str, Any]) -> None:
         mpp_x=mpp_x,
         mpp_y=mpp_y,
     )
+    return row
 
 
 def main() -> None:
