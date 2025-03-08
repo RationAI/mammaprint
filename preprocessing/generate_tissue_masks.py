@@ -46,6 +46,7 @@ def process_slide(path) -> None:
 
 def main() -> None:
     slides = Path(SLIDES_PATH).rglob("*.mrxs")
+    Path(MASK_DEST).mkdir(exist_ok=True)
     tasks = [process_slide.remote(slide) for slide in slides]
     ray.get(tasks)
 
