@@ -5,7 +5,7 @@ from statistics import mean
 import ray
 from openslide import OpenSlide
 from pyvips import Image
-from rationai.masks import slide_resolution, tissue_mask, write_big_tiff
+from rationai.masks import process_items, slide_resolution, tissue_mask, write_big_tiff
 
 # from ray import data
 
@@ -47,8 +47,7 @@ def process_slide(path) -> None:
 def main() -> None:
     slides = Path(SLIDES_PATH).rglob("*.mrxs")
     Path(MASK_DEST).mkdir(exist_ok=True)
-    tasks = [process_slide.remote(slide) for slide in slides]
-    ray.get(tasks)
+    process_items(slides, process_slide)
 
 
 if __name__ == "__main__":
