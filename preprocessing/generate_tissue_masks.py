@@ -47,7 +47,7 @@ def process_slide(path) -> None:
 def main() -> None:
     slides = Path(SLIDES_PATH).rglob("*.mrxs")
     Path(MASK_DEST).mkdir(exist_ok=True)
-    process_items(slides, process_slide)
+    process_items(list(slides), process_slide)
 
 
 if __name__ == "__main__":
