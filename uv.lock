@@ -9,12 +9,6 @@ resolution-markers = [
     "sys_platform == 'win32'",
 ]
 
-[manifest]
-
-[[manifest.dependency-metadata]]
-name = "pyvips-binary"
-requires-dist = ["pyvips"]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.4.6"
@@ -520,16 +514,6 @@ wheels = [
 ]
 
 [[package]]
-name = "histopath"
-version = "0.1.0"
-source = { git = "https://github.com/RationAI/histopath.git?rev=tiling#b57f5e3de8127ff715e0d15436381527fa91d8ea" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pyvips" },
-    { name = "ray", extra = ["data"] },
-]
-
-[[package]]
 name = "humanize"
 version = "4.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -761,7 +745,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "albumentations" },
-    { name = "histopath" },
     { name = "humanize" },
     { name = "hydra-core" },
     { name = "lightning" },
@@ -770,7 +753,6 @@ dependencies = [
     { name = "omegaconf" },
     { name = "pandas" },
     { name = "pyvips" },
-    { name = "pyvips-binary" },
     { name = "rationai-mlkit" },
     { name = "ray", extra = ["data"] },
     { name = "scikit-image" },
@@ -792,7 +774,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "albumentations", specifier = ">=1.3.1" },
-    { name = "histopath", git = "https://github.com/RationAI/histopath.git?rev=tiling" },
     { name = "humanize", specifier = ">=4.9.0" },
     { name = "hydra-core", specifier = ">=1.3.2" },
     { name = "lightning", specifier = ">=2.1.3" },
@@ -801,7 +782,6 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pandas", specifier = ">=2.1.4" },
     { name = "pyvips", specifier = ">=2.2.1" },
-    { name = "pyvips-binary", specifier = ">=8.16.0" },
     { name = "rationai-mlkit", git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/mlkit.git" },
     { name = "ray", extras = ["data"], specifier = ">=2.42.1" },
     { name = "scikit-image", specifier = ">=0.22.0" },
@@ -1520,25 +1500,6 @@ dependencies = [
     { name = "pkgconfig" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7b/88/f73dae807ec68b228fba72507105e3ba80a561dc0bade0004ce24fd118fc/pyvips-2.2.3.tar.gz", hash = "sha256:43bceced0db492654c93008246a58a508e0373ae1621116b87b322f2ac72212f", size = 56626 }
-
-[[package]]
-name = "pyvips-binary"
-version = "8.16.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyvips" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/da/1d/b9d5a52a46e9bf5f11392b31d79e22a28f8674d197b61b46300da1f133ee/pyvips_binary-8.16.0.tar.gz", hash = "sha256:bd38068ad9683bcc0975815d5a64c2a023621847b8d89969efba0c263241c936", size = 3818 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4c/5b/bc55efe905faee1d87ee086b3a1f0d106f22d35df013a123bc367df3af52/pyvips_binary-8.16.0-cp37-abi3-macosx_10_13_x86_64.whl", hash = "sha256:07c6848ab8374cb0756ffbad71ae9af8a7deeaaad7738f4b7488b5e8b71b49c5", size = 8062345 },
-    { url = "https://files.pythonhosted.org/packages/72/f3/b059a8c67999801b2f930e29dfd235ccfe6766d194206a5568fabd601efe/pyvips_binary-8.16.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:b5131461b2701b349ef0b61b3b98956129aedc9676192f6e4af37a879a0be77c", size = 7090433 },
-    { url = "https://files.pythonhosted.org/packages/71/4a/3ebc4f40d0dd96f6dd648ac37e44cb136b6ac92f0eb9ad85b1ceaed44d05/pyvips_binary-8.16.0-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:504fb66d3bbee05331ad83ec33ab662ed8b5b728f502f27e75f6b2182c8c737b", size = 7252489 },
-    { url = "https://files.pythonhosted.org/packages/e0/c0/7ab39495f629f8545a3a1957083bb70441f4f993d712796c523474a62024/pyvips_binary-8.16.0-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:2d54bea75a5641d3db8e7db085980653f7a5133bea3306b3a4b6b95894811d70", size = 7195693 },
-    { url = "https://files.pythonhosted.org/packages/c1/b4/b032a29755b7e0a2c3ea9eba07eae420ec36822db739077e652a2b874971/pyvips_binary-8.16.0-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:09fed8b0810677ff944998718cf541edfc3e9bdfee468eb4a0db26ebd5ee82fe", size = 7283773 },
-    { url = "https://files.pythonhosted.org/packages/f8/af/42d5fe4e35611d777097c0c07cea5aeb924495be33117e5f6bde3bbe874f/pyvips_binary-8.16.0-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:0d39f4d94afa52b524c05360040ce0fdb289f15927d950e92fa97d9e469823bc", size = 7328407 },
-    { url = "https://files.pythonhosted.org/packages/04/59/bf36f525fa832a494aa54327389139f54232a10bf27a747ec76099f8c9e4/pyvips_binary-8.16.0-cp37-abi3-win32.whl", hash = "sha256:e344886ea240cd4d245b4f4fc81ab646ee9133594ad0d66004981771aa397a6a", size = 7929195 },
-    { url = "https://files.pythonhosted.org/packages/eb/37/57aa667ec9e3412df827645d4e68b19af72b7354c682fd09786495e58dbd/pyvips_binary-8.16.0-cp37-abi3-win_amd64.whl", hash = "sha256:576fdb1442d971a0fe832b484b0d751a530e0e96bcd9bf9c78224556c370e96b", size = 7922661 },
-]
 
 [[package]]
 name = "pywin32"
