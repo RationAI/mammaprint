@@ -1,6 +1,5 @@
 import pandas as pd
 from pathlib import Path
-import os
 
 DATA_PATH = "/mnt/data/Projects/Data/MOU/breast/mammaprint"
 
@@ -21,11 +20,17 @@ if not data_path.exists():
     print("Please update the DATA_PATH variable in the script")
     exit(1)
 
-print("first 10 files")
-files = os.listdir(data_path)
-for f in files[:10]:
-    print(f)
+# Get all folders in the data directory
+print("\nScanning directory for folders...")
+all_folders = {folder.name for folder in data_path.iterdir() if folder.is_dir()}
+print(f"Found {len(all_folders)} folders in directory")
 
+# Get all record_nums from CSV
+csv_records = set(merged_df['record_num'].astype(str).str.strip())
+print(f"Found {len(csv_records)} records in CSV")
+
+# Check CSV records against filesystem
+print("\n--- Checking CSV records against filesystem ---")
 results = []
 
 for idx, row in merged_df.iterrows():
@@ -36,14 +41,13 @@ for idx, row in merged_df.iterrows():
     folder_exists = folder_path.exists() and folder_path.is_dir()
 
     # Check if .mrxs file exists
-    file_path = data_path / f"{record_num}.mrxs"
+    file_path = folder_path / f"{record_num}.mrxs"
     file_exists = file_path.exists() and file_path.is_file()
 
     # Determine issue
-    issue = ""
     if not folder_exists and not file_exists:
         issue = 'Both missing'
-    if not folder_exists:
+    elif not folder_exists:
         issue = 'Folder missing'
     elif not file_exists:
         issue = 'File missing'
@@ -54,43 +58,71 @@ for idx, row in merged_df.iterrows():
         'record_num': record_num,
         'folder_exists': folder_exists,
         'file_exists': file_exists,
-        'folder_path': str(folder_path) if folder_exists else None,
-        'file_path': str(file_path) if file_exists else None,
         'issue': issue
     })
 
-    if idx % 10 == 0:
-        print(f"Checked {idx + 1}/{len(merged_df)} records...")
-
-print(f"\nCompleted checking {len(results)} records")
+print(f"Completed checking {len(results)} records")
 
 results_df = pd.DataFrame(results)
+
+# Check for folders in directory not in CSV
+print("\n--- Checking for folders in directory not in CSV ---")
+folders_not_in_csv = all_folders - csv_records
+print(f"Found {len(folders_not_in_csv)} folders not in CSV")
 
 # Summary statistics
 total = len(results_df)
 ok_count = len(results_df[results_df['issue'] == 'OK'])
-both_count = len(results_df[results_df['issue'] == 'Both missing'])
+both_missing = len(results_df[results_df['issue'] == 'Both missing'])
 folder_missing = len(results_df[results_df['issue'] == 'Folder missing'])
 file_missing = len(results_df[results_df['issue'] == 'File missing'])
-empty_records = len(results_df[results_df['issue'] == 'Empty or NaN record_num'])
 
-print("\n--- Summary ---")
-print(f"Total records: {total}")
-print(f"OK (folder + file exist): {ok_count}")
-print(f"Both missing: {both_count}")
-print(f"only Folder missing: {folder_missing}")
-print(f"only File missing: {file_missing}")
-print(f"Empty/NaN record_num: {empty_records}")
+print("\n" + "="*60)
+print("SUMMARY")
+print("="*60)
+print(f"Total records in CSV: {total}")
+print(f"✅ OK (folder + file exist): {ok_count}")
+print(f"⚠️  Both folder and file missing: {both_missing}")
+print(f"⚠️  Only folder missing: {folder_missing}")
+print(f"⚠️  Only file missing (folder exists): {file_missing}")
+print(f"⚠️  Folders in directory not in CSV: {len(folders_not_in_csv)}")
 
-output_file = 'data_exploration/file_check_results.csv'
-results_df.to_csv(output_file, index=False)
-print(f"\n✅ Results saved to: {output_file}")
+# Print first 10 of each problem set
+print("\n" + "="*60)
+print("PROBLEM SETS (first 10 of each)")
+print("="*60)
 
-issues_df = results_df[results_df['issue'] != 'OK']
-if len(issues_df) > 0:
-    issues_file = 'data_exploration/file_check_issues.csv'
-    issues_df.to_csv(issues_file, index=False)
-    print(f"⚠️  Issues only saved to: {issues_file}")
-    print(f"\nFound {len(issues_df)} records with issues")
+# Both missing
+both_missing_df = results_df[results_df['issue'] == 'Both missing']
+if len(both_missing_df) > 0:
+    print(f"\n1. Both folder and file missing ({len(both_missing_df)} total):")
+    print(both_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
 else:
-    print("\n✅ All records have corresponding folders and files!")
+    print("\n1. Both folder and file missing: None")
+
+# Folder missing
+folder_missing_df = results_df[results_df['issue'] == 'Folder missing']
+if len(folder_missing_df) > 0:
+    print(f"\n2. Folder missing ({len(folder_missing_df)} total):")
+    print(folder_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
+else:
+    print("\n2. Folder missing: None")
+
+# File missing
+file_missing_df = results_df[results_df['issue'] == 'File missing']
+if len(file_missing_df) > 0:
+    print(f"\n3. File missing ({len(file_missing_df)} total):")
+    print(file_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
+else:
+    print("\n3. File missing: None")
+
+# Folders not in CSV
+if len(folders_not_in_csv) > 0:
+    print(f"\n4. Folders in directory not in CSV ({len(folders_not_in_csv)} total):")
+    folders_list = sorted(list(folders_not_in_csv))[:10]
+    for folder in folders_list:
+        print(f"  - {folder}")
+else:
+    print("\n4. Folders in directory not in CSV: None")
+
+print("\n" + "="*60)
