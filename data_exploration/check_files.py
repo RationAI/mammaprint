@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+import os
 
 DATA_PATH = "/mnt/data/Projects/Data/MOU/breast/mammaprint"
 
@@ -19,6 +20,11 @@ if not data_path.exists():
     print(f"WARNING: Path does not exist: {data_path}")
     print("Please update the DATA_PATH variable in the script")
     exit(1)
+
+print("first 10 files")
+files = os.listdir(data_path)
+for f in files[:10]:
+    print(f)
 
 results = []
 
