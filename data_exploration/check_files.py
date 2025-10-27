@@ -21,28 +21,89 @@ if not data_path.exists():
     exit(1)
 
 # Get all folders in the data directory
-print("\nScanning directory for folders...")
+print("\nScanning directory for folders and files...")
 all_folders = {folder.name for folder in data_path.iterdir() if folder.is_dir()}
 print(f"Found {len(all_folders)} folders in directory")
+
+# Get all .mrxs files in the data directory
+all_files = {file.stem for file in data_path.iterdir() if file.is_file() and file.suffix == '.mrxs'}
+print(f"Found {len(all_files)} .mrxs files in directory")
 
 # Get all record_nums from CSV
 csv_records = set(merged_df['record_num'].astype(str).str.strip())
 print(f"Found {len(csv_records)} records in CSV")
 
+# Function to generate possible folder name variations
+def get_folder_variations(record_num):
+    """Generate possible folder name variations for a record number."""
+    variations = [record_num]  # Start with exact match
+
+    # Handle formats like "2023/835" -> "P2023_00835", "P2023_835", "2023_835", etc.
+    if '/' in record_num:
+        parts = record_num.split('/')
+        if len(parts) == 2:
+            year, num = parts
+            # Check if num has suffix like "-1"
+            num_base = num
+            suffix = ""
+            if '-' in num:
+                num_parts = num.split('-', 1)
+                num_base = num_parts[0]
+                suffix = '-' + num_parts[1]
+
+            # Try with P prefix and underscore
+            variations.append(f"P{year}_{num_base}{suffix}")
+            variations.append(f"P{year}_{num_base.zfill(5)}{suffix}")  # Zero-padded to 5 digits
+            variations.append(f"P{year}_{num_base.zfill(4)}{suffix}")  # Zero-padded to 4 digits
+    
+    return variations
+
+
+# Function to generate possible file name variations
+def get_file_variations(record_num):
+    """Generate possible .mrxs file name variations."""
+    return [f"{x}.mrxs" for x in get_folder_variations(record_num)]
+
+# Function to find matching folder
+def find_matching_folder(record_num, all_folders):
+    """Try to find a matching folder using various naming conventions."""
+    variations = get_folder_variations(record_num)
+
+    for var in variations:
+        if var in all_folders:
+            return var, True
+
+    return None, False
+
+# Function to find matching file
+def find_matching_file(record_num, all_files):
+    """Try to find a matching .mrxs file using various naming conventions."""
+    variations = get_folder_variations(record_num)  # Use same variations as folders
+
+    for var in variations:
+        if var in all_files:
+            return var, True
+
+    return None, False
+
 # Check CSV records against filesystem
 print("\n--- Checking CSV records against filesystem ---")
 results = []
+matched_folders = set()
+matched_files = set()
 
 for idx, row in merged_df.iterrows():
     record_num = str(row['record_num']).strip()
 
-    # Check if folder exists
-    folder_path = data_path / record_num
-    folder_exists = folder_path.exists() and folder_path.is_dir()
+    # Try to find matching folder with variations
+    matched_folder_name, folder_exists = find_matching_folder(record_num, all_folders)
+    if folder_exists:
+        matched_folders.add(matched_folder_name)
 
-    # Check if .mrxs file exists
-    file_path = folder_path / f"{record_num}.mrxs"
-    file_exists = file_path.exists() and file_path.is_file()
+    # Try to find matching .mrxs file with variations
+    matched_file_name, file_exists = find_matching_file(record_num, all_files)
+    if file_exists:
+        matched_files.add(matched_file_name)
 
     # Determine issue
     if not folder_exists and not file_exists:
@@ -56,6 +117,8 @@ for idx, row in merged_df.iterrows():
 
     results.append({
         'record_num': record_num,
+        'matched_folder': matched_folder_name if folder_exists else None,
+        'matched_file': matched_file_name if file_exists else None,
         'folder_exists': folder_exists,
         'file_exists': file_exists,
         'issue': issue
@@ -65,10 +128,129 @@ print(f"Completed checking {len(results)} records")
 
 results_df = pd.DataFrame(results)
 
-# Check for folders in directory not in CSV
+# Check for folders in directory not in CSV (excluding already matched folders)
 print("\n--- Checking for folders in directory not in CSV ---")
-folders_not_in_csv = all_folders - csv_records
-print(f"Found {len(folders_not_in_csv)} folders not in CSV")
+unmatched_folders = all_folders - matched_folders
+print(f"Found {len(unmatched_folders)} unmatched folders")
+
+# Try reverse matching: for each unmatched folder, see if it could match a CSV record
+reverse_matched = []
+truly_unmatched_folders = []
+
+for folder in unmatched_folders:
+    found_match = False
+    # Generate reverse variations (e.g., "P2023_00835" -> "2023/835")
+    if folder.startswith('P') and '_' in folder:
+        # P2023_00835 -> 2023/835 or P2023_00835-1 -> 2023/835-1
+        parts = folder[1:].split('_', 1)  # Remove P and split on first underscore
+        if len(parts) == 2:
+            year = parts[0]
+            num_part = parts[1]
+            # Handle dashes
+            if '-' in num_part:
+                num_parts = num_part.split('-', 1)
+                num = num_parts[0].lstrip('0') or '0'
+                suffix = '-' + num_parts[1]
+                possible_csv = f"{year}/{num}{suffix}"
+            else:
+                num = num_part.lstrip('0') or '0'
+                possible_csv = f"{year}/{num}"
+
+            if possible_csv in csv_records:
+                reverse_matched.append((folder, possible_csv))
+                found_match = True
+
+    if not found_match and '_' in folder and not folder.startswith('P'):
+        # 2023_00835 -> 2023/835 or 2024_02851-1 -> 2024/2851-1
+        parts = folder.split('_', 1)
+        if len(parts) == 2:
+            year = parts[0]
+            num_part = parts[1]
+            # Handle dashes
+            if '-' in num_part:
+                num_parts = num_part.split('-', 1)
+                num = num_parts[0].lstrip('0') or '0'
+                suffix = '-' + num_parts[1]
+                possible_csv = f"{year}/{num}{suffix}"
+            else:
+                num = num_part.lstrip('0') or '0'
+                possible_csv = f"{year}/{num}"
+
+            if possible_csv in csv_records:
+                reverse_matched.append((folder, possible_csv))
+                found_match = True
+
+    if not found_match:
+        truly_unmatched_folders.append(folder)
+
+if len(reverse_matched) > 0:
+    print(f"Found {len(reverse_matched)} folders that match CSV records (but were using different naming)")
+    print("These folders should have been matched in the forward pass - investigating...")
+
+folders_not_in_csv = truly_unmatched_folders
+print(f"Truly unmatched folders: {len(folders_not_in_csv)}")
+
+# Check for files in directory not in CSV (excluding already matched files)
+print("\n--- Checking for files in directory not in CSV ---")
+unmatched_files = all_files - matched_files
+print(f"Found {len(unmatched_files)} unmatched files")
+
+# Try reverse matching: for each unmatched file, see if it could match a CSV record
+reverse_matched_files = []
+truly_unmatched_files = []
+
+for file in unmatched_files:
+    found_match = False
+    # Generate reverse variations (e.g., "P2023_00835" -> "2023/835")
+    if file.startswith('P') and '_' in file:
+        # P2023_00835 -> 2023/835 or P2023_00835-1 -> 2023/835-1
+        parts = file[1:].split('_', 1)  # Remove P and split on first underscore
+        if len(parts) == 2:
+            year = parts[0]
+            num_part = parts[1]
+            # Handle dashes
+            if '-' in num_part:
+                num_parts = num_part.split('-', 1)
+                num = num_parts[0].lstrip('0') or '0'
+                suffix = '-' + num_parts[1]
+                possible_csv = f"{year}/{num}{suffix}"
+            else:
+                num = num_part.lstrip('0') or '0'
+                possible_csv = f"{year}/{num}"
+
+            if possible_csv in csv_records:
+                reverse_matched_files.append((file, possible_csv))
+                found_match = True
+
+    if not found_match and '_' in file and not file.startswith('P'):
+        # 2023_00835 -> 2023/835 or 2024_02851-1 -> 2024/2851-1
+        parts = file.split('_', 1)
+        if len(parts) == 2:
+            year = parts[0]
+            num_part = parts[1]
+            # Handle dashes
+            if '-' in num_part:
+                num_parts = num_part.split('-', 1)
+                num = num_parts[0].lstrip('0') or '0'
+                suffix = '-' + num_parts[1]
+                possible_csv = f"{year}/{num}{suffix}"
+            else:
+                num = num_part.lstrip('0') or '0'
+                possible_csv = f"{year}/{num}"
+
+            if possible_csv in csv_records:
+                reverse_matched_files.append((file, possible_csv))
+                found_match = True
+
+    if not found_match:
+        truly_unmatched_files.append(file)
+
+if len(reverse_matched_files) > 0:
+    print(f"Found {len(reverse_matched_files)} files that match CSV records (but were using different naming)")
+    print("These files should have been matched in the forward pass - investigating...")
+
+files_not_in_csv = truly_unmatched_files
+print(f"Truly unmatched files: {len(files_not_in_csv)}")
 
 # Summary statistics
 total = len(results_df)
@@ -86,6 +268,7 @@ print(f"⚠️  Both folder and file missing: {both_missing}")
 print(f"⚠️  Only folder missing: {folder_missing}")
 print(f"⚠️  Only file missing (folder exists): {file_missing}")
 print(f"⚠️  Folders in directory not in CSV: {len(folders_not_in_csv)}")
+print(f"⚠️  Files in directory not in CSV: {len(files_not_in_csv)}")
 
 # Print first 10 of each problem set
 print("\n" + "="*60)
@@ -96,7 +279,7 @@ print("="*60)
 both_missing_df = results_df[results_df['issue'] == 'Both missing']
 if len(both_missing_df) > 0:
     print(f"\n1. Both folder and file missing ({len(both_missing_df)} total):")
-    print(both_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
+    print(both_missing_df[['record_num']].head(10).to_string(index=False))
 else:
     print("\n1. Both folder and file missing: None")
 
@@ -104,7 +287,7 @@ else:
 folder_missing_df = results_df[results_df['issue'] == 'Folder missing']
 if len(folder_missing_df) > 0:
     print(f"\n2. Folder missing ({len(folder_missing_df)} total):")
-    print(folder_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
+    print(folder_missing_df[['record_num']].head(10).to_string(index=False))
 else:
     print("\n2. Folder missing: None")
 
@@ -112,17 +295,38 @@ else:
 file_missing_df = results_df[results_df['issue'] == 'File missing']
 if len(file_missing_df) > 0:
     print(f"\n3. File missing ({len(file_missing_df)} total):")
-    print(file_missing_df[['record_num', 'issue']].head(10).to_string(index=False))
+    print(file_missing_df[['record_num', 'matched_folder']].head(10).to_string(index=False))
 else:
     print("\n3. File missing: None")
 
+# Successfully matched with name variations
+matched_folder_variations = results_df[(results_df['issue'] == 'OK') & (results_df['matched_folder'].notna()) & (results_df['record_num'] != results_df['matched_folder'])]
+matched_file_variations = results_df[(results_df['issue'] == 'OK') & (results_df['matched_file'].notna()) & (results_df['record_num'] != results_df['matched_file'])]
+
+if len(matched_folder_variations) > 0:
+    print(f"\n4a. Successfully matched folders with name variations ({len(matched_folder_variations)} total) - sample:")
+    print(matched_folder_variations[['record_num', 'matched_folder']].head(10).to_string(index=False))
+
+if len(matched_file_variations) > 0:
+    print(f"\n4b. Successfully matched files with name variations ({len(matched_file_variations)} total) - sample:")
+    print(matched_file_variations[['record_num', 'matched_folder', 'matched_file']].head(10).to_string(index=False))
+
 # Folders not in CSV
 if len(folders_not_in_csv) > 0:
-    print(f"\n4. Folders in directory not in CSV ({len(folders_not_in_csv)} total):")
+    print(f"\n5. Folders in directory not in CSV ({len(folders_not_in_csv)} total):")
     folders_list = sorted(list(folders_not_in_csv))[:10]
     for folder in folders_list:
         print(f"  - {folder}")
 else:
-    print("\n4. Folders in directory not in CSV: None")
+    print("\n5. Folders in directory not in CSV: None")
+
+# Files not in CSV
+if len(files_not_in_csv) > 0:
+    print(f"\n6. Files in directory not in CSV ({len(files_not_in_csv)} total):")
+    files_list = sorted(list(files_not_in_csv))[:10]
+    for file in files_list:
+        print(f"  - {file}.mrxs")
+else:
+    print("\n6. Files in directory not in CSV: None")
 
 print("\n" + "="*60)
