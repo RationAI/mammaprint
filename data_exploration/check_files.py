@@ -75,16 +75,26 @@ def find_matching_folder(record_num, all_folders):
 
     return None, False
 
-# Function to find matching file
-def find_matching_file(record_num, all_files):
-    """Try to find a matching .mrxs file using various naming conventions."""
+# Function to find matching files (can be multiple with suffixes like -1, -2)
+def find_matching_files(record_num, all_files):
+    """Try to find all matching .mrxs files using various naming conventions.
+    Returns list of matched file names and whether any were found."""
     variations = get_folder_variations(record_num)  # Use same variations as folders
+    matched = []
 
+    # First check for exact matches
     for var in variations:
         if var in all_files:
-            return var, True
+            matched.append(var)
 
-    return None, False
+    # Also check for files with suffixes (e.g., record-1, record-2)
+    for var in variations:
+        for file in all_files:
+            # Check if file starts with the variation and has a suffix
+            if file.startswith(var + '-') and file not in matched:
+                matched.append(file)
+
+    return matched, len(matched) > 0
 
 # Check CSV records against filesystem
 print("\n--- Checking CSV records against filesystem ---")
@@ -100,10 +110,12 @@ for idx, row in merged_df.iterrows():
     if folder_exists:
         matched_folders.add(matched_folder_name)
 
-    # Try to find matching .mrxs file with variations
-    matched_file_name, file_exists = find_matching_file(record_num, all_files)
+    # Try to find matching .mrxs files with variations (can be multiple)
+    matched_file_list, file_exists = find_matching_files(record_num, all_files)
     if file_exists:
-        matched_files.add(matched_file_name)
+        # Add all matched files to the set
+        for f in matched_file_list:
+            matched_files.add(f)
 
     # Determine issue
     if not folder_exists and not file_exists:
@@ -118,7 +130,8 @@ for idx, row in merged_df.iterrows():
     results.append({
         'record_num': record_num,
         'matched_folder': matched_folder_name if folder_exists else None,
-        'matched_file': matched_file_name if file_exists else None,
+        'matched_files': matched_file_list if file_exists else [],
+        'file_count': len(matched_file_list),
         'folder_exists': folder_exists,
         'file_exists': file_exists,
         'issue': issue
@@ -258,6 +271,8 @@ ok_count = len(results_df[results_df['issue'] == 'OK'])
 both_missing = len(results_df[results_df['issue'] == 'Both missing'])
 folder_missing = len(results_df[results_df['issue'] == 'Folder missing'])
 file_missing = len(results_df[results_df['issue'] == 'File missing'])
+multiple_files_count = len(results_df[results_df['file_count'] > 1])
+total_file_count = results_df['file_count'].sum()
 
 print("\n" + "="*60)
 print("SUMMARY")
@@ -267,6 +282,8 @@ print(f"✅ OK (folder + file exist): {ok_count}")
 print(f"⚠️  Both folder and file missing: {both_missing}")
 print(f"⚠️  Only folder missing: {folder_missing}")
 print(f"⚠️  Only file missing (folder exists): {file_missing}")
+print(f"ℹ️  Records with multiple files: {multiple_files_count}")
+print(f"ℹ️  Total .mrxs files found: {total_file_count}")
 print(f"⚠️  Folders in directory not in CSV: {len(folders_not_in_csv)}")
 print(f"⚠️  Files in directory not in CSV: {len(files_not_in_csv)}")
 
@@ -299,34 +316,39 @@ if len(file_missing_df) > 0:
 else:
     print("\n3. File missing: None")
 
+# Records with multiple files
+multiple_files_df = results_df[results_df['file_count'] > 1]
+if len(multiple_files_df) > 0:
+    print(f"\n4. Records with multiple files ({len(multiple_files_df)} total) - sample:")
+    for idx, row in multiple_files_df.head(10).iterrows():
+        files_str = ', '.join(row['matched_files'])
+        print(f"  {row['record_num']}: {row['file_count']} files ({files_str})")
+else:
+    print("\n4. Records with multiple files: None")
+
 # Successfully matched with name variations
 matched_folder_variations = results_df[(results_df['issue'] == 'OK') & (results_df['matched_folder'].notna()) & (results_df['record_num'] != results_df['matched_folder'])]
-matched_file_variations = results_df[(results_df['issue'] == 'OK') & (results_df['matched_file'].notna()) & (results_df['record_num'] != results_df['matched_file'])]
 
 if len(matched_folder_variations) > 0:
-    print(f"\n4a. Successfully matched folders with name variations ({len(matched_folder_variations)} total) - sample:")
+    print(f"\n5. Successfully matched folders with name variations ({len(matched_folder_variations)} total) - sample:")
     print(matched_folder_variations[['record_num', 'matched_folder']].head(10).to_string(index=False))
-
-if len(matched_file_variations) > 0:
-    print(f"\n4b. Successfully matched files with name variations ({len(matched_file_variations)} total) - sample:")
-    print(matched_file_variations[['record_num', 'matched_folder', 'matched_file']].head(10).to_string(index=False))
 
 # Folders not in CSV
 if len(folders_not_in_csv) > 0:
-    print(f"\n5. Folders in directory not in CSV ({len(folders_not_in_csv)} total):")
+    print(f"\n6. Folders in directory not in CSV ({len(folders_not_in_csv)} total):")
     folders_list = sorted(list(folders_not_in_csv))[:10]
     for folder in folders_list:
         print(f"  - {folder}")
 else:
-    print("\n5. Folders in directory not in CSV: None")
+    print("\n6. Folders in directory not in CSV: None")
 
 # Files not in CSV
 if len(files_not_in_csv) > 0:
-    print(f"\n6. Files in directory not in CSV ({len(files_not_in_csv)} total):")
+    print(f"\n7. Files in directory not in CSV ({len(files_not_in_csv)} total):")
     files_list = sorted(list(files_not_in_csv))[:10]
     for file in files_list:
         print(f"  - {file}.mrxs")
 else:
-    print("\n6. Files in directory not in CSV: None")
+    print("\n7. Files in directory not in CSV: None")
 
 print("\n" + "="*60)
