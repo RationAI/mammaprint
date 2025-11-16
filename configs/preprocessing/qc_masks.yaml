@@ -1,0 +1,32 @@
+# @package _global_
+
+defaults:
+  - /default
+  - _self_
+
+url: "http://rayservice-qc-serve-svc.rationai-jobs-ns.svc.cluster.local:8000/"
+
+# Concurrency settings
+request_limit: 4
+num_repeats: 10
+
+# Timeout settings (in seconds)
+request_timeout: 36000
+report_request_timeout: 3600
+
+# Resolution levels for mask generation and sampling
+mask_level: 3
+sample_level: 1
+
+# Quality check flags
+check_residual: true
+check_folding: true
+check_blur: true
+compute_metrics: true
+
+# Output directory for QC masks
+output_path: ${mammaprint_path}/qc_masks
+
+metadata:
+  run_name: Mammaprint QC Masks
+  description: "Quality control processing for mammaprint slides"
