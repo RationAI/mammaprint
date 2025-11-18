@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - /default
+  - _self_
+
+level: 3
+max_concurrent: 100
+mlflow_artifact_path: tissue_masks
+
+metadata:
+  run_name: Mammaprint Tissue Masks
+  description: Generating tissue masks for mammaprint slides
