@@ -7,7 +7,7 @@ submit_job(
     image="cerit.io/rationai/base:2.0.6",
     cpu=4,
     memory="8Gi",
-    gpu="A40",
+    gpu=None,
     public=False,
     script=[
         "git clone https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint workdir",
