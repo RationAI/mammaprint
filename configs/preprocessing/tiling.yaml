@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+  - /default
+  - _self_
+
+mpp: 0.5
+tile_extent: 512
+stride: 256
+
+data_mapping: ???
+data_name: ???
+qc_masks_path: ???
+tissue_masks_uri: ???
+
+metadata:
+  run_name: Mammaprint Tiling
+  description: "Tiling configuration for mammaprint slides"
+  hyperparameters:
+    mpp: ${mpp}
+    tile_extent: ${tile_extent}
+    stride: ${stride}
+    data_mapping: ${data_mapping}
+    data_name: ${data_name}
+    qc_masks_path: ${qc_masks_path}
+    tissue_masks_uri: ${tissue_masks_uri}
