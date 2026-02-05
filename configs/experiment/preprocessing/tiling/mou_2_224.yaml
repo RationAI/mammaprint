@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - data: default
+  - _self_
+
+mpp: 1.55 # level 2
+tile_extent: 224
+stride: 112

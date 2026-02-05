@@ -1,21 +1,14 @@
 # @package _global_
 
 defaults:
-  - /data/default
+  - data: default
   - _self_
 
-mpp: ???
-tile_size: ???
-stride: ???
-
-
-data_mapping: ???
-qc_masks_path: ???
-tissue_masks_uri: ???
+mpp: 0.5
+tile_size: 512
+stride: 256
 
 metadata:
-  run_name: Mammaprint Tiling ${dataset.name}
-  metadata:
   description: |
     Tiling experiment config that sets `tile_size` and `stride` for slide tiling.
     The tiling pipeline:
