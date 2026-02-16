@@ -1,0 +1,25 @@
+# @package _global_
+
+output_dir: ${mammaprint_path}/embeddings/${dataset.name}
+
+dataloader:
+  batch_size: 2048  # 2048 for H100, 1024 for A40, 512 for mig-2g.20gb
+  num_workers: 8
+  persistent_workers: True
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Mammaprint Embeddings ${dataset.name}
+  description: |
+    Embeddings preprocessing experiment config.
+    The embeddings pipeline:
+    * loads tiled dataset URIs
+    * initializes the tile encoder model
+    * processes slides in batches through the encoder
+    * saves embeddings as parquet files with tile coordinates
+    * logs artifacts to MLflow
+  hyperparameters:
+    tile_encoder: ${tile_encoder.name}
+    dataset_name: ${dataset.name}
+    batch_size: ${dataloader.batch_size}
+    num_workers: ${dataloader.num_workers}
