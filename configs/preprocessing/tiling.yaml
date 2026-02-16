@@ -1,26 +1,29 @@
 # @package _global_
 
 defaults:
-  - /data/default
+  - /base
+  - /data: default
+  - /experiment/preprocessing/tiling: ???
   - _self_
 
 mpp: ???
-tile_size: ???
+tile_extent: ???
 stride: ???
-
-
-data_mapping: ???
-qc_masks_path: ???
-tissue_masks_uri: ???
+data_name: ???
 
 metadata:
+  experiment_name: MammaPrint
   run_name: Mammaprint Tiling ${dataset.name}
-  metadata:
   description: |
-    Tiling experiment config that sets `tile_size` and `stride` for slide tiling.
+    Tiling experiment config that sets `tile_extent` and `stride` for slide tiling.
     The tiling pipeline:
     * reads slide metadata and builds a grid of tiles with the given stride
     * assigns tissue/QC mask paths and computes overlap scores
     * keeps tiles with tissue in the centered 50% ROI
     * computes full-tile overlaps for blur, folding, and residual masks
     * saves slide and tile datasets via MLflow
+  hyperparameters:
+    mpp: ${mpp}
+    tile_extent: ${tile_extent}
+    stride: ${stride}
+    data_name: ${data_name}

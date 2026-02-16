@@ -1,7 +1,8 @@
 # @package _global_
 
 defaults:
-  - /default
+  - /base
+  - /data: ???
   - _self_
 
 url: "http://rayservice-qc-serve-svc.rationai-jobs-ns.svc.cluster.local:8000/"
@@ -28,5 +29,6 @@ compute_metrics: true
 output_path: ${mammaprint_path}/qc_masks
 
 metadata:
+  experiment_name: MammaPrint
   run_name: Mammaprint QC Masks
   description: "Quality control processing for mammaprint slides"

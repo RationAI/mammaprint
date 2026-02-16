@@ -1,9 +1,6 @@
 # @package _global_
 
-defaults:
-  - data: default
-  - _self_
-
-mpp: 0.17 # level 0
+mpp: 0.24 # level 0
 tile_extent: 224
 stride: 112
+data_name: mou_0_224

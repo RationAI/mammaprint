@@ -1,13 +1,17 @@
 # @package _global_
 
 defaults:
-  - /default
+  - /base
+  - /data: ???
   - _self_
 
-level: 3
-max_concurrent: 100
+level: ???
+max_concurrent: 8
 mlflow_artifact_path: tissue_masks
 
 metadata:
+  experiment_name: MammaPrint
   run_name: Mammaprint Tissue Masks
   description: Generating tissue masks for mammaprint slides
+  hyperparameters:
+    level: ${level}

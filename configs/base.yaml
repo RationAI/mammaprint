@@ -3,5 +3,8 @@ defaults:
   - logger: mlflow
   - _self_
 
+mammaprint_path: /mnt/projects/mammaprint
+data_path: /mnt/data/MOU/breast/mammaprint
+
 metadata:
   experiment_name: ???

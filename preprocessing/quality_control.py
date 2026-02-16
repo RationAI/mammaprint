@@ -184,7 +184,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     output_path = Path(config.output_path)
     output_path.mkdir(exist_ok=True, parents=True)
 
-    df = pd.read_csv(config.data_mapping)
+    df = pd.read_csv(config.dataset.paths.data_mapping)
     slides = [Path(path + ".mrxs") for path in df["path"]]
 
     semaphore = asyncio.Semaphore(config.request_limit)

@@ -3,8 +3,6 @@
 dataset:
   name: full_dataset
   paths:
-    data_path: /mnt/data/MOU/breast/mammaprint
-    mammaprint_path: /mnt/projects/mammaprint
     qc_masks: ${mammaprint_path}/qc_masks
     data_mapping: ${mammaprint_path}/data_mapping.csv
   mlflow_uris:

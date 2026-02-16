@@ -160,13 +160,13 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
 
     tissue_masks_path = (
         None
-        if config.tissue_masks_uri is None
-        else download_artifacts(config.tissue_masks_uri)
+        if config.dataset.mlflow_uris.tissue_masks is None
+        else download_artifacts(config.dataset.mlflow_uris.tissue_masks)
     )
-    qc_masks_path = config.qc_masks_path or None
+    qc_masks_path = config.dataset.paths.qc_masks or None
 
     # Read slide paths from data mapping
-    slide_labels_df = pd.read_csv(config.data_mapping)
+    slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping)
     slide_labels_df["slide_path"] = slide_labels_df["path"] + ".mrxs"
     slide_paths = slide_labels_df["slide_path"].tolist()
     metadata_ds = rd.from_pandas(
