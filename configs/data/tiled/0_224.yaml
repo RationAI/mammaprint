@@ -1,0 +1,9 @@
+# @package _global_
+
+dataset:
+  name: mou_0_224
+  level: 0
+  tile_size: 224
+  uris:
+    train: mlflow-artifacts:/98/397162ddc6064e889ff6c99577c83b0a/artifacts/test_15  # MLflow URI for train dataset directory (contains slides.parquet and tiles.parquet)
+    # test: ???  # MLflow URI for test dataset directory
