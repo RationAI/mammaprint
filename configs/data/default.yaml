@@ -3,7 +3,7 @@
 dataset:
   name: full_dataset
   paths:
-    qc_masks: ${mammaprint_path}/qc_masks
-    data_mapping: ${mammaprint_path}/data_mapping.csv
+    qc_masks: ${project_path}/qc_masks
+    data_mapping: ${project_path}/data_mapping.csv
   mlflow_uris:
     tissue_masks: mlflow-artifacts:/98/aa6301ad8ae341ab935ab5325cde9369/artifacts/tissue_masks

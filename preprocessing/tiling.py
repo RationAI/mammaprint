@@ -11,7 +11,7 @@ import ray
 import ray.data as rd
 from mlflow.artifacts import download_artifacts
 from omegaconf import DictConfig
-from rationai.mlkit import autolog
+from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
 from rationai.tiling.writers import save_mlflow_dataset
 from ratiopath.ray import read_slides
@@ -148,9 +148,10 @@ def tiling(
     ]
 
 
+@with_cli_args(["+preprocessing=tiling"])
 @hydra.main(
     config_path="../configs",
-    config_name="preprocessing/tiling",
+    config_name="preprocessing",
     version_base=None,
 )
 @autolog

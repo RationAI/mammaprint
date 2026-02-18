@@ -1,10 +1,5 @@
 # @package _global_
 
-defaults:
-  - /base
-  - /data: ???
-  - _self_
-
 url: "http://rayservice-qc-serve-svc.rationai-jobs-ns.svc.cluster.local:8000/"
 
 # Concurrency settings
@@ -26,9 +21,11 @@ check_blur: true
 compute_metrics: true
 
 # Output directory for QC masks
-output_path: ${mammaprint_path}/qc_masks
+output_path: ${project_path}/qc_masks
 
 metadata:
-  experiment_name: MammaPrint
   run_name: Mammaprint QC Masks
   description: "Quality control processing for mammaprint slides"
+  hyperparams:
+    mask_level: ${mask_level}
+    sample_level: ${sample_level}

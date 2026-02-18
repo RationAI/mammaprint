@@ -13,7 +13,7 @@ submit_job(
         "git clone https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint workdir",
         "cd workdir",
         "uv sync",
-        "uv run preprocessing/quality_control.py data=???",
+        "uv run -m preprocessing.quality_control",
     ],
     storage=[storage.secure.DATA, storage.secure.PROJECTS],
 )

@@ -1,0 +1,4 @@
+defaults:
+  - base
+  - /data: default
+  - _self_

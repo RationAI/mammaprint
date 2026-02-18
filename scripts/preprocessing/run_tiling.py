@@ -12,9 +12,8 @@ submit_job(
     script=[
         "git clone https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint workdir",
         "cd workdir",
-        "git checkout feature/experiment-refactor",
         "uv sync --frozen",
-        "uv run preprocessing/tiling.py experiment/preprocessing/tiling=???",
+        "uv run -m preprocessing.tiling +experiment=preprocessing/tiling/...",
     ],
     storage=[storage.secure.DATA, storage.secure.PROJECTS],
 )
