@@ -131,6 +131,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
                 slide_tiles_y = torch.zeros((len(slide_dataset),), dtype=torch.int32)
 
                 for i, (x, metadata) in enumerate(slide_tiles_dataloader):
+                    if i * config.dataloader.batch_size >= 50:  # Stop after 50 tiles
+                        break
+
                     x = x.to(device)
                     embeddings = cast("torch.Tensor", tile_encoder(x))
 
@@ -141,10 +144,12 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
                     slide_tiles_x[start:end] = metadata["x"].to("cpu")
                     slide_tiles_y[start:end] = metadata["y"].to("cpu")
 
+                # Save only the first 50 tiles
+                num_processed = min(50, len(slide_dataset))
                 save_embeddings(
-                    slide_tiles_embeddings,
-                    slide_tiles_x,
-                    slide_tiles_y,
+                    slide_tiles_embeddings[:num_processed],
+                    slide_tiles_x[:num_processed],
+                    slide_tiles_y[:num_processed],
                     embeddings_path,
                 )
 
