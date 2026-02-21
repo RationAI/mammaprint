@@ -7,7 +7,7 @@ import hydra
 import pandas as pd
 from aiohttp import ClientSession, ClientTimeout
 from omegaconf import DictConfig
-from rationai.mlkit.autolog import autolog
+from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
 
 
@@ -175,22 +175,21 @@ async def qc_main(
             print(f"Could not upload report artifact from {report_path}")
 
 
-@hydra.main(
-    config_path="../configs", config_name="preprocessing/qc_masks", version_base=None
-)
+@with_cli_args(["+preprocessing=qc_masks"])
+@hydra.main(config_path="../configs", config_name="preprocessing", version_base=None)
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
     """Entry point for quality control preprocessing."""
     output_path = Path(config.output_path)
     output_path.mkdir(exist_ok=True, parents=True)
 
-    df = pd.read_csv(config.data_mapping)
+    df = pd.read_csv(config.dataset.paths.data_mapping)
     slides = [Path(path + ".mrxs") for path in df["path"]]
 
     semaphore = asyncio.Semaphore(config.request_limit)
 
     with tempfile.TemporaryDirectory(
-        prefix="qc_masks_report", dir=Path(config.mammaprint_path).as_posix()
+        prefix="qc_masks_report", dir=Path(config.project_path).as_posix()
     ) as tmp_dir:
         report_path = Path(tmp_dir) / "report.html"
 

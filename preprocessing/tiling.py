@@ -11,7 +11,7 @@ import ray
 import ray.data as rd
 from mlflow.artifacts import download_artifacts
 from omegaconf import DictConfig
-from rationai.mlkit import autolog
+from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
 from rationai.tiling.writers import save_mlflow_dataset
 from ratiopath.ray import read_slides
@@ -148,9 +148,10 @@ def tiling(
     ]
 
 
+@with_cli_args(["+preprocessing=tiling"])
 @hydra.main(
     config_path="../configs",
-    config_name="preprocessing/tiling",
+    config_name="preprocessing",
     version_base=None,
 )
 @autolog
@@ -160,13 +161,13 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
 
     tissue_masks_path = (
         None
-        if config.tissue_masks_uri is None
-        else download_artifacts(config.tissue_masks_uri)
+        if config.dataset.mlflow_uris.tissue_masks is None
+        else download_artifacts(config.dataset.mlflow_uris.tissue_masks)
     )
-    qc_masks_path = config.qc_masks_path or None
+    qc_masks_path = config.dataset.paths.qc_masks or None
 
     # Read slide paths from data mapping
-    slide_labels_df = pd.read_csv(config.data_mapping)
+    slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping)
     slide_labels_df["slide_path"] = slide_labels_df["path"] + ".mrxs"
     slide_paths = slide_labels_df["slide_path"].tolist()
     metadata_ds = rd.from_pandas(

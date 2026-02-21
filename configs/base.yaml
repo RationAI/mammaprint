@@ -1,0 +1,10 @@
+defaults:
+  - hydra: default
+  - logger: mlflow
+  - _self_
+
+project_path: /mnt/projects/mammaprint
+data_path: /mnt/data/MOU/breast/mammaprint
+
+metadata:
+  experiment_name: MammaPrint
