@@ -23,6 +23,8 @@ from ray.data.expressions import col
 from shapely.geometry import box
 from shapely.geometry.polygon import Polygon
 
+from preprocessing.splitting import split_dataset
+
 
 BATCH_SIZE = 256
 
@@ -239,15 +241,36 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     slides_df = slides.to_pandas()
     tiles_df = tiles.to_pandas()
 
-    save_mlflow_dataset(
-        slides=slides_df,
-        tiles=tiles_df,
-        dataset_name=config.data_name,
-    )
-
     print(
         f"\n[INFO] Generated {len(slides_df)} slide records and {len(tiles_df)} tile records\n"
     )
+
+    # Split at slide level and save each split
+    splits = {
+        "train": config.splits.train,
+        "test_preliminary": config.splits.test_preliminary,
+        "test_final": config.splits.test_final,
+    }
+    train_slides, test_preliminary_slides, test_final_slides = split_dataset(
+        slides_df, splits
+    )
+
+    for split_slides, split_name in [
+        (train_slides, "train"),
+        (test_preliminary_slides, "test_preliminary"),
+        (test_final_slides, "test_final"),
+    ]:
+        split_tiles = tiles_df[tiles_df["slide_id"].isin(split_slides["id"])]
+
+        print(
+            f"[INFO] {split_name}: {len(split_slides)} slides, {len(split_tiles)} tiles"
+        )
+
+        save_mlflow_dataset(
+            slides=split_slides,
+            tiles=split_tiles,
+            dataset_name=f"{config.data_name}_{split_name}",
+        )
 
     ray.shutdown()
 
