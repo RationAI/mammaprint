@@ -104,6 +104,7 @@ def tiling(
     row: dict[str, Any],
     tissue_masks_path: str | None,
     qc_masks_path: str | None,
+    epithelium_masks_path: str | None,
 ) -> list[dict[str, Any]]:
     """Generate tile coordinates for a single slide."""
     slide_path = Path(row["path"])
@@ -111,6 +112,12 @@ def tiling(
 
     tissue_mask = (
         str(Path(tissue_masks_path) / tiff_slide_name) if tissue_masks_path else ""
+    )
+
+    epithelium_mask = (
+        str(Path(epithelium_masks_path) / tiff_slide_name)
+        if epithelium_masks_path
+        else ""
     )
 
     if qc_masks_path:
@@ -133,6 +140,7 @@ def tiling(
             "mpp_x": row["mpp_x"],
             "mpp_y": row["mpp_y"],
             "tissue_mask_path": tissue_mask,
+            "epithelium_mask_path": epithelium_mask,
             "blur_mask_path": blur_mask,
             "folding_mask_path": folding_mask,
             "residual_mask_path": residual_mask,
@@ -163,6 +171,11 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         None
         if config.dataset.mlflow_uris.tissue_masks is None
         else download_artifacts(config.dataset.mlflow_uris.tissue_masks)
+    )
+    epithelium_masks_path = (
+        None
+        if config.dataset.mlflow_uris.epithelium_masks is None
+        else download_artifacts(config.dataset.mlflow_uris.epithelium_masks)
     )
     qc_masks_path = config.dataset.paths.qc_masks or None
 
@@ -196,7 +209,10 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # Expand slides into tile coordinates
     tiles = slides.flat_map(
         partial(
-            tiling, tissue_masks_path=tissue_masks_path, qc_masks_path=qc_masks_path
+            tiling,
+            tissue_masks_path=tissue_masks_path,
+            qc_masks_path=qc_masks_path,
+            epithelium_masks_path=epithelium_masks_path,
         ),
         num_cpus=0.2,
         memory=BATCH_SIZE * 1024**2,
@@ -222,11 +238,15 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
     )
+    tiles = add_tile_overlap(
+        tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
+    )
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
         [
             "tissue_mask_path",
+            "epithelium_mask_path",
             "blur_mask_path",
             "folding_mask_path",
             "residual_mask_path",

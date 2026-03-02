@@ -1,0 +1,15 @@
+# @package _global_
+
+dataset:
+  paths:
+    data_mapping: ???
+  mlflow_uris:
+    tissue_masks: ???
+
+max_concurrent: 4
+timeout: 3000
+model_name: episeg-1
+
+metadata:
+  run_name: Mammaprint Epithelium Masks
+  description: Generating epithelium masks for mammaprint slides
