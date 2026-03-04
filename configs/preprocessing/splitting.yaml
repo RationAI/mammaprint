@@ -1,0 +1,21 @@
+# @package _global_
+
+source_dataset_uri: ???
+data_name: ???
+
+splits:
+  train: 0.7
+  test_preliminary: 0.15
+  test_final: 0.15
+
+metadata:
+  run_name: Mammaprint Splitting ${data_name}
+  description: |
+    Split an existing tiling dataset into train / test_preliminary / test_final.
+    The split is stratified by slide type and performed at the slide level.
+    Tiles are assigned to splits based on their parent slide.
+  hyperparams:
+    source_dataset_uri: ${source_dataset_uri}
+    data_name: ${data_name}
+    seed: ${seed}
+    splits: ${splits}

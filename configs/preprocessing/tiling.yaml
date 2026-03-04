@@ -5,6 +5,11 @@ tile_extent: ???
 stride: ???
 data_name: ???
 
+splits:
+  train: 0.7
+  test_preliminary: 0.15
+  test_final: 0.15
+
 metadata:
   run_name: Mammaprint Tiling ${dataset.name}
   description: |
