@@ -1,4 +1,4 @@
-from ml.data.datasets.tiles import TilesPredict
+from ml.data.datasets.tiles import SlideDataset, TileDataset
 
 
-__all__ = ["TilesPredict"]
+__all__ = ["SlideDataset", "TileDataset"]

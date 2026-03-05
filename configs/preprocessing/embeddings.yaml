@@ -13,7 +13,7 @@ metadata:
   description: |
     Embeddings preprocessing experiment config.
     The embeddings pipeline:
-    * loads tiled dataset URIs
+    * loads tiled dataset from slides/tiles parquet files via HuggingFace datasets (lazy Arrow-backed loading)
     * initializes the tile encoder model
     * processes slides in batches through the encoder
     * saves embeddings as parquet files with tile coordinates

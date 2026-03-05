@@ -13,7 +13,7 @@ from timm.layers.mlp import SwiGLUPacked
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from ml.data.datasets import TilesPredict
+from ml.data.datasets import SlideDataset
 
 
 class Virchow2(torch.nn.Module):
@@ -41,27 +41,6 @@ class Virchow2(torch.nn.Module):
         return torch.cat([class_token, patch_tokens.mean(1)], dim=-1)  # size: B x 2560
 
 
-def load_dataset(uri: str) -> TilesPredict:
-    """Load the dataset for tile embeddings.
-
-    Assumes that the dataset has 224x224 RGB tiles.
-
-    Args:
-        uri (str): The URI of the tiled slide.
-
-    Returns:
-        TilesPredict: The dataset object for tile embeddings.
-    """
-    return TilesPredict(
-        uri,
-        transforms=A.Compose(
-            [
-                A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ]
-        ),
-    )
-
-
 def save_embeddings(
     slide_tiles_embeddings: torch.Tensor,
     slide_tiles_x: torch.Tensor,
@@ -71,10 +50,10 @@ def save_embeddings(
     """Save the slide embeddings to the specified path.
 
     Args:
-        slide_tiles_embeddings (torch.Tensor): The embeddings to save.
-        slide_tiles_x (torch.Tensor): The x-coordinates of the tiles.
-        slide_tiles_y (torch.Tensor): The y-coordinates of the tiles.
-        embeddings_path (Path): The path to save the embeddings to.
+        slide_tiles_embeddings: The embeddings to save.
+        slide_tiles_x: The x-coordinates of the tiles.
+        slide_tiles_y: The y-coordinates of the tiles.
+        embeddings_path: The path to save the embeddings to.
     """
     embeddings_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -102,7 +81,16 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tile_encoder: Virchow2 = hydra.utils.instantiate(config.tile_encoder)
     tile_encoder = tile_encoder.to(device)
 
-    for slide_name, slide_uri in tqdm(config.dataset.uris.items()):
+    dataset = SlideDataset(
+        path=config.dataset.path,
+        transforms=A.Compose(
+            [A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
+        ),
+    )
+
+    # Process each slide's tiles separately so embeddings can be saved per-slide
+    for tile_dataset in tqdm(dataset.datasets, desc="Slides"):
+        slide_name = tile_dataset.slide_path.stem
         embeddings_path = (dest / slide_name).with_suffix(".parquet")
 
         if embeddings_path.exists():
@@ -110,20 +98,20 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             continue
 
         try:
-            slide_dataset = load_dataset(slide_uri)
-            slide_tiles_dataloader = DataLoader(
-                slide_dataset,
+            dataloader = DataLoader(
+                tile_dataset,
                 batch_size=config.dataloader.batch_size,
                 num_workers=config.dataloader.num_workers,
                 persistent_workers=config.dataloader.persistent_workers,
             )
-            slide_tiles_embeddings = torch.zeros(
-                (len(slide_dataset), tile_encoder.module.embed_dim), dtype=torch.float32
-            )
-            slide_tiles_x = torch.zeros((len(slide_dataset),), dtype=torch.int32)
-            slide_tiles_y = torch.zeros((len(slide_dataset),), dtype=torch.int32)
 
-            for i, (x, metadata) in enumerate(slide_tiles_dataloader):
+            slide_tiles_embeddings = torch.zeros(
+                (len(tile_dataset), tile_encoder.module.embed_dim), dtype=torch.float32
+            )
+            slide_tiles_x = torch.zeros((len(tile_dataset),), dtype=torch.int32)
+            slide_tiles_y = torch.zeros((len(tile_dataset),), dtype=torch.int32)
+
+            for i, (x, metadata) in enumerate(dataloader):
                 x = x.to(device)
                 embeddings = cast("torch.Tensor", tile_encoder(x))
 

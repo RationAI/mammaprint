@@ -7,8 +7,8 @@ class TileMetadata(TypedDict):
     """Metadata for a tile, including its slide ID and coordinates."""
 
     slide_id: str
-    tile_x: int
-    tile_y: int
+    x: int
+    y: int
 
 
 type TilesPredictSample = tuple[Tensor, TileMetadata]
