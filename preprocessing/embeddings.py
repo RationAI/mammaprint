@@ -27,6 +27,7 @@ class Virchow2(torch.nn.Module):
             mlp_layer=SwiGLUPacked,
             act_layer=torch.nn.SiLU,
         ).eval()
+        self.embed_dim = self.module.embed_dim * 2  # class token + mean patch tokens
 
     @torch.inference_mode()
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -82,14 +83,14 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tile_encoder = tile_encoder.to(device)
 
     dataset = SlideDataset(
-        path=config.dataset.path,
+        uris=[config.dataset.path],
         transforms=A.Compose(
             [A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
         ),
     )
 
     # Process each slide's tiles separately so embeddings can be saved per-slide
-    for tile_dataset in tqdm(dataset.datasets, desc="Slides"):
+    for tile_dataset in tqdm(dataset.generate_datasets(), desc="Slides"):
         slide_name = tile_dataset.slide_path.stem
         embeddings_path = (dest / slide_name).with_suffix(".parquet")
 
@@ -106,7 +107,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             )
 
             slide_tiles_embeddings = torch.zeros(
-                (len(tile_dataset), tile_encoder.module.embed_dim), dtype=torch.float32
+                (len(tile_dataset), tile_encoder.embed_dim), dtype=torch.float32
             )
             slide_tiles_x = torch.zeros((len(tile_dataset),), dtype=torch.int32)
             slide_tiles_y = torch.zeros((len(tile_dataset),), dtype=torch.int32)
