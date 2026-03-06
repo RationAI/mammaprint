@@ -167,7 +167,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     qc_masks_path = config.dataset.paths.qc_masks or None
 
     # Read slide paths from data mapping
-    slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping)
+    slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping).iloc[:1]
     slide_labels_df["slide_path"] = slide_labels_df["path"] + ".mrxs"
     slide_paths = slide_labels_df["slide_path"].tolist()
     metadata_ds = rd.from_pandas(
