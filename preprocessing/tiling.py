@@ -23,8 +23,12 @@ from ray.data.expressions import col
 from shapely.geometry import box
 from shapely.geometry.polygon import Polygon
 
-
 BATCH_SIZE = 256
+
+
+def add_missing_epithelium_overlap(batch: DataBatch) -> DataBatch:
+    batch["epithelium_overlap"] = np.nan
+    return batch
 
 
 def add_tile_overlap(
@@ -238,9 +242,22 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
     )
-    tiles = add_tile_overlap(
-        tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
-    )
+    if epithelium_masks_path:
+        print("[INFO] Computing overlap: epithelium_overlap from epithelium_mask_path")
+        tiles = add_tile_overlap(
+            tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
+        )
+    else:
+        print(
+            "[INFO] Skipping epithelium overlap: dataset.mlflow_uris.epithelium_masks is not set"
+        )
+
+        tiles = tiles.map_batches(
+            add_missing_epithelium_overlap,
+            batch_format="pandas",
+            num_cpus=1,
+            memory=BATCH_SIZE * 8 * 512**2,
+        )
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(

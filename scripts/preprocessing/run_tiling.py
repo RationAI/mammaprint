@@ -5,8 +5,9 @@ submit_job(
     job_name="mammaprint-tiling-...",
     username=...,
     image="cerit.io/rationai/base:2.0.6",
-    cpu=8,
-    memory="32Gi",
+    cpu=16,
+    memory="64Gi",
+    shm="32Gi",
     gpu=None,
     public=False,
     script=[
