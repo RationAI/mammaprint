@@ -10,6 +10,7 @@ import pandas as pd
 import ray
 import ray.data as rd
 from mlflow.artifacts import download_artifacts
+from openslide import OpenSlide
 from omegaconf import DictConfig
 from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
@@ -25,6 +26,148 @@ from shapely.geometry.polygon import Polygon
 
 
 BATCH_SIZE = 256
+
+QC_MASK_PATTERNS = {
+    "blur_mask_path": "Piqe_piqe_median_activity_mask_{name}",
+    "folding_mask_path": "FoldingFunction_folding_test_{name}",
+    "residual_mask_path": "ResidualArtifactsAndCoverage_coverage_mask_{name}",
+}
+
+
+def build_mask_paths(
+    slide_path: str,
+    tissue_masks_path: str | None,
+    qc_masks_path: str | None,
+) -> dict[str, str]:
+    """Build all mask paths for a slide using the same naming rules as tiling."""
+    tiff_slide_name = Path(slide_path).with_suffix(".tiff").name
+    tissue_mask = (
+        str(Path(tissue_masks_path) / tiff_slide_name) if tissue_masks_path else ""
+    )
+
+    if qc_masks_path:
+        qc_path = Path(qc_masks_path)
+        blur_mask = str(
+            qc_path / QC_MASK_PATTERNS["blur_mask_path"].format(name=tiff_slide_name)
+        )
+        folding_mask = str(
+            qc_path / QC_MASK_PATTERNS["folding_mask_path"].format(name=tiff_slide_name)
+        )
+        residual_mask = str(
+            qc_path / QC_MASK_PATTERNS["residual_mask_path"].format(name=tiff_slide_name)
+        )
+    else:
+        blur_mask = ""
+        folding_mask = ""
+        residual_mask = ""
+
+    return {
+        "tissue_mask_path": tissue_mask,
+        "blur_mask_path": blur_mask,
+        "folding_mask_path": folding_mask,
+        "residual_mask_path": residual_mask,
+    }
+
+
+def log_and_validate_mask_paths(
+    slide_paths: list[str],
+    tissue_masks_path: str | None,
+    qc_masks_path: str | None,
+    max_examples: int = 20,
+) -> None:
+    """Log missing masks early and fail fast with concrete paths."""
+    print("[INFO] Mask source roots:")
+    print(
+        f"  - tissue_masks_path={tissue_masks_path} "
+        f"(exists={Path(tissue_masks_path).is_dir() if tissue_masks_path else False})"
+    )
+    print(
+        f"  - qc_masks_path={qc_masks_path} "
+        f"(exists={Path(qc_masks_path).is_dir() if qc_masks_path else False})"
+    )
+
+    rows = [
+        {
+            "slide_path": slide_path,
+            **build_mask_paths(
+                slide_path=slide_path,
+                tissue_masks_path=tissue_masks_path,
+                qc_masks_path=qc_masks_path,
+            ),
+        }
+        for slide_path in slide_paths
+    ]
+    mask_columns = [
+        "tissue_mask_path",
+        "blur_mask_path",
+        "folding_mask_path",
+        "residual_mask_path",
+    ]
+
+    broken_columns: list[str] = []
+    for column in mask_columns:
+        values = [row[column] for row in rows]
+        if all(value == "" for value in values):
+            print(f"[ERROR] {column}: no paths configured (all values are empty)")
+            broken_columns.append(column)
+            continue
+
+        unique_values = sorted(set(values))
+        non_empty = [value for value in unique_values if value]
+        missing = [value for value in non_empty if not Path(value).is_file()]
+        existing = [value for value in non_empty if Path(value).is_file()]
+        unreadable: list[tuple[str, str]] = []
+        for path in existing:
+            try:
+                with OpenSlide(path):
+                    pass
+            except Exception as exc:
+                unreadable.append((path, f"{type(exc).__name__}: {exc}"))
+
+        found_count = len(non_empty) - len(missing)
+        print(
+            f"[INFO] {column}: found {found_count}/{len(non_empty)} "
+            f"unique files across {len(rows)} slides"
+        )
+        print(
+            f"[INFO] {column}: readable_by_openslide="
+            f"{len(existing) - len(unreadable)}/{len(existing)}"
+        )
+
+        if missing:
+            broken_columns.append(column)
+            print(
+                f"[WARN] {column}: {len(missing)} missing files. "
+                f"First {min(len(missing), max_examples)} examples:"
+            )
+            for missing_path in missing[:max_examples]:
+                slide_example = next(
+                    (row["slide_path"] for row in rows if row[column] == missing_path),
+                    "<unknown-slide>",
+                )
+                print(f"  - slide={slide_example} mask={missing_path}")
+        if unreadable:
+            broken_columns.append(column)
+            print(
+                f"[WARN] {column}: {len(unreadable)} files exist but cannot be opened "
+                "with OpenSlide. "
+                f"First {min(len(unreadable), max_examples)} examples:"
+            )
+            for unreadable_path, error in unreadable[:max_examples]:
+                slide_example = next(
+                    (row["slide_path"] for row in rows if row[column] == unreadable_path),
+                    "<unknown-slide>",
+                )
+                print(
+                    f"  - slide={slide_example} mask={unreadable_path} "
+                    f"openslide_error={error}"
+                )
+
+    if broken_columns:
+        raise FileNotFoundError(
+            "Mask preflight failed for columns "
+            f"{sorted(set(broken_columns))}. See logs above for missing/unreadable files."
+        )
 
 
 def add_tile_overlap(
@@ -106,24 +249,11 @@ def tiling(
     qc_masks_path: str | None,
 ) -> list[dict[str, Any]]:
     """Generate tile coordinates for a single slide."""
-    slide_path = Path(row["path"])
-    tiff_slide_name = slide_path.with_suffix(".tiff").name
-
-    tissue_mask = (
-        str(Path(tissue_masks_path) / tiff_slide_name) if tissue_masks_path else ""
+    masks = build_mask_paths(
+        slide_path=row["path"],
+        tissue_masks_path=tissue_masks_path,
+        qc_masks_path=qc_masks_path,
     )
-
-    if qc_masks_path:
-        qc_path = Path(qc_masks_path)
-        blur_mask = str(qc_path / f"Piqe_piqe_median_activity_mask_{tiff_slide_name}")
-        folding_mask = str(qc_path / f"FoldingFunction_folding_test_{tiff_slide_name}")
-        residual_mask = str(
-            qc_path / f"ResidualArtifactsAndCoverage_coverage_mask_{tiff_slide_name}"
-        )
-    else:
-        blur_mask = ""
-        folding_mask = ""
-        residual_mask = ""
 
     return [
         {
@@ -132,10 +262,10 @@ def tiling(
             "slide_id": row["id"],
             "mpp_x": row["mpp_x"],
             "mpp_y": row["mpp_y"],
-            "tissue_mask_path": tissue_mask,
-            "blur_mask_path": blur_mask,
-            "folding_mask_path": folding_mask,
-            "residual_mask_path": residual_mask,
+            "tissue_mask_path": masks["tissue_mask_path"],
+            "blur_mask_path": masks["blur_mask_path"],
+            "folding_mask_path": masks["folding_mask_path"],
+            "residual_mask_path": masks["residual_mask_path"],
             "type": row["type"],
             "mammaprint_index": row["mammaprint_index"],
         }
@@ -170,6 +300,13 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping).iloc[:1]
     slide_labels_df["slide_path"] = slide_labels_df["path"] + ".mrxs"
     slide_paths = slide_labels_df["slide_path"].tolist()
+
+    log_and_validate_mask_paths(
+        slide_paths=slide_paths,
+        tissue_masks_path=tissue_masks_path,
+        qc_masks_path=qc_masks_path,
+    )
+
     metadata_ds = rd.from_pandas(
         slide_labels_df[["slide_path", "type", "mammaprint_index"]]
     )
@@ -211,14 +348,18 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     full_roi = box(0, 0, config.tile_extent, config.tile_extent)
 
     # Add tissue overlaps
+    print("[INFO] Computing overlap: tissue_overlap from tissue_mask_path")
     tiles = add_tile_overlap(
         tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", "0"
     )
     tiles = tiles.filter(expr=col("tissue_overlap") > 0.0)
+    print("[INFO] Computing overlap: blur_overlap from blur_mask_path")
     tiles = add_tile_overlap(tiles, full_roi, "blur_mask_path", "blur_overlap", "255")
+    print("[INFO] Computing overlap: folding_overlap from folding_mask_path")
     tiles = add_tile_overlap(
         tiles, full_roi, "folding_mask_path", "folding_overlap", "255"
     )
+    print("[INFO] Computing overlap: residual_overlap from residual_mask_path")
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
     )
