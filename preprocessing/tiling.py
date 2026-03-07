@@ -104,15 +104,6 @@ def add_tile_overlap(
     return tiles.drop_columns([overlap_struct_col])
 
 
-def _mask_path_or_empty(path: Path | str) -> str:
-    """Return the path as a string if the file exists, otherwise return empty string."""
-    p = Path(path)
-    if p.is_file():
-        return str(p)
-    print(f"[WARN] Mask file missing: {p}")
-    return ""
-
-
 def tiling(
     row: dict[str, Any],
     tissue_masks_path: str | None,
@@ -124,26 +115,20 @@ def tiling(
     tiff_slide_name = slide_path.with_suffix(".tiff").name
 
     tissue_mask = (
-        _mask_path_or_empty(Path(tissue_masks_path) / tiff_slide_name)
-        if tissue_masks_path
-        else ""
+        str(Path(tissue_masks_path) / tiff_slide_name) if tissue_masks_path else ""
     )
 
     epithelium_mask = (
-        _mask_path_or_empty(Path(epithelium_masks_path) / tiff_slide_name)
+        str(Path(epithelium_masks_path) / tiff_slide_name)
         if epithelium_masks_path
         else ""
     )
 
     if qc_masks_path:
         qc_path = Path(qc_masks_path)
-        blur_mask = _mask_path_or_empty(
-            qc_path / f"Piqe_piqe_median_activity_mask_{tiff_slide_name}"
-        )
-        folding_mask = _mask_path_or_empty(
-            qc_path / f"FoldingFunction_folding_test_{tiff_slide_name}"
-        )
-        residual_mask = _mask_path_or_empty(
+        blur_mask = str(qc_path / f"Piqe_piqe_median_activity_mask_{tiff_slide_name}")
+        folding_mask = str(qc_path / f"FoldingFunction_folding_test_{tiff_slide_name}")
+        residual_mask = str(
             qc_path / f"ResidualArtifactsAndCoverage_coverage_mask_{tiff_slide_name}"
         )
     else:
@@ -235,7 +220,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         ),
         num_cpus=0.2,
         memory=128 * 1024**2,
-    ).repartition(target_num_rows_per_block=4096)
+    ).repartition(target_num_rows_per_block=1024)
 
     # Compute masks and filter tissue tiles
     # Tissue mask checks center 50%
