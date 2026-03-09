@@ -82,7 +82,7 @@ def add_tile_overlap(
         col("mpp_y"),
     )
     tiles = tiles.with_column(
-        overlap_struct_col, overlap_struct, num_cpus=0.2, memory=256 * 1024**2
+        overlap_struct_col, overlap_struct, num_cpus=0.2, memory=512 * 1024**2
     )
 
     def extract_value(batch: DataBatch) -> DataBatch:
@@ -98,7 +98,7 @@ def add_tile_overlap(
         extract_value,
         batch_format="pandas",
         num_cpus=0.1,
-        memory=128 * 1024**2,
+        memory=256 * 1024**2,
     )
 
     return tiles.drop_columns([overlap_struct_col])
@@ -208,7 +208,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     )
 
     # Create unique slide IDs and save slide metadata
-    slides = slides.map(row_hash, num_cpus=0.1, memory=128 * 1024**2)
+    slides = slides.map(row_hash, num_cpus=0.1, memory=256 * 1024**2)
 
     # Expand slides into tile coordinates
     tiles = slides.flat_map(
@@ -219,7 +219,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             epithelium_masks_path=epithelium_masks_path,
         ),
         num_cpus=0.2,
-        memory=128 * 1024**2,
+        memory=256 * 1024**2,
     ).repartition(target_num_rows_per_block=4096)
 
     # Compute masks and filter tissue tiles
@@ -256,7 +256,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             add_missing_epithelium_overlap,
             batch_format="pandas",
             num_cpus=0.1,
-            memory=128 * 1024**2,
+            memory=256 * 1024**2,
         )
 
     # Drop unnecessary columns
