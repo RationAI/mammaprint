@@ -210,6 +210,11 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # Create unique slide IDs and save slide metadata
     slides = slides.map(row_hash, num_cpus=0.1, memory=256 * 1024**2)
 
+    # Materialize slides so the source pipeline (read + join + hash) runs once
+    # and is reused for both slides_df and the tiles pipeline.
+    slides = slides.materialize()
+    slides_df = slides.to_pandas()
+
     # Expand slides into tile coordinates
     tiles = slides.flat_map(
         partial(
@@ -235,6 +240,12 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", "0"
     )
     tiles = tiles.filter(expr=col("tissue_overlap") > 0.0)
+
+    # Materialize after tissue filter to:
+    # 1. Lock in the reduction (discard background tiles before computing remaining overlaps)
+    # 2. Break the long operator chain to prevent streaming backpressure starvation
+    tiles = tiles.materialize()
+
     tiles = add_tile_overlap(tiles, full_roi, "blur_mask_path", "blur_overlap", "255")
     tiles = add_tile_overlap(
         tiles, full_roi, "folding_mask_path", "folding_overlap", "255"
@@ -272,8 +283,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         ]
     )
 
-    # Convert Ray Datasets to pandas DataFrames
-    slides_df = slides.to_pandas()
+    # Convert tiles Ray Dataset to pandas DataFrame
     tiles_df = tiles.to_pandas()
 
     save_mlflow_dataset(
