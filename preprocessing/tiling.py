@@ -23,6 +23,8 @@ from ray.data.expressions import col
 from shapely.geometry import box
 from shapely.geometry.polygon import Polygon
 
+from preprocessing.monitor import ResourceMonitor
+
 BATCH_SIZE = 256
 
 
@@ -171,6 +173,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     if not ray.is_initialized():
         ray.init()
 
+    monitor = ResourceMonitor("/mnt/projects/mammaprint/tiling_resource_usage.csv", interval=60)
+    monitor.start()
+
     tissue_masks_path = (
         None
         if config.dataset.mlflow_uris.tissue_masks is None
@@ -194,6 +199,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     print(f"\n[INFO] Processing {len(slide_paths)} slides using Ray Data pipeline\n")
 
     # Read slides
+    monitor.log_phase("read_slides")
     slides = read_slides(
         slide_paths,
         mpp=config.mpp,
@@ -214,8 +220,10 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # and is reused for both slides_df and the tiles pipeline.
     slides = slides.materialize()
     slides_df = slides.to_pandas()
+    monitor.log_phase("slides_done", tile_count=len(slides_df))
 
     # Expand slides into tile coordinates
+    monitor.log_phase("grid_tiling")
     tiles = slides.flat_map(
         partial(
             tiling,
@@ -236,6 +244,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     full_roi = box(0, 0, config.tile_extent, config.tile_extent)
 
     # Add tissue overlaps
+    monitor.log_phase("tissue_overlap")
     tiles = add_tile_overlap(
         tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", "0"
     )
@@ -245,16 +254,24 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # 1. Lock in the reduction (discard background tiles before computing remaining overlaps)
     # 2. Break the long operator chain to prevent streaming backpressure starvation
     tiles = tiles.materialize()
+    tissue_tile_count = tiles.count()
+    monitor.log_phase("tissue_filter_done", tile_count=tissue_tile_count)
 
+    monitor.log_phase("blur_overlap", tile_count=tissue_tile_count)
     tiles = add_tile_overlap(tiles, full_roi, "blur_mask_path", "blur_overlap", "255")
+
+    monitor.log_phase("folding_overlap", tile_count=tissue_tile_count)
     tiles = add_tile_overlap(
         tiles, full_roi, "folding_mask_path", "folding_overlap", "255"
     )
+
+    monitor.log_phase("residual_overlap", tile_count=tissue_tile_count)
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
     )
+
     if epithelium_masks_path:
-        print("[INFO] Computing overlap: epithelium_overlap from epithelium_mask_path")
+        monitor.log_phase("epithelium_overlap", tile_count=tissue_tile_count)
         tiles = add_tile_overlap(
             tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
         )
@@ -284,7 +301,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     )
 
     # Convert tiles Ray Dataset to pandas DataFrame
+    monitor.log_phase("materialize_final")
     tiles_df = tiles.to_pandas()
+    monitor.log_phase("save_dataset", tile_count=len(tiles_df))
 
     save_mlflow_dataset(
         slides=slides_df,
@@ -292,9 +311,13 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         dataset_name=config.data_name,
     )
 
+    monitor.log_phase("done", tile_count=len(tiles_df))
     print(
         f"\n[INFO] Generated {len(slides_df)} slide records and {len(tiles_df)} tile records\n"
     )
+
+    monitor.stop()
+    print("[INFO] Resource usage log: /mnt/projects/mammaprint/tiling_resource_usage.csv")
 
     ray.shutdown()
 
