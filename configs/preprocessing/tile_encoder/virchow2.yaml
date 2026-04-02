@@ -1,0 +1,4 @@
+# @package _global_
+
+tile_encoder:
+  _target_: preprocessing.embeddings.Virchow2
