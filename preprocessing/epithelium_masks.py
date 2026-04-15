@@ -53,10 +53,8 @@ async def segment_epithel(
 @hydra.main(config_path="../configs", config_name="preprocessing", version_base=None)
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
-    slides_df = pd.read_csv(
-        mlflow.artifacts.download_artifacts(config.dataset.mlflow_uris.dataframe)
-    )
-    slides: list[str] = list(slides_df["slide_path"])
+    slides_df = pd.read_csv(config.dataset.paths.data_mapping)
+    slides: list[str] = [path + ".mrxs" for path in slides_df["path"]]
 
     with tempfile.TemporaryDirectory(
         prefix="episeg_", dir=config.project_path
