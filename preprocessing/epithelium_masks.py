@@ -6,7 +6,7 @@ import hydra
 import mlflow
 import pandas as pd
 from omegaconf import DictConfig
-from rationai import AsyncClient
+from rationai.client import AsyncClient
 from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
 from tqdm import tqdm
@@ -23,7 +23,7 @@ async def segment_epithel(
     sem = asyncio.Semaphore(max_concurrent)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def _bounded_process(client: AsyncClient, path: str):
+    async def _bounded_process(client: AsyncClient, path: str) -> None:
         async with sem:
             try:
                 slide_filename = Path(path).with_suffix(".tiff").name
