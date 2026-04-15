@@ -27,11 +27,12 @@ class Virchow2(torch.nn.Module):
             mlp_layer=SwiGLUPacked,
             act_layer=torch.nn.SiLU,
         ).eval()
-        self.embed_dim = self.module.embed_dim * 2  # class token + mean patch tokens
+        self.embed_dim: int = cast("int", self.module.embed_dim) * 2
+        # class token + mean patch tokens
 
     @torch.inference_mode()
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output = self.module(x)  # size: B x 261 x 1280
+        output = cast("torch.Tensor", self.module(x))  # size: B x 261 x 1280
 
         class_token = output[:, 0]  # size: B x 1280
         patch_tokens = output[
