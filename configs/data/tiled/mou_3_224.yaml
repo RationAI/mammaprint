@@ -1,0 +1,11 @@
+# @package _global_
+
+dataset:
+  name: mou_3_224
+  mpp: 1.94
+  tile_extent: 224
+  level: 3
+  uris:
+    train: "mlflow-artifacts:/3/e0f0170be75241d095446a33202edb95/artifacts/mou_3_224_train"
+    val: "mlflow-artifacts:/3/e0f0170be75241d095446a33202edb95/artifacts/mou_3_224_val"
+    test: "mlflow-artifacts:/3/e0f0170be75241d095446a33202edb95/artifacts/mou_3_224_test"
