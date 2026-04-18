@@ -69,6 +69,14 @@ def save_embeddings(
     df.to_parquet(embeddings_path, index=False, engine="pyarrow")
 
 
+def resolve_dataset_uris(config: DictConfig) -> list[str]:
+    """Resolve tiled dataset URIs from Hydra config."""
+    if config.dataset.get("uris") is not None:
+        return [str(uri) for uri in config.dataset.uris.values()]
+
+    raise ValueError("Embeddings preprocessing requires `dataset.uris`.")
+
+
 @with_cli_args(["+preprocessing=embeddings"])
 @hydra.main(
     config_path="../configs",
@@ -83,7 +91,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tile_encoder = tile_encoder.to(device)
 
     dataset = SlideDataset(
-        uris=[config.dataset.path],
+        uris=resolve_dataset_uris(config),
         transforms=A.Compose(
             [A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))]
         ),
