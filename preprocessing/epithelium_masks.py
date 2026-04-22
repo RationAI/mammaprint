@@ -54,7 +54,7 @@ async def segment_epithel(
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
     slides_df = pd.read_csv(config.dataset.paths.data_mapping)
-    slides: list[str] = [path + ".mrxs" for path in slides_df["path"]]
+    slides: list[str] = slides_df.apply(lambda x: x["path"] + ".mrxs", axis=1).tolist()
 
     with tempfile.TemporaryDirectory(
         prefix="episeg_", dir=config.project_path
