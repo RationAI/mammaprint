@@ -1,5 +1,6 @@
 """Script for creating slides and tiles datasets for mammaprint prediction using Ray Data."""
 
+import os
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -24,7 +25,48 @@ from shapely.geometry import box
 from shapely.geometry.polygon import Polygon
 
 
-BATCH_SIZE = 256
+# Rows per block after the tiling flat_map. Larger blocks amortize Ray's per-block
+# scheduling overhead and the per-batch mask file-open in the overlap UDFs (one open per
+# (mask, block) instead of one per 256 tiles), at the cost of more object-store memory per
+# block. Kept well within the object store sized below.
+BATCH_SIZE = 4096
+
+# Fraction of the pod's memory to give Ray's object store when RAY_MEMORY_BYTES is set.
+# The rest is left for Ray's heap and the Python worker processes.
+RAY_OBJECT_STORE_FRACTION = 0.4
+
+
+def _ray_init_kwargs() -> dict[str, Any]:
+    """Build ``ray.init`` sizing kwargs from the pod's resources.
+
+    On the K8s cluster ``ray.init()`` auto-detection was unreliable: it over-detected CPUs
+    (saw the 192-core node instead of the pod's cgroup limit) and under-sized the object
+    store (~9.5 GiB), which backpressured the repartition queue and collapsed the
+    overlap+filter stage to a single task.
+
+    To avoid duplicating the pod's resource numbers, the launcher
+    (``scripts/preprocessing/run_tiling.py``) exports them as environment variables derived
+    from its own ``submit_job(cpu=..., memory=...)`` args:
+
+    * ``RAY_NUM_CPUS`` -- number of CPUs to give Ray.
+    * ``RAY_MEMORY_BYTES`` -- the pod's total memory in bytes; the object store is sized as
+      a fraction of it.
+
+    When unset (e.g. a plain local run), we fall back to Ray's own auto-detection for both.
+    """
+    kwargs: dict[str, Any] = {}
+
+    num_cpus = os.environ.get("RAY_NUM_CPUS")
+    if num_cpus:
+        kwargs["num_cpus"] = int(float(num_cpus))
+
+    memory_bytes = os.environ.get("RAY_MEMORY_BYTES")
+    if memory_bytes:
+        # Fraction of pod memory for the object store. The rest is left for Ray's heap and
+        # the Python worker processes. Capped by /dev/shm at the pod level (see run_tiling.py).
+        kwargs["object_store_memory"] = int(float(memory_bytes) * RAY_OBJECT_STORE_FRACTION)
+
+    return kwargs
 
 
 def add_missing_epithelium_overlap(batch: DataBatch) -> DataBatch:
@@ -93,9 +135,9 @@ def add_tile_overlap(
         col("mpp_x"),
         col("mpp_y"),
     )
-    tiles = tiles.with_column(
-        overlap_struct_col, overlap_struct, num_cpus=1, memory=BATCH_SIZE * 8 * 512**2
-    )
+    # num_cpus=1 so Ray schedules one task per core across the pod. Without it the fused
+    # overlap+filter operator ran with a single task and left 47 of 48 cores idle.
+    tiles = tiles.with_column(overlap_struct_col, overlap_struct, num_cpus=1)
 
     def extract_value(batch: DataBatch) -> DataBatch:
         def score(s: Any) -> float:
@@ -114,7 +156,6 @@ def add_tile_overlap(
         extract_value,
         batch_format="pandas",
         num_cpus=1,
-        memory=BATCH_SIZE * 8 * 512**2,
     )
 
     return tiles.drop_columns([overlap_struct_col])
@@ -185,7 +226,7 @@ def tiling(
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
     if not ray.is_initialized():
-        ray.init()
+        ray.init(**_ray_init_kwargs())
 
     tissue_masks_path = (
         None
@@ -223,8 +264,13 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         join_type="left_outer",
     )
 
-    # Create unique slide IDs and save slide metadata
-    slides = slides.map(row_hash, num_cpus=0.1, memory=128 * 1024**2)
+    # Create unique slide IDs and save slide metadata.
+    # Fractional num_cpus so these cheap coordinate-generation stages don't win Ray's
+    # per-operator CPU reservation. Ray's ReservationOpResourceAllocator prioritizes upstream
+    # operators, so without a cap row_hash/tiling grabbed ~22 of 48 CPUs and starved the
+    # expensive downstream overlap+filter stage to a single task while its input queue backed
+    # up. Keeping these sub-1.0 leaves the CPU budget for the mask-reading UDFs (num_cpus=1).
+    slides = slides.map(row_hash, num_cpus=0.1)
 
     # Expand slides into tile coordinates
     tiles = slides.flat_map(
@@ -234,8 +280,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             qc_masks_path=qc_masks_path,
             epithelium_masks_path=epithelium_masks_path,
         ),
-        num_cpus=0.2,
-        memory=BATCH_SIZE * 1024**2,
+        num_cpus=0.25,
     ).repartition(target_num_rows_per_block=BATCH_SIZE)
 
     # Compute masks and filter tissue tiles
@@ -250,18 +295,39 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # [0, 255] where 0 = clean/background and any non-zero = foreground/artifact (per the QC docs).
     # tissue/epithelium keep the non-zero (foreground) fraction; the QC artifact masks keep the
     # zero (clean) fraction. See scripts/notebooks/mask_coverage_threshold.ipynb for the evidence.
+    #
+    # We compute each overlap and immediately filter on it, rather than computing all overlaps up
+    # front and filtering at the end. The final result is identical (the keep set is the AND of all
+    # thresholds), but interleaving means a tile discarded by an early gate never pays for the
+    # remaining mask reads. Only ~2.5% of tiles survive, so this roughly halves total overlap work.
+    # Thresholds come from the experiment config (see configs/experiment/preprocessing/tiling/*.yaml)
+    # and the coverage distributions in scripts/notebooks/mask_coverage_threshold.ipynb: a moderate
+    # tissue gate, and lenient artifact-only QC cutoffs (they only remove damaged tissue).
+    #
+    # Order matters for speed (not for the result): the tissue gate runs first because it is both the
+    # most selective and the cheapest (center-50% ROI = smallest region read).
     tiles = add_tile_overlap(
         tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", keep="nonzero"
     )
+    tiles = tiles.filter(expr=col("tissue_overlap") > config.tissue_threshold)
+
     tiles = add_tile_overlap(
         tiles, full_roi, "blur_mask_path", "blur_overlap", keep="zero"
     )
+    tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+
     tiles = add_tile_overlap(
         tiles, full_roi, "folding_mask_path", "folding_overlap", keep="zero"
     )
+    tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
     )
+    tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
+
+    # Epithelium is computed but NOT filtered here (that mask is not always populated; add a cutoff
+    # once it is, by desired tumor purity). Computed last so it only runs on the surviving tiles.
     if epithelium_masks_path:
         print("[INFO] Computing overlap: epithelium_overlap from epithelium_mask_path")
         tiles = add_tile_overlap(
@@ -280,16 +346,6 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             add_missing_epithelium_overlap,
             batch_format="pandas",
         )
-
-    # Filter tiles by mask coverage. Thresholds come from the experiment config (see
-    # configs/experiment/preprocessing/tiling/*.yaml) and were chosen from the coverage
-    # distributions in scripts/notebooks/mask_coverage_threshold.ipynb: a moderate tissue gate, and
-    # lenient artifact-only QC cutoffs (they only remove damaged tissue). Epithelium is not filtered
-    # here because that mask is not always populated; add a cutoff once it is, by desired tumor purity.
-    tiles = tiles.filter(expr=col("tissue_overlap") > config.tissue_threshold)
-    tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
-    tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
-    tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
