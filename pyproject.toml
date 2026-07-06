@@ -14,7 +14,7 @@ dependencies = [
     "hydra-core>=1.3.2",
     "lightning>=2.5.5",
     "omegaconf>=2.3.0",
-    "rationai-mlkit",
+    "rationai-mlkit>=0.4.1",
     "rationai-masks>=1.1.1",
     "rationai-tiling>=1.1.1",
     "ratiopath>=1.2.0",
