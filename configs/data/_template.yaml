@@ -1,0 +1,35 @@
+# @package _global_
+# Parent "shape" for the data layer: DataModule wiring + mandatory fields the
+# selected cards must fill. A data/sources/* selector pulls this in plus one or
+# more data/tiled/* cards (which populate dataset.levels). The datamodule reads the
+# whole dataset.levels map; a one-entry map is the single-scale case.
+dataset:
+  levels: ???            # filled by the selected data/tiled/* card(s)
+  data_mapping: ${project_path}/data_mapping.csv
+
+datamodule:
+  _target_: ml.data.DataModule
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  # data_mapping/levels/label_mode are defined once above (dataset.*) and referenced
+  # per split; only `split` differs. Each split is a separate dataset construction.
+  train:
+    _target_: ml.data.PyramidSlideDataset
+    split: train
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    label_mode: ${label_mode}
+  val:
+    _target_: ml.data.PyramidSlideDataset
+    split: val
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    label_mode: ${label_mode}
+  test:
+    _target_: ml.data.PyramidSlideDataset
+    split: test
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    label_mode: ${label_mode}
