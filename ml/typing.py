@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import TypedDict
 
 from torch import Tensor
@@ -21,16 +22,18 @@ class SlideMetadata(TypedDict):
 
 
 class LevelSpec(TypedDict):
-    """One pyramid level's data card: physical facts + artifact location.
+    """One pyramid level's data card: physical facts + per-split artifact locations.
 
     Authored once per preprocessing artifact (a ``configs/data/tiled/*.yaml`` card).
-    ``uris`` points at the embedding artifact; ``raw_uris`` (optional) at the
-    raw-tile artifact for the OpenSlide path.
+    ``uris`` maps ``split -> embedding artifact URI`` (``train``/``val``/``test``);
+    ``raw_uris`` (optional) does the same for the raw-tile artifact. Per-split URIs
+    because the split is materialised into physically separate artifacts by
+    ``scripts/preprocessing/split_dataset.py``.
     """
 
     mpp: float
     tile_extent: int
-    uris: str
+    uris: Mapping[str, str]
 
 
 type Bag = Tensor
@@ -46,8 +49,14 @@ level-2 tiles that zoom into the same footprint.
 type MultiScaleBag = list[Region]
 """A slide as a list of aligned multi-scale regions (variable length)."""
 
+type AnyBag = Bag #| MultiScaleBag
+"""Either a flat single-level bag or a multi-scale bag."""
+
 type MILSample = tuple[Bag, Tensor, SlideMetadata]
 """A single-level slide-level training sample: ``(bag, label, metadata)``."""
 
 type MultiScaleSample = tuple[MultiScaleBag, Tensor, SlideMetadata]
 """A multi-scale slide-level training sample: ``(regions, label, metadata)``."""
+
+type AnySample = MILSample #| MultiScaleSample
+"""Either a single-level or a multi-scale training sample."""
