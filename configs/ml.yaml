@@ -1,6 +1,13 @@
-
 defaults:
   - base
   - _self_
+  # A +experiment config selects the data source (data/sources/*) and model pieces.
 
 seed: ${random_seed:}
+
+# Task shape — set per experiment; consumed by the ml/head + ml/metrics configs.
+label_mode: type  # "type" (classification) or "index" (regression)
+num_classes: 2
+feature_dim: ???  # tile-feature width = encoder.out_dim; set per experiment
+
+# datamodule / ml / trainer are composed by the +experiment config's defaults.
