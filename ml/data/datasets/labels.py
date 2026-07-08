@@ -27,7 +27,7 @@ def process_slides(slides: pd.DataFrame, mode: LabelMode | None = None) -> pd.Da
             slides["type_label"] = slides["type"].map(_map_luminal_type)
         case LabelMode.INDEX:
             slides = slides.copy()
-            slides["index"] = slides["index"].astype(float)
+            slides["mammaprint_index"] = slides["mammaprint_index"].astype(float)
 
     slides["name"] = slides["path"].apply(lambda x: Path(x).stem)
     return slides
@@ -38,7 +38,7 @@ def get_label(slide_metadata: pd.Series, mode: LabelMode) -> torch.Tensor:
         case LabelMode.TYPE:
             return torch.tensor(int(slide_metadata["type_label"])).long()
         case LabelMode.INDEX:
-            return torch.tensor(float(slide_metadata["index"])).float()
+            return torch.tensor(float(slide_metadata["mammaprint_index"])).float()
 
     raise ValueError(f"Unsupported label mode: {mode}")
 
@@ -48,6 +48,6 @@ def get_target_column(mode: LabelMode) -> str:
         case LabelMode.TYPE:
             return "type_label"
         case LabelMode.INDEX:
-            return "index"
+            return "mammaprint_index"
 
     raise ValueError(f"Unsupported label mode: {mode}")
