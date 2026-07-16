@@ -2,7 +2,7 @@
 
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import hydra
 import numpy as np
@@ -32,17 +32,29 @@ def add_tile_overlap(
     roi: Polygon,
     path_col: str,
     overlap_col: str,
-    struct_field: str,
+    keep: Literal["zero", "nonzero"],
+    background: str = "0",
 ) -> Dataset:
-    """Compute per-tile overlap score against a mask overlay.
+    """Compute a per-tile coverage score against a mask overlay.
 
-    This helper uses `tile_overlay_overlap` to compute, for each tile,
-    how much of the given ROI (tile sub-region) overlaps a binary mask.
+    This helper uses `tile_overlay_overlap` to obtain, for each tile, the fraction of the ROI
+    covered by every distinct pixel value in the mask, then reduces it to a single score in
+    ``[0, 1]`` where **higher = keep**.
 
-    The mask file path is read from the column ``path_col`` in the Ray Dataset. The
-    function expects the dataset to contain tile coordinates and microns-per-pixel columns
-    (``tile_x``, ``tile_y``, ``mpp_x``, ``mpp_y``), as produced by the upstream tiling
-    pipeline.
+    The masks are downsampled to a continuous ``[0, 255]`` range (they are NOT strictly binary):
+    the background/clean pixel value is ``0`` and *any* non-zero value marks foreground (tissue) or
+    an artifact, depending on the mask. Two reductions are therefore supported via ``keep``:
+
+    * ``keep="nonzero"`` (tissue/epithelium): score = fraction of non-zero pixels = foreground
+      coverage. Keep tiles with a lot of tissue/epithelium.
+    * ``keep="zero"`` (QC artifact masks: blur/folding/residual): score = fraction of ``0`` pixels =
+      clean fraction. Keep tiles that are mostly artifact-free.
+
+    In both cases a downstream ``overlap > threshold`` filter keeps the desirable tiles.
+
+    The mask file path is read from the column ``path_col`` in the Ray Dataset. The function expects
+    the dataset to contain tile coordinates and microns-per-pixel columns (``tile_x``, ``tile_y``,
+    ``mpp_x``, ``mpp_y``), as produced by the upstream tiling pipeline.
 
     Parameters
     ----------
@@ -54,14 +66,12 @@ def add_tile_overlap(
     path_col:
         Column name containing the mask image path for each tile.
     overlap_col:
-        Name of the output column to store the computed overlap score in [0, 1].
-    struct_field:
-        The pixel value (as string: "0" or "255") in the binary mask representing the
-        undesired artifact or background. The mask contains only values 0 and 255.
-        The overlap is computed as ``1 - (fraction of pixels with this value)``, yielding
-        the fraction of desired (non-artifact) pixels.
-        For example, when folding masks have folds as white (255), pass "255" to compute
-        the amount of non-folded tissue.
+        Name of the output column to store the computed score in [0, 1].
+    keep:
+        Which pixels count as desirable: ``"zero"`` scores the clean (background) fraction,
+        ``"nonzero"`` scores the foreground fraction.
+    background:
+        Pixel value (as string) of the clean/background class. Defaults to ``"0"``.
 
     Returns:
     -------
@@ -82,12 +92,16 @@ def add_tile_overlap(
     )
 
     def extract_value(batch: DataBatch) -> DataBatch:
-        batch[overlap_col] = np.array(
-            [
-                1.0 - (s.get(struct_field, 1.0) or 1.0) if isinstance(s, dict) else 0.0
-                for s in batch[overlap_struct_col]
-            ]
-        )
+        def score(s: Any) -> float:
+            # No mask / no readable pixels in the ROI -> score 0 so the tile is dropped.
+            if not isinstance(s, dict) or not s:
+                return 0.0
+            # Fraction of clean/background (== background value) pixels in the ROI.
+            zero_fraction = s.get(background, 0.0) or 0.0
+            # keep="zero": clean fraction; keep="nonzero": foreground (1 - clean) fraction.
+            return zero_fraction if keep == "zero" else 1.0 - zero_fraction
+
+        batch[overlap_col] = np.array([score(s) for s in batch[overlap_struct_col]])
         return batch
 
     tiles = tiles.map_batches(
@@ -226,21 +240,35 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # Full tile
     full_roi = box(0, 0, config.tile_extent, config.tile_extent)
 
-    # Add tissue overlaps
+    # Add coverage scores (all in [0, 1], higher = keep). The masks are downsampled continuous
+    # [0, 255] where 0 = clean/background and any non-zero = foreground/artifact (per the QC docs).
+    # tissue/epithelium keep the non-zero (foreground) fraction; the QC artifact masks keep the
+    # zero (clean) fraction. See scripts/notebooks/mask_coverage_threshold.ipynb for the evidence.
     tiles = add_tile_overlap(
-        tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", "0"
-    )
-    tiles = tiles.filter(expr=col("tissue_overlap") > 0.0)
-    tiles = add_tile_overlap(tiles, full_roi, "blur_mask_path", "blur_overlap", "255")
-    tiles = add_tile_overlap(
-        tiles, full_roi, "folding_mask_path", "folding_overlap", "255"
+        tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", keep="nonzero"
     )
     tiles = add_tile_overlap(
-        tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
+        tiles, full_roi, "blur_mask_path", "blur_overlap", keep="zero"
     )
     tiles = add_tile_overlap(
-        tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
+        tiles, full_roi, "folding_mask_path", "folding_overlap", keep="zero"
     )
+    tiles = add_tile_overlap(
+        tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
+    )
+    tiles = add_tile_overlap(
+        tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", keep="nonzero"
+    )
+
+    # Filter tiles by mask coverage. Thresholds come from the experiment config (see
+    # configs/experiment/preprocessing/tiling/*.yaml) and were chosen from the coverage
+    # distributions in scripts/notebooks/mask_coverage_threshold.ipynb: a moderate tissue gate, and
+    # lenient artifact-only QC cutoffs (they only remove damaged tissue). Epithelium is not filtered
+    # here because that mask is not always populated; add a cutoff once it is, by desired tumor purity.
+    tiles = tiles.filter(expr=col("tissue_overlap") > config.tissue_threshold)
+    tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+    tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+    tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
