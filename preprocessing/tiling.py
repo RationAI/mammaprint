@@ -226,21 +226,34 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # Full tile
     full_roi = box(0, 0, config.tile_extent, config.tile_extent)
 
-    # Add tissue overlaps
+    # Add overlaps. Every *_overlap is "fraction of desired (clean) pixels", so higher = cleaner
+    # and each filter below keeps tiles with overlap above a threshold. struct_field is the
+    # UNDESIRED pixel value (masks are binary 0/255). folding uses "0" and residual "255" because
+    # their masks encode the artifact with the opposite value from blur/tissue; the earlier
+    # settings ("255"/"0") stored these two columns inverted (verified via the coverage notebook).
     tiles = add_tile_overlap(
         tiles, tissue_roi, "tissue_mask_path", "tissue_overlap", "0"
     )
-    tiles = tiles.filter(expr=col("tissue_overlap") > 0.0)
     tiles = add_tile_overlap(tiles, full_roi, "blur_mask_path", "blur_overlap", "255")
     tiles = add_tile_overlap(
-        tiles, full_roi, "folding_mask_path", "folding_overlap", "255"
+        tiles, full_roi, "folding_mask_path", "folding_overlap", "0"
     )
     tiles = add_tile_overlap(
-        tiles, full_roi, "residual_mask_path", "residual_overlap", "0"
+        tiles, full_roi, "residual_mask_path", "residual_overlap", "255"
     )
     tiles = add_tile_overlap(
         tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", "0"
     )
+
+    # Filter tiles by mask coverage. Thresholds come from the experiment config (see
+    # configs/experiment/preprocessing/tiling/*.yaml) and were chosen from the coverage
+    # distributions in scripts/notebooks/mask_coverage_threshold.ipynb: a moderate tissue gate, and
+    # lenient artifact-only QC cutoffs (they only remove damaged tissue). Epithelium is not filtered
+    # here because that mask is not always populated; add a cutoff once it is, by desired tumor purity.
+    tiles = tiles.filter(expr=col("tissue_overlap") > config.tissue_threshold)
+    tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+    tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+    tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
