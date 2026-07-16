@@ -1,0 +1,3 @@
+# @package ml.metrics
+f1:
+  _target_: torchmetrics.classification.BinaryF1Score

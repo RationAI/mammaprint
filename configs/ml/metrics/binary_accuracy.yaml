@@ -1,0 +1,3 @@
+# @package ml.metrics
+accuracy:
+  _target_: torchmetrics.classification.BinaryAccuracy

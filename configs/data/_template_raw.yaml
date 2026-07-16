@@ -1,11 +1,11 @@
 # @package _global_
-# Single-scale data shape: DataModule over SingleScaleDataset (flat embedding bags).
-# A data/sources/* selector pulls this in plus ONE data/tiled/* card (one level).
-# The dataset spec is written ONCE (the &dataset anchor on `train`); val/test merge
-# it and override only `split`. Splits are built lazily per stage in DataModule.setup.
+# Raw-tile data shape: DataModule over RawTileSlideDataset (image bags).
+# A data/sources/* selector pulls this in plus ONE data/tiled/* card (with raw_uris).
+# Dataset spec written once (&dataset on `train`); val/test override only `split`.
 dataset:
   levels: ???            # filled by the selected data/tiled/* card
   data_mapping: ${project_path}/data_mapping.csv
+  max_tiles: 256         # per-slide tile cap (random-sampled if exceeded)
 
 datamodule:
   _target_: ml.data.DataModule
@@ -14,11 +14,13 @@ datamodule:
   pin_memory: false
   persistent_workers: false
   train: &dataset
-    _target_: ml.data.SingleScaleDataset
+    _target_: ml.data.RawTileSlideDataset
     split: train
     levels: ${dataset.levels}
     data_mapping: ${dataset.data_mapping}
     label_mode: ${label_mode}
+    max_tiles: ${dataset.max_tiles}
+    seed: ${seed}
   val:
     <<: *dataset
     split: val

@@ -1,4 +1,0 @@
-# @package ml.metrics
-auroc:
-  _target_: torchmetrics.classification.MulticlassAUROC
-  num_classes: ${num_classes}

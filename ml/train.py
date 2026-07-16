@@ -1,12 +1,15 @@
-"""Training entrypoint for MammaPrint MIL models.
+"""Entrypoint for MammaPrint MIL models — train / validate / test / predict.
 
 Mirrors the preprocessing entrypoints: Hydra composes the config, ``@autolog``
 sets up MLflow logging, and every object (datamodule, module, trainer) is built
-with :func:`hydra.utils.instantiate`.
+with :func:`hydra.utils.instantiate`. The Lightning stage is selected by
+``config.mode`` (``fit``/``validate``/``test``/``predict``), and ``config.checkpoint``
+optionally resumes / loads weights.
 
 Run with, e.g.::
 
-    uv run -m ml.train +experiment=ml/train_mil_embeddings
+    uv run -m ml.train +experiment=ml/train_mil_embeddings            # fit (default)
+    uv run -m ml.train +experiment=ml/train_mil_embeddings mode=test checkpoint=/path/best.ckpt
 """
 
 import random
@@ -26,11 +29,16 @@ OmegaConf.register_new_resolver(
 @hydra.main(config_path="../configs", config_name="ml", version_base=None)
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
-    datamodule = hydra.utils.instantiate(config.datamodule)
+    # _recursive_=False: keep the per-split dataset nodes as DictConfig so the
+    # DataModule can instantiate them lazily per stage in setup().
+    datamodule = hydra.utils.instantiate(config.datamodule, _recursive_=False)
     module = hydra.utils.instantiate(config.ml)
     trainer = hydra.utils.instantiate(config.trainer, logger=logger)
 
-    trainer.fit(module, datamodule=datamodule)
+    # config.mode selects the Lightning stage (fit/validate/test/predict);
+    # config.checkpoint (or null) resumes training / loads weights for eval.
+    run_stage = getattr(trainer, config.mode)
+    run_stage(module, datamodule=datamodule, ckpt_path=config.checkpoint)
 
 
 if __name__ == "__main__":

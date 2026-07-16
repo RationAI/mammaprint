@@ -1,0 +1,3 @@
+# @package ml.metrics
+specificity:
+  _target_: torchmetrics.classification.BinarySpecificity
