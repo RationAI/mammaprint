@@ -6,5 +6,5 @@ dataset:
     qc_masks: ${project_path}/qc_masks
     data_mapping: ${project_path}/data_mapping.csv
   mlflow_uris:
-    tissue_masks: mlflow-artifacts:/98/aa6301ad8ae341ab935ab5325cde9369/artifacts/tissue_masks
+    tissue_masks: mlflow-artifacts:/3/1d67612f123e46f6a3c6183257106512/artifacts/tissue_masks
     epithelium_masks: null
