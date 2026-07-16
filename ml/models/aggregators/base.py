@@ -20,18 +20,16 @@ from abc import ABC, abstractmethod
 
 from torch import Tensor, nn
 
-from ml.typing import Bag, MultiScaleBag
 
-
-class Aggregator[InputT: (Bag, MultiScaleBag)](nn.Module, ABC):
+class Aggregator[InputT](nn.Module, ABC):
     """Reduces one slide's tiles to a single slide vector.
 
-    Generic over its input type: flat aggregators specialise as ``Aggregator[Bag]``
-    (a tile tensor ``(N, D)``), and multi-scale aggregators as
-    ``Aggregator[MultiScaleBag]`` (a list of aligned regions). Implementations
-    return the pooled vector and, optionally, weights (``None`` for parameter-free
-    poolings such as mean/max), surfaced for interpretability (e.g. heatmaps) and
-    not required by the training loop.
+    Generic (unbounded) over its input type so this base stays single-level-safe
+    (it references no multilevel type): flat aggregators specialise as
+    ``Aggregator[Bag]`` (a tile tensor ``(N, D)``), and the optional multi-scale
+    aggregator as ``Aggregator[MultiScaleBag]`` (a list of aligned regions).
+    Implementations return the pooled vector and, optionally, weights (``None`` for
+    parameter-free poolings such as mean/max), surfaced for interpretability.
     """
 
     @property
