@@ -36,27 +36,26 @@ class LevelSpec(TypedDict):
     uris: Mapping[str, str]
 
 
+# ── Single-level types (always shipped) ──────────────────────────────────────
 type Bag = Tensor
 """A bag of per-slide items: tile features ``(N, D)`` or raw tiles ``(N, C, H, W)``."""
-
-type Region = dict[int, Tensor]
-"""One aligned multi-scale region: level -> that level's tiles ``(K_level, D)``.
-
-For example ``{3: (1, D), 2: (4, D)}`` is one coarse level-3 tile with the four
-level-2 tiles that zoom into the same footprint.
-"""
-
-type MultiScaleBag = list[Region]
-"""A slide as a list of aligned multi-scale regions (variable length)."""
-
-type AnyBag = Bag #| MultiScaleBag
-"""Either a flat single-level bag or a multi-scale bag."""
 
 type MILSample = tuple[Bag, Tensor, SlideMetadata]
 """A single-level slide-level training sample: ``(bag, label, metadata)``."""
 
-type MultiScaleSample = tuple[MultiScaleBag, Tensor, SlideMetadata]
-"""A multi-scale slide-level training sample: ``(regions, label, metadata)``."""
 
-type AnySample = MILSample #| MultiScaleSample
-"""Either a single-level or a multi-scale training sample."""
+# ── Multilevel types (comment out this block to ship single-level only) ───────
+# Nothing single-level references these; the multilevel dataset/aggregator are the
+# only consumers, so removing/commenting them here + their imports drops multilevel.
+# type Region = dict[int, Tensor]
+# """One aligned multi-scale region: level -> that level's tiles ``(K_level, D)``.
+
+# For example ``{3: (1, D), 2: (4, D)}`` is one coarse level-3 tile with the four
+# level-2 tiles that zoom into the same footprint.
+# """
+
+# type MultiScaleBag = list[Region]
+# """A slide as a list of aligned multi-scale regions (variable length)."""
+
+# type MultiScaleSample = tuple[MultiScaleBag, Tensor, SlideMetadata]
+# """A multi-scale slide-level training sample: ``(regions, label, metadata)``."""

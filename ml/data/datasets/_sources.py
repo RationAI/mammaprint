@@ -61,4 +61,27 @@ def available_slides(dirs: Mapping[int, Path]) -> set[str]:
     return set.intersection(*per_level) if dirs else set()
 
 
-__all__ = ["available_slides", "download_level_sources", "load_labeled_slides"]
+def split_uri(card: Mapping[str, object], key: str, split: str, level: int) -> str:
+    """Read a level card's per-split artifact URI (``card[key][split]``).
+
+    Raises a clear error if the card lacks the URI map or the requested split.
+    """
+    uris = card.get(key)
+    if not isinstance(uris, Mapping):
+        raise KeyError(
+            f"Level {level} data card is missing a '{key}' split->URI map."
+        )
+    uri = uris.get(split)
+    if not isinstance(uri, str):
+        raise KeyError(
+            f"Level {level} data card '{key}' has no URI for split '{split}'."
+        )
+    return uri
+
+
+__all__ = [
+    "available_slides",
+    "download_level_sources",
+    "load_labeled_slides",
+    "split_uri",
+]
