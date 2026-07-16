@@ -27,6 +27,12 @@ from shapely.geometry.polygon import Polygon
 BATCH_SIZE = 256
 
 
+def add_missing_epithelium_overlap(batch: DataBatch) -> DataBatch:
+    """Fill a NaN ``epithelium_overlap`` when no epithelium mask is configured."""
+    batch["epithelium_overlap"] = np.nan
+    return batch
+
+
 def add_tile_overlap(
     tiles: Dataset,
     roi: Polygon,
@@ -256,9 +262,24 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     tiles = add_tile_overlap(
         tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
     )
-    tiles = add_tile_overlap(
-        tiles, full_roi, "epithelium_mask_path", "epithelium_overlap", keep="nonzero"
-    )
+    if epithelium_masks_path:
+        print("[INFO] Computing overlap: epithelium_overlap from epithelium_mask_path")
+        tiles = add_tile_overlap(
+            tiles,
+            full_roi,
+            "epithelium_mask_path",
+            "epithelium_overlap",
+            keep="nonzero",
+        )
+    else:
+        print(
+            "[INFO] Skipping epithelium overlap: "
+            "dataset.mlflow_uris.epithelium_masks is not set"
+        )
+        tiles = tiles.map_batches(
+            add_missing_epithelium_overlap,
+            batch_format="pandas",
+        )
 
     # Filter tiles by mask coverage. Thresholds come from the experiment config (see
     # configs/experiment/preprocessing/tiling/*.yaml) and were chosen from the coverage
