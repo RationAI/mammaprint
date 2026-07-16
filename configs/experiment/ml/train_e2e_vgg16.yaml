@@ -1,0 +1,39 @@
+# @package _global_
+# End-to-end classification: VGG16 backbone over raw level-3 tiles -> mean-pool
+# -> linear head. Reads tile images via RawTileSlideDataset (OpenSlide).
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: vgg16
+  - /ml/aggregator@ml.aggregator: mean
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: bce
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - binary_accuracy
+      - binary_auroc
+      - binary_f1
+      - binary_precision
+      - binary_recall
+      - binary_specificity
+      - binary_cohen_kappa
+  - /trainer: default
+  - /data/sources: single_l3_tiled
+  - _self_
+
+label_mode: type
+feature_dim: 512  # VGG16 global-max-pooled feature size
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: End-to-end VGG16 — luminal classification (raw tiles)
+  description: |
+    End-to-end luminal classification with a VGG16 backbone over raw tiles and
+    mean-pool aggregation. Backbone/aggregator/head are all Hydra-swappable.
+  hyperparameters:
+    encoder: ${ml.encoder._target_}
+    aggregator: ${ml.aggregator._target_}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}
