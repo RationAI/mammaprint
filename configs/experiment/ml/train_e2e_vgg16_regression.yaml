@@ -18,6 +18,10 @@ defaults:
       - pearson
       - spearman
       - r2
+      - thresholded_f1
+      - thresholded_precision
+      - thresholded_recall
+      - thresholded_specificity
   - /trainer: default
   - /data/sources: single_l3_tiled
   - _self_
