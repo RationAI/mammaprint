@@ -1,0 +1,14 @@
+# @package dataset.levels.3
+# DEMO level-3 RAW-TILE card (OpenSlide tiled artifact: slides.parquet + tiles.parquet).
+# Per-split raw_uris produced by:
+#   python scripts/preprocessing/split_dataset.py --kind tiled \
+#     --uri mlflow-artifacts:/3/0b32eceb1c434abf94104bb2c54b792e/artifacts/mou_3_224 \
+#     --name l3_tiled
+name: demo_l3_tiled
+level: 3
+mpp: 1.94
+tile_extent: 224
+raw_uris:
+  train: "mlflow-artifacts:/3/59bc4eba00734fd1becac92949065792/artifacts/l3_tiled_train"
+  val: "mlflow-artifacts:/3/1c3b8348dab84158a95abac79267e71b/artifacts/l3_tiled_val"
+  test: "mlflow-artifacts:/3/594c785fe3064c9784c2ec50375cc59b/artifacts/l3_tiled_test"

@@ -1,0 +1,5 @@
+# @package _global_
+# DEMO single-scale raw-tile source: level-3 tiled card + raw-tile template.
+defaults:
+  - /data/_template_raw
+  - /data/tiled/demo_l3_tiled
