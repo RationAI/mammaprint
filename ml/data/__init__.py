@@ -10,7 +10,7 @@ from ml.data.datasets.single_scale import SingleScaleDataset
 
 # Grouped (single-level first, multilevel last) to make the toggle obvious, so this
 # is deliberately not alphabetically sorted.
-__all__ = [  # noqa: RUF022
+__all__ = [
     "DataModule",
     "RawTileSlideDataset",
     "SingleScaleDataset",

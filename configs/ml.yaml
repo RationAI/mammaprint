@@ -5,9 +5,15 @@ defaults:
 
 seed: ${random_seed:}
 
-# Task shape — set per experiment; consumed by the ml/head + ml/metrics configs.
-label_mode: type  # "type" (classification) or "index" (regression)
-num_classes: 2
+# Lightning stage + checkpoint. Override for eval/inference, e.g.
+#   mode=test checkpoint=/path/to/best.ckpt
+mode: fit  # fit | validate | test | predict
+checkpoint: null  # path to a .ckpt to resume (fit) or load weights (validate/test/predict)
+
+# Task shape — set per experiment. The head is single-output (out_dim=1) either way:
+# binary classification (label_mode=type, BCE + binary metrics) or regression
+# (label_mode=index, MSE). No num_classes — the task is binary-or-regression.
+label_mode: type  # "type" (binary classification) or "index" (regression)
 feature_dim: ???  # tile-feature width = encoder.out_dim; set per experiment
 
 # datamodule / ml / trainer are composed by the +experiment config's defaults.

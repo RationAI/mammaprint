@@ -34,13 +34,22 @@ def process_slides(slides: pd.DataFrame, mode: LabelMode | None = None) -> pd.Da
 
 
 def get_label(slide_metadata: pd.Series, mode: LabelMode) -> torch.Tensor:
+    """One slide's target as a ``(1,)`` float tensor.
+
+    Both modes are single-output (``out_dim=1``): binary classification (luminal
+    a=1 / b=0, for ``BCEWithLogitsLoss`` + binary metrics) and regression (the
+    MammaPrint index). Shape ``(1,)`` matches the head's per-slide output so batched
+    preds/targets line up as ``(B, 1)``.
+    """
     match mode:
         case LabelMode.TYPE:
-            return torch.tensor(int(slide_metadata["type_label"])).long()
+            value = float(slide_metadata["type_label"])
         case LabelMode.INDEX:
-            return torch.tensor(float(slide_metadata["mammaprint_index"])).float()
+            value = float(slide_metadata["mammaprint_index"])
+        case _:
+            raise ValueError(f"Unsupported label mode: {mode}")
 
-    raise ValueError(f"Unsupported label mode: {mode}")
+    return torch.tensor([value], dtype=torch.float32)
 
 
 def get_target_column(mode: LabelMode) -> str:

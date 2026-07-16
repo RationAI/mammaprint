@@ -1,0 +1,3 @@
+# @package ml.metrics
+spearman:
+  _target_: torchmetrics.SpearmanCorrCoef

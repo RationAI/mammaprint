@@ -1,0 +1,2 @@
+# Binary classification with a single-logit head. Pair with output_activation=identity.
+_target_: torch.nn.BCEWithLogitsLoss

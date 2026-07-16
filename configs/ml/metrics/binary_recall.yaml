@@ -1,0 +1,3 @@
+# @package ml.metrics
+recall:
+  _target_: torchmetrics.classification.BinaryRecall

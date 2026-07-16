@@ -1,0 +1,4 @@
+# End-to-end path: VGG16 conv features + global max pool (512-dim per tile).
+_target_: ml.models.encoders.VGG16Encoder
+pretrained: true
+freeze: false

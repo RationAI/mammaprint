@@ -1,0 +1,3 @@
+# @package ml.metrics
+auroc:
+  _target_: torchmetrics.classification.BinaryAUROC

@@ -1,0 +1,3 @@
+# @package ml.metrics
+pearson:
+  _target_: torchmetrics.PearsonCorrCoef
