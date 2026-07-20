@@ -12,6 +12,8 @@ blur_threshold: ???
 folding_threshold: ???
 residual_threshold: ???
 
+diagnostics: false
+
 metadata:
   run_name: Mammaprint Tiling ${dataset.name}
   description: |

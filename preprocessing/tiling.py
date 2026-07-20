@@ -161,6 +161,93 @@ def add_tile_overlap(
     return tiles.drop_columns([overlap_struct_col])
 
 
+def count_candidate_tiles(slides_df: pd.DataFrame) -> int:
+    """Number of candidate tiles across all slides, computed analytically (no mask IO).
+
+    Mirrors ``grid_tiles(..., last="keep")``: per axis it yields
+    ``ceil((extent - tile_extent) / stride) + 1`` tiles, so the per-slide count is the product
+    over the x and y axes. Summed over slides this is the pre-filter tile count -- computed from
+    the slide metadata alone, so we never have to materialize the ~250M-row candidate set to count
+    it.
+    """
+    ex = np.asarray(slides_df["extent_x"], dtype=float)
+    ey = np.asarray(slides_df["extent_y"], dtype=float)
+    tx = np.asarray(slides_df["tile_extent_x"], dtype=float)
+    ty = np.asarray(slides_df["tile_extent_y"], dtype=float)
+    sx = np.asarray(slides_df["stride_x"], dtype=float)
+    sy = np.asarray(slides_df["stride_y"], dtype=float)
+    nx = np.ceil((ex - tx) / sx) + 1
+    ny = np.ceil((ey - ty) / sy) + 1
+    return int(np.sum(nx * ny))
+
+
+def log_drop_funnel(
+    tissue_survivors: Dataset,
+    n_candidates: int,
+    thresholds: dict[str, float],
+    logger: MLFlowLogger,
+) -> None:
+    """Quantify how many tiles each QC threshold drops and log the funnel to MLflow.
+
+    ``tissue_survivors`` must be the dataset AFTER the tissue gate but with ``blur_overlap``,
+    ``folding_overlap`` and ``residual_overlap`` already computed and NOT yet filtered (so the
+    dropped tiles' scores are still present). Reports two views:
+
+    * **independent** -- how many tiles each threshold removes on its own. Tissue is measured
+      against the full candidate grid (``n_candidates``); the QC gates are measured among the
+      tissue survivors (the only affordable and meaningful denominator).
+    * **sequential** -- the funnel in pipeline order (tissue -> blur -> folding -> residual), where
+      each gate is credited only for tiles it is the first to drop. These sum to the total dropped.
+
+    A tile is dropped by a gate when ``overlap <= threshold`` (the strict complement of the
+    production ``overlap > threshold`` filter; NaN/empty overlaps already score 0.0 and so count as
+    dropped, matching the run).
+    """
+    df = tissue_survivors.to_pandas()
+    n_tissue = len(df)
+
+    b = df["blur_overlap"] <= thresholds["blur"]
+    f = df["folding_overlap"] <= thresholds["folding"]
+    r = df["residual_overlap"] <= thresholds["residual"]
+
+    independent = {
+        "tissue": n_candidates - n_tissue,
+        "blur": int(b.sum()),
+        "folding": int(f.sum()),
+        "residual": int(r.sum()),
+    }
+    # Sequential attribution in pipeline order: each gate credited only for tiles that survived
+    # every earlier gate (tissue already applied by construction of this dataset).
+    sequential = {
+        "tissue": n_candidates - n_tissue,
+        "blur": int(b.sum()),
+        "folding": int((~b & f).sum()),
+        "residual": int((~b & ~f & r).sum()),
+    }
+    kept_final = int((~b & ~f & ~r).sum())
+
+    def pct(n: int) -> float:
+        return round(100.0 * n / n_candidates, 3) if n_candidates else 0.0
+
+    print("\n[DIAGNOSTICS] Tile drop funnel")
+    print(f"  candidate tiles (pre-filter):        {n_candidates:,}")
+    print(f"  survived tissue gate:                {n_tissue:,}")
+    print("  independent drops (each gate alone; QC gates among tissue survivors):")
+    for k in ("tissue", "blur", "folding", "residual"):
+        print(f"    {k:9} {independent[k]:>12,}  ({pct(independent[k]):5.2f}% of candidates)")
+    print("  sequential drops (pipeline order; mutually exclusive):")
+    for k in ("tissue", "blur", "folding", "residual"):
+        print(f"    {k:9} {sequential[k]:>12,}  ({pct(sequential[k]):5.2f}% of candidates)")
+    print(f"  kept (survived all gates):           {kept_final:,}  ({pct(kept_final):5.2f}%)")
+
+    metrics = {"diag_candidate_tiles": n_candidates, "diag_tissue_survivors": n_tissue,
+               "diag_kept_final": kept_final}
+    for k in ("tissue", "blur", "folding", "residual"):
+        metrics[f"diag_independent_drop_{k}"] = independent[k]
+        metrics[f"diag_sequential_drop_{k}"] = sequential[k]
+    logger.log_metrics(metrics)
+
+
 def tiling(
     row: dict[str, Any],
     tissue_masks_path: str | None,
@@ -311,20 +398,50 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     )
     tiles = tiles.filter(expr=col("tissue_overlap") > config.tissue_threshold)
 
-    tiles = add_tile_overlap(
-        tiles, full_roi, "blur_mask_path", "blur_overlap", keep="zero"
-    )
-    tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+    if config.get("diagnostics", False):
+        # Diagnostic path: quantify per-gate drops. Compute ALL three QC overlaps on the tissue
+        # survivors WITHOUT filtering (so dropped tiles' scores are retained), materialize once so
+        # the funnel scan and the subsequent production filters both reuse the same pinned blocks
+        # (no re-reading of masks), log the funnel, then apply the identical QC filters below so the
+        # written dataset is byte-identical to a normal run.
+        tiles = add_tile_overlap(
+            tiles, full_roi, "blur_mask_path", "blur_overlap", keep="zero"
+        )
+        tiles = add_tile_overlap(
+            tiles, full_roi, "folding_mask_path", "folding_overlap", keep="zero"
+        )
+        tiles = add_tile_overlap(
+            tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
+        )
+        tiles = tiles.materialize()
 
-    tiles = add_tile_overlap(
-        tiles, full_roi, "folding_mask_path", "folding_overlap", keep="zero"
-    )
-    tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+        n_candidates = count_candidate_tiles(slides.to_pandas())
+        thresholds = {
+            "tissue": config.tissue_threshold,
+            "blur": config.blur_threshold,
+            "folding": config.folding_threshold,
+            "residual": config.residual_threshold,
+        }
+        log_drop_funnel(tiles, n_candidates, thresholds, logger)
 
-    tiles = add_tile_overlap(
-        tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
-    )
-    tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
+        tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+        tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+        tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
+    else:
+        tiles = add_tile_overlap(
+            tiles, full_roi, "blur_mask_path", "blur_overlap", keep="zero"
+        )
+        tiles = tiles.filter(expr=col("blur_overlap") > config.blur_threshold)
+
+        tiles = add_tile_overlap(
+            tiles, full_roi, "folding_mask_path", "folding_overlap", keep="zero"
+        )
+        tiles = tiles.filter(expr=col("folding_overlap") > config.folding_threshold)
+
+        tiles = add_tile_overlap(
+            tiles, full_roi, "residual_mask_path", "residual_overlap", keep="zero"
+        )
+        tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
 
     # Epithelium is computed but NOT filtered here (that mask is not always populated; add a cutoff
     # once it is, by desired tumor purity). Computed last so it only runs on the surviving tiles.
