@@ -19,6 +19,7 @@ async def segment_epithel(
     max_concurrent: int,
     timeout: int,
     model_name: str,
+    models_base_url: str,
 ) -> None:
     sem = asyncio.Semaphore(max_concurrent)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +41,9 @@ async def segment_epithel(
             except Exception as e:
                 print(f"Slide processing failed for {path}: {e}, error: {e!r}")
 
-    async with AsyncClient(timeout=timeout) as client:
+    async with AsyncClient(
+        models_base_url=models_base_url, timeout=timeout
+    ) as client:
         tasks = [_bounded_process(client, path) for path in slides]
 
         for f in tqdm(
@@ -74,6 +77,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
                 max_concurrent=config.max_concurrent,
                 timeout=config.timeout,
                 model_name=config.model_name,
+                models_base_url=config.models_base_url,
             )
         )
         logger.log_artifacts(

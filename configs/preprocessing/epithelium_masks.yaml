@@ -9,6 +9,7 @@ dataset:
 max_concurrent: 100
 timeout: 3000
 model_name: episeg-1
+models_base_url: http://rayservice-model-fix-serve-svc.rationai-jobs-ns.svc.cluster.local:8000
 
 metadata:
   run_name: Mammaprint Epithelium Masks
