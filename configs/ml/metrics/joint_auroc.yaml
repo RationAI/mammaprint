@@ -1,0 +1,8 @@
+# @package ml.metrics
+# Classification AUROC on the joint head's column 0 (class logit vs type label).
+# BinaryAUROC is threshold-free and consumes logits directly.
+joint_auroc:
+  _target_: ml.metrics.ColumnMetric
+  column: 0
+  metric:
+    _target_: torchmetrics.classification.BinaryAUROC

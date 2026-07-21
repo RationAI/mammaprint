@@ -1,0 +1,10 @@
+# @package ml.metrics
+# Classification F1 on the joint head's column 0. The class logit is thresholded
+# at 0 (logit >= 0 <=> prob >= 0.5 <=> class 1), so BinaryF1Score is fed a
+# hard {0,1} prediction against the {0,1} type label.
+joint_f1:
+  _target_: ml.metrics.ColumnMetric
+  column: 0
+  metric:
+    _target_: torchmetrics.classification.BinaryF1Score
+    threshold: 0.0
