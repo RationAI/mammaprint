@@ -1,0 +1,47 @@
+# @package _global_
+# Multi-task MIL on precomputed level-3 embeddings: identity encoder -> mean-pool
+# -> MLP head with out_dim=2. The head emits a class logit (col 0) and a regression
+# scalar (col 1); JointLoss = w_cls * BCE(type) + w_reg * MSE(index) trains both at
+# once. Same data as train_mil_embeddings / train_regression, label_mode="both".
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: identity
+  - /ml/aggregator@ml.aggregator: mean
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: joint
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - joint_auroc
+      - joint_f1
+      - joint_mse
+      - joint_pearson
+  - /trainer: default
+  - /data/sources: single_l3_embed
+  - _self_
+
+label_mode: both
+feature_dim: 2560  # Virchow2 embedding size
+
+# Two outputs: [class logit, regression scalar].
+ml:
+  head:
+    out_dim: 2
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Joint — luminal classification + MammaPrint index regression (level-3 Virchow2 embeddings)
+  description: |
+    Multi-task multiple-instance-learning over frozen per-slide level-3 Virchow2
+    tile embeddings: mean-pool + 2-output MLP head trained jointly on luminal type
+    (BCE) and the continuous MammaPrint index (MSE) via JointLoss.
+  hyperparameters:
+    aggregator: ${ml.aggregator._target_}
+    head: ${ml.head._target_}
+    loss: ${ml.loss._target_}
+    w_cls: ${ml.loss.w_cls}
+    w_reg: ${ml.loss.w_reg}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}

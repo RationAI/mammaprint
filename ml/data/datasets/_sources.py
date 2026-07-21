@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 from mlflow.artifacts import download_artifacts
 
-from ml.data.datasets.labels import LabelMode, get_target_column, process_slides
+from ml.data.datasets.labels import LabelMode, get_target_columns, process_slides
 
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,8 @@ def load_labeled_slides(
     slides = pd.read_csv(data_mapping)
     slides = process_slides(slides, mode=label_mode)
 
-    target_column = get_target_column(label_mode)
-    keep = slides[target_column].notna()
+    target_columns = get_target_columns(label_mode)
+    keep = slides[target_columns].notna().all(axis=1)
     return slides[keep].reset_index(drop=True)
 
 

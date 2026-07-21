@@ -1,5 +1,6 @@
 """Custom metrics for MammaPrint."""
 
+from ml.metrics.column import ColumnMetric
 from ml.metrics.thresholded import (
     ThresholdedBinaryMetric,
     thresholded_f1,
@@ -10,6 +11,7 @@ from ml.metrics.thresholded import (
 
 
 __all__ = [
+    "ColumnMetric",
     "ThresholdedBinaryMetric",
     "thresholded_f1",
     "thresholded_precision",

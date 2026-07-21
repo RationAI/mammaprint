@@ -1,0 +1,7 @@
+# @package ml.metrics
+# Regression Pearson correlation on the joint head's column 1.
+joint_pearson:
+  _target_: ml.metrics.ColumnMetric
+  column: 1
+  metric:
+    _target_: torchmetrics.PearsonCorrCoef
