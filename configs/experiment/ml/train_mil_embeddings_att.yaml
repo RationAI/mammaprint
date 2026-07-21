@@ -1,0 +1,41 @@
+# @package _global_
+# Linear head on precomputed level-3 embeddings: identity encoder (frozen
+# embeddings) -> mean-pool aggregation -> linear head. Single-scale.
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: identity
+  - /ml/aggregator@ml.aggregator: attention
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: bce
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - binary_accuracy
+      - binary_auroc
+      - binary_f1
+      - binary_precision
+      - binary_recall
+      - binary_specificity
+      - binary_cohen_kappa
+  - /trainer: default
+  - /data/sources: single_l3_embed
+  - _self_
+
+label_mode: type
+feature_dim: 2560  # Virchow2 embedding size
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Linear head — luminal classification (level-3 Virchow2 embeddings)
+  description: |
+    Multiple-instance-learning classification of luminal type (A/B) over frozen
+    per-slide level-3 Virchow2 tile embeddings, mean-pool aggregation + linear head.
+  hyperparameters:
+    encoder: ${ml.encoder._target_}
+    aggregator: ${ml.aggregator._target_}
+    head: ${ml.head._target_}
+    loss: ${ml.loss._target_}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}
