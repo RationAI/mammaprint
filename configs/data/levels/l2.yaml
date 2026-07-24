@@ -1,0 +1,9 @@
+# Physical facts for pyramid level 2, shared across every mask variant and
+# across the tiled card / embedded card / tiling experiment that use this level.
+# Pulled in via a defaults @-redirect:
+#   variant cards (package dataset.levels.2):  - /data/levels/l2@_here_
+#   tiling experiments (package _global_):        - /data/levels/l2@_global_
+level: 2
+mpp: 0.97
+tile_extent: 224
+stride: 112
