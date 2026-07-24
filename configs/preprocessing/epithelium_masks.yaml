@@ -6,8 +6,8 @@ dataset:
   mlflow_uris:
     tissue_masks: ???
 
-max_concurrent: 10
-timeout: 3000
+max_concurrent: 3
+timeout: 6000
 model_name: episeg-1
 models_base_url: http://rayservice-model-fix-serve-svc.rationai-jobs-ns.svc.cluster.local:8000
 
