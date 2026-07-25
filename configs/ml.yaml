@@ -10,6 +10,10 @@ seed: ${random_seed:}
 mode: fit  # fit | validate | test | predict
 checkpoint: null  # path to a .ckpt to resume (fit) or load weights (validate/test/predict)
 
+# After a `fit` run, evaluate the best checkpoint on the test split so models are
+# directly comparable on held-out data right after training. Ignored unless mode=fit.
+test_after_fit: true
+
 # Task shape — set per experiment. Single-output (out_dim=1) for the single-task
 # modes: binary classification (label_mode=type, BCE + binary metrics) or
 # regression (label_mode=index, MSE). The joint mode (label_mode=both) is
