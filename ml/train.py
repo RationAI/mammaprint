@@ -12,12 +12,16 @@ Run with, e.g.::
     uv run -m ml.train +experiment=ml/train_mil_embeddings mode=test checkpoint=/path/best.ckpt
 """
 
+import logging
 import random
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
 from rationai.mlkit.lightning.loggers import MLFlowLogger
+
+
+log = logging.getLogger(__name__)
 
 
 # Resolves ${random_seed:} in the config; cached so all consumers share one seed.
@@ -39,6 +43,17 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # config.checkpoint (or null) resumes training / loads weights for eval.
     run_stage = getattr(trainer, config.mode)
     run_stage(module, datamodule=datamodule, ckpt_path=config.checkpoint)
+
+    # After training, evaluate the best checkpoint on the test split so runs are
+    # directly comparable on held-out data. "best" points at the ModelCheckpoint's
+    # top-k pick; if checkpointing is off it's empty, so fall back to final weights.
+    if config.mode == "fit" and config.get("test_after_fit", False):
+        best_ckpt = getattr(trainer.checkpoint_callback, "best_model_path", "") or None
+        log.info(
+            "Running test on %s checkpoint after fit.",
+            "best" if best_ckpt else "final (no checkpoint saved)",
+        )
+        trainer.test(module, datamodule=datamodule, ckpt_path=best_ckpt)
 
 
 if __name__ == "__main__":
