@@ -11,7 +11,7 @@ defaults:
 
 name: l2_tissue
 raw_uris:
-  all: "mlflow-artifacts:/3/0d8e51f080df435bbaa9b189b7973aac/artifacts/mou_2_224_tissue"
+  all: "mlflow-artifacts:/3/c65f9ba257da4595837750ede54d4f25/artifacts/mou_2_224_tissue"
   train: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_train"
   val: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_val"
   test: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_test"
