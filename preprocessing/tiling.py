@@ -477,6 +477,12 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         ]
     )
 
+    # Rename tile coordinates to the schema mlkit's OpenSlideTilesDataset expects.
+    # The ratiopath overlap helpers (tile_overlay_overlap) require "tile_x"/"tile_y", so those
+    # names are kept through the whole pipeline above; mlkit's OpenSlideTilesDataset.__getitem__
+    # reads tile["x"]/tile["y"], so we rename only now, right before writing.
+    tiles = tiles.rename_columns({"tile_x": "x", "tile_y": "y"})
+
     # Convert Ray Datasets to pandas DataFrames
     slides_df = slides.to_pandas()
     tiles_df = tiles.to_pandas()
