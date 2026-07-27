@@ -9,7 +9,6 @@ import hydra
 import numpy as np
 import pandas as pd
 import ray
-import ray.data as rd
 from mlflow.artifacts import download_artifacts
 from omegaconf import DictConfig
 from rationai.mlkit import autolog, with_cli_args
@@ -329,13 +328,27 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
 
     # Read slide paths from data mapping
     slide_labels_df = pd.read_csv(config.dataset.paths.data_mapping)
-    slide_labels_df["slide_path"] = slide_labels_df["path"]
-    slide_paths = slide_labels_df["slide_path"].tolist()
-    metadata_ds = rd.from_pandas(
-        slide_labels_df[["slide_path", "type", "mammaprint_index"]]
-    )
+    slide_paths = slide_labels_df["path"].tolist()
 
     print(f"\n[INFO] Processing {len(slide_paths)} slides using Ray Data pipeline\n")
+
+    # Attach labels (type, mammaprint_index) by path. This is a tiny per-slide lookup
+    # (~2k rows) that we already hold in the driver, so we broadcast it as a dict and merge
+    # in a map_batches rather than a Ray hash-shuffle join. The distributed join was pure
+    # overhead here -- worse, its shuffle produced a wildly inflated per-task memory estimate
+    # (~1 TiB/task) that no node could satisfy, so the autoscaler rejected it forever and the
+    # whole pipeline deadlocked at Join: 0/1 before row_hash/tiling ever ran.
+    labels_by_path = slide_labels_df.set_index("path")[
+        ["type", "mammaprint_index"]
+    ].to_dict("index")
+
+    def attach_labels(batch: pd.DataFrame) -> pd.DataFrame:
+        labels = batch["path"].map(labels_by_path)
+        batch["type"] = [lp["type"] if isinstance(lp, dict) else None for lp in labels]
+        batch["mammaprint_index"] = [
+            lp["mammaprint_index"] if isinstance(lp, dict) else None for lp in labels
+        ]
+        return batch
 
     # Read slides
     slides = read_slides(
@@ -343,13 +356,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         mpp=config.mpp,
         tile_extent=config.tile_extent,
         stride=config.stride,
-    ).join(
-        metadata_ds,
-        on=("path",),
-        right_on=("slide_path",),
-        num_partitions=16,
-        join_type="left_outer",
-    )
+    ).map_batches(attach_labels, batch_format="pandas", num_cpus=0.1)
 
     # Create unique slide IDs and save slide metadata.
     # Fractional num_cpus so these cheap coordinate-generation stages don't win Ray's
