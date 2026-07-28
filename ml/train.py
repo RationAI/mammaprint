@@ -8,8 +8,10 @@ optionally resumes / loads weights.
 
 Run with, e.g.::
 
-    uv run -m ml.train +experiment=ml/train_mil_embeddings            # fit (default)
-    uv run -m ml.train +experiment=ml/train_mil_embeddings mode=test checkpoint=/path/best.ckpt
+    uv run -m ml.train +experiment=ml/train_mil_embeddings \
+        data/embedded=demo_l3_embed
+    uv run -m ml.train +experiment=ml/train_mil_embeddings \
+        data/embedded=demo_l3_embed mode=test checkpoint=/path/best.ckpt
 """
 
 import logging
