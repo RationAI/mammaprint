@@ -1,10 +1,11 @@
 # @package _global_
 # Single-scale data shape: DataModule over SingleScaleDataset (flat embedding bags).
-# A data/sources/* selector pulls this in plus ONE data/tiled/* card (one level).
+# An experiment pulls this in and exposes an optional data/embedded card slot.
+# Select exactly one artifact card at launch, e.g. data/embedded=demo_l3_embed.
 # The dataset spec is written ONCE (the &dataset anchor on `train`); val/test merge
 # it and override only `split`. Splits are built lazily per stage in DataModule.setup.
 dataset:
-  levels: ???            # filled by the selected data/tiled/* card
+  levels: ???            # filled by the selected data/embedded/* card
   data_mapping: ${project_path}/data_mapping.csv
 
 datamodule:

@@ -19,7 +19,8 @@ defaults:
       - binary_specificity
       - binary_cohen_kappa
   - /trainer: default
-  - /data/sources: single_l3_tiled
+  - /data: _template_raw
+  - optional /data/tiled: null
   - _self_
 
 label_mode: type

@@ -1,7 +1,8 @@
 defaults:
   - base
   - _self_
-  # A +experiment config selects the data source (data/sources/*) and model pieces.
+  # A +experiment config selects the data shape and model pieces. Single-scale
+  # launches also select one artifact card (data/embedded=* or data/tiled=*).
 
 seed: ${random_seed:}
 
