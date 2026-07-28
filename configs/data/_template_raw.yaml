@@ -1,6 +1,7 @@
 # @package _global_
 # Raw-tile data shape: DataModule over RawTileSlideDataset (image bags).
-# A data/sources/* selector pulls this in plus ONE data/tiled/* card (with raw_uris).
+# An experiment pulls this in and exposes an optional data/tiled card slot.
+# Select exactly one artifact card at launch, e.g. data/tiled=demo_l3_tiled.
 # Dataset spec written once (&dataset on `train`); val/test override only `split`.
 dataset:
   levels: ???            # filled by the selected data/tiled/* card
