@@ -1,0 +1,19 @@
+# TransMIL-style self-attention MIL with an added 2D sinusoidal positional encoding
+# built from each tile's level-0 pixel (x, y). Coordinates ride as the last two
+# columns of the bag ((N, feature_dim + 2)); the aggregator slices them off, so
+# feature_dim (NOT feature_dim + 2) must be divisible by num_heads and by 4.
+#
+# REQUIRES a coord-aware dataset (ml.data.SpatialScaleDataset) — select the spatial
+# data template. tile_extent / mpp come from the chosen level card and set the
+# level-0 tile footprint (extent = tile_extent * mpp) used to grid-normalise coords.
+_target_: ml.models.aggregators.SpatialTransformerMIL
+feature_dim: ${feature_dim}
+tile_extent: ${spatial.tile_extent}
+mpp: ${spatial.mpp}
+num_heads: 8
+num_layers: 2
+mlp_ratio: 4.0
+dropout: 0.1
+pe_scale: 0.1
+pe_base: 10000.0
+pe_span: 64.0
