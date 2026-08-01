@@ -1,5 +1,9 @@
-# Extension point — not implemented in the skeleton (raises NotImplementedError).
+# TransMIL-style self-attention MIL: a learned CLS token attends over the tile bag
+# and its final embedding is the slide vector. Returns per-tile CLS->tiles attention
+# for interpretability. feature_dim must be divisible by num_heads.
 _target_: ml.models.aggregators.TransformerMIL
 feature_dim: ${feature_dim}
 num_heads: 8
 num_layers: 2
+mlp_ratio: 4.0
+dropout: 0.1
