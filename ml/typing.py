@@ -38,7 +38,13 @@ class LevelSpec(TypedDict):
 
 # ── Single-level types (always shipped) ──────────────────────────────────────
 type Bag = Tensor
-"""A bag of per-slide items: tile features ``(N, D)`` or raw tiles ``(N, C, H, W)``."""
+"""A bag of per-slide items: tile features ``(N, D)`` or raw tiles ``(N, C, H, W)``.
+
+The coordinate-aware single-scale path (``SpatialScaleDataset`` +
+``SpatialTransformerMIL``) packs a wider ``(N, D + 2)`` tensor whose last two columns
+are each tile's level-0 pixel ``(x, y)``; the spatial aggregator slices them off. No
+other dataset or aggregator produces or consumes those extra columns.
+"""
 
 type MILSample = tuple[Bag, Tensor, SlideMetadata]
 """A single-level slide-level training sample: ``(bag, label, metadata)``."""
