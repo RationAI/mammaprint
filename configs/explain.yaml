@@ -1,0 +1,43 @@
+# Standalone, post-hoc explainability configuration.
+#
+# The source training run's original Hydra overrides are replayed against this
+# config, so the instantiated encoder/aggregator/head and data card exactly match
+# the checkpoint.  Everything under ``explain`` controls inference only and can be
+# overridden from ``ml.explain`` / ``scripts/ml/submit_explain.py``.
+defaults:
+  - ml
+  - _self_
+
+explain:
+  split: test
+  seed: 42
+  counterfactual_batch_size: 1024
+
+  ig:
+    enabled: true
+    steps: 32
+    baseline_split: train
+    completeness_tolerance: 0.05
+
+  leave_one_out:
+    enabled: true
+
+  single:
+    enabled: true
+
+  attention:
+    enabled: true
+
+  patch_flipping:
+    enabled: true
+    step_percent: 1
+    random_repeats: 5
+
+  output:
+    artifact_path: explanations
+    # Browser-facing viewer used by the RationAI pathologist report workflow.
+    # This is intentionally separate from the in-cluster MLflow tracking URI.
+    xopat_ui_uri: ${oc.env:XOPAT_UI_URI,https://xopat.rationai.cloud.trusted.e-infra.cz/}
+    scale_percentile: 99.0
+    geojson_fraction: 0.05
+    tiff_tile_size: 512
