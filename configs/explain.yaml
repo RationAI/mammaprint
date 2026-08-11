@@ -15,6 +15,8 @@ explain:
 
   ig:
     enabled: true
+    # Numerical integration points for mean/attention. Max + linear/MLP uses an
+    # exact pooled-space solution and therefore does not depend on this value.
     steps: 32
     baseline_split: train
     completeness_tolerance: 0.05

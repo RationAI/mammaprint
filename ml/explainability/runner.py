@@ -8,6 +8,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from hashlib import sha256
+from importlib.metadata import version as package_version
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -314,9 +315,7 @@ def run_cohort(
         "complementary_methods": [
             method for method in ("single",) if method in enabled_methods
         ],
-        "diagnostic_methods": (
-            ["attention"] if "attention" in enabled_methods else []
-        ),
+        "diagnostic_methods": (["attention"] if "attention" in enabled_methods else []),
         "tile_table": {
             "layout": "one row per tile and target",
             "columns": list(TILE_TABLE_COLUMNS),
@@ -380,6 +379,19 @@ def run_cohort(
                 "wsi_level_mpp_source_x",
                 "wsi_level_mpp_source_y",
             ],
+        },
+        "implementation": {
+            "ratiopath_version": package_version("ratiopath"),
+            "mask_assembly": "ratiopath.MaskBuilder with MeanAggregator",
+            "wsi_access": "ratiopath.openslide.OpenSlide",
+            "ome_tiff_writer": (
+                "tifffile OME-BigTIFF streaming from the compact ratiopath mask"
+            ),
+            "integrated_gradients": (
+                "exact pooled-space linear/ReLU solution"
+                if type(module.aggregator).__name__ == "MaxPool"
+                else "sequential trapezoidal integration"
+            ),
         },
         "visualization_scaling": {
             "kind": "cohort_absolute_percentile",
@@ -587,8 +599,8 @@ def _explain_slide(
                         result=result,
                     )
                 )
-                slide_row[f"faithfulness_srg/{target}/{method}"] = (
-                    _target_scalar(result.srg, target_index)
+                slide_row[f"faithfulness_srg/{target}/{method}"] = _target_scalar(
+                    result.srg, target_index
                 )
                 slide_row[f"faithfulness_descending_auc/{target}/{method}"] = (
                     _target_scalar(result.descending_auc, target_index)
@@ -692,6 +704,7 @@ def _render_outputs(
     provenance: dict[str, Any],
 ) -> None:
     tile_extent = int(level_spec["tile_extent"])
+    stride = int(level_spec["stride"])
     configured_mpp = float(level_spec["mpp"])
     row_by_slide = {row["slide_id"]: row for row in state.slide_rows}
     for slide in state.render_slides:
@@ -703,9 +716,12 @@ def _render_outputs(
                 slide.level,
                 configured_mpp,
             )
-            if bool((slide.x < 0).any()) or bool((slide.y < 0).any()) or bool(
-                (slide.x >= geometry.width).any()
-            ) or bool((slide.y >= geometry.height).any()):
+            if (
+                bool((slide.x < 0).any())
+                or bool((slide.y < 0).any())
+                or bool((slide.x >= geometry.width).any())
+                or bool((slide.y >= geometry.height).any())
+            ):
                 raise ValueError(
                     "Tile coordinates fall outside the selected WSI level; refusing "
                     "to create a plausibly aligned mask from mismatched geometry."
@@ -722,6 +738,7 @@ def _render_outputs(
                         scores,
                         geometry=geometry,
                         tile_extent=tile_extent,
+                        stride=stride,
                         scale=scale,
                         tile_size=int(config.output.tiff_tile_size),
                     )
@@ -765,6 +782,7 @@ def _render_outputs(
                     slide=slide,
                     geometry=geometry,
                     tile_extent=tile_extent,
+                    stride=stride,
                     output_dir=output_dir,
                     slide_row=row,
                     scales=scales,
@@ -778,7 +796,9 @@ def _render_outputs(
                     f"{type(summary_error).__name__}: {summary_error}"
                 )
         except FileNotFoundError as error:
-            log.warning("Viewer output unavailable for slide %s: %s", slide.slide_id, error)
+            log.warning(
+                "Viewer output unavailable for slide %s: %s", slide.slide_id, error
+            )
             row["overlay_status"] = "unavailable"
             row["overlay_error"] = f"{type(error).__name__}: {error}"
             row["summary_status"] = "unavailable"
@@ -829,7 +849,9 @@ def _attach_viewer_url(
             layers=_viewer_layers(slide),
         )
     except (TypeError, ValueError) as error:
-        log.warning("Interactive viewer unavailable for slide %s: %s", slide.slide_id, error)
+        log.warning(
+            "Interactive viewer unavailable for slide %s: %s", slide.slide_id, error
+        )
         row["viewer_status"] = "unavailable"
         row["viewer_error"] = f"{type(error).__name__}: {error}"
         row["viewer_url"] = None
@@ -865,7 +887,9 @@ def _viewer_layers(slide: RenderSlide) -> list[ViewerLayer]:
             else:
                 directions = ("raises", "lowers")
             mask_root = f"masks/{method}/{target}"
-            initially_visible = method == "integrated_gradients" and target == first_target
+            initially_visible = (
+                method == "integrated_gradients" and target == first_target
+            )
             layers.extend(
                 (
                     ViewerLayer(
@@ -914,6 +938,7 @@ def _write_slide_summary(
     slide: RenderSlide,
     geometry: SlideGeometry,
     tile_extent: int,
+    stride: int,
     output_dir: Path,
     slide_row: dict[str, Any],
     scales: dict[tuple[str, str], float],
@@ -939,13 +964,12 @@ def _write_slide_summary(
             scores,
             geometry=geometry,
             tile_extent=tile_extent,
+            stride=stride,
             raster_downsample=preview_downsample,
         )
         for target, method, scores in selected
     }
-    attribution_maps = {
-        name: raster.values for name, raster in preview_rasters.items()
-    }
+    attribution_maps = {name: raster.values for name, raster in preview_rasters.items()}
     attribution_coverages = {
         name: raster.coverage for name, raster in preview_rasters.items()
     }
@@ -982,7 +1006,7 @@ def _write_slide_summary(
 
 
 def _read_thumbnail(slide_path: Path) -> np.ndarray:
-    from openslide import OpenSlide
+    from ratiopath.openslide import OpenSlide
 
     with OpenSlide(str(slide_path)) as slide:
         thumbnail = slide.get_thumbnail((1024, 1024)).convert("RGB")
@@ -1066,7 +1090,9 @@ def _validate_record_numbers(slides: pd.DataFrame, requested: set[str]) -> None:
         raise KeyError(
             "The data mapping has no 'record_num' column required for slide_keys.csv."
         )
-    selected = slides if not requested else slides[slides["name"].astype(str).isin(requested)]
+    selected = (
+        slides if not requested else slides[slides["name"].astype(str).isin(requested)]
+    )
     invalid = [
         str(row["name"])
         for _, row in selected.iterrows()
@@ -1153,14 +1179,10 @@ def _cohort_metrics(
 ) -> dict[str, float]:
     """Aggregate only cohort-level values suitable for MLflow metrics."""
     metrics: dict[str, float] = {}
-    class_rows = slide_keys.dropna(
-        subset=["class_label", "prediction_class_label"]
-    )
+    class_rows = slide_keys.dropna(subset=["class_label", "prediction_class_label"])
     if not class_rows.empty:
         truth = pd.to_numeric(class_rows["class_label"], errors="coerce")
-        predicted = pd.to_numeric(
-            class_rows["prediction_class_label"], errors="coerce"
-        )
+        predicted = pd.to_numeric(class_rows["prediction_class_label"], errors="coerce")
         valid = truth.notna() & predicted.notna()
         if valid.any():
             metrics["classification_accuracy"] = float(
@@ -1171,9 +1193,7 @@ def _cohort_metrics(
         subset=["mammaprint_index", "prediction_mammaprint_index"]
     )
     if not index_rows.empty:
-        truth_index = pd.to_numeric(
-            index_rows["mammaprint_index"], errors="coerce"
-        )
+        truth_index = pd.to_numeric(index_rows["mammaprint_index"], errors="coerce")
         predicted_index = pd.to_numeric(
             index_rows["prediction_mammaprint_index"], errors="coerce"
         )
@@ -1190,9 +1210,7 @@ def _cohort_metrics(
     ]
     if warning_columns:
         warnings = slides.loc[:, warning_columns].fillna(False).astype(bool)
-        metrics["ig_completeness_warning_count"] = float(
-            warnings.to_numpy().sum()
-        )
+        metrics["ig_completeness_warning_count"] = float(warnings.to_numpy().sum())
 
     for column in sorted(
         column
@@ -1248,7 +1266,10 @@ def _enabled_methods(config: DictConfig, module: MammaprintModule) -> list[str]:
         methods.append("integrated_gradients")
     if bool(config.single.enabled):
         methods.append("single")
-    if bool(config.attention.enabled) and type(module.aggregator).__name__ == "AttentionMIL":
+    if (
+        bool(config.attention.enabled)
+        and type(module.aggregator).__name__ == "AttentionMIL"
+    ):
         methods.append("attention")
     return methods
 

@@ -86,13 +86,10 @@ def patch_flipping(
     _validate_head_batch_size(head_batch_size)
     if not 1 <= percentage_step <= 100:
         raise ValueError(
-            "percentage_step must be between 1 and 100; "
-            f"got {percentage_step}."
+            f"percentage_step must be between 1 and 100; got {percentage_step}."
         )
     if random_repeats < 1:
-        raise ValueError(
-            f"random_repeats must be at least one; got {random_repeats}."
-        )
+        raise ValueError(f"random_repeats must be at least one; got {random_repeats}.")
 
     percentages = list(range(0, 100, percentage_step))
     if percentages[-1] != 100:
@@ -231,9 +228,7 @@ def _ordered_subset_outputs(
             zip(unique_intermediate, predictions.unbind(dim=0), strict=True)
         )
 
-    return torch.stack(
-        [predictions_by_count[count] for count in removal_counts], dim=0
-    )
+    return torch.stack([predictions_by_count[count] for count in removal_counts], dim=0)
 
 
 def _mean_suffix_pooling(
@@ -292,9 +287,7 @@ def _attention_suffix_pooling(
         segment_maximum = segment_logits.amax()
         segment_weights = torch.exp(segment_logits - segment_maximum)
         segment_denominator = segment_weights.sum()
-        segment_numerator = (
-            segment_weights.unsqueeze(1) * segment_features
-        ).sum(dim=0)
+        segment_numerator = (segment_weights.unsqueeze(1) * segment_features).sum(dim=0)
 
         if running_maximum is None:
             running_maximum = segment_maximum
@@ -307,12 +300,10 @@ def _attention_suffix_pooling(
             old_scale = torch.exp(running_maximum - combined_maximum)
             segment_scale = torch.exp(segment_maximum - combined_maximum)
             running_denominator = (
-                running_denominator * old_scale
-                + segment_denominator * segment_scale
+                running_denominator * old_scale + segment_denominator * segment_scale
             )
             running_numerator = (
-                running_numerator * old_scale
-                + segment_numerator * segment_scale
+                running_numerator * old_scale + segment_numerator * segment_scale
             )
             running_maximum = combined_maximum
 

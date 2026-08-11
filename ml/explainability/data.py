@@ -181,7 +181,7 @@ def streaming_mean_embedding(
             assert total is not None
             total += bag.double().sum(dim=0)
             count += bag.shape[0]
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - isolate corrupt slide artifacts
             log.warning(
                 "Skipping corrupt baseline slide %s: %s: %s",
                 slide_id,
@@ -212,7 +212,8 @@ def read_slide_geometry(
 
     # Imported lazily: the Python package is present in development environments,
     # while the native OpenSlide library is supplied by the inference container.
-    from openslide import PROPERTY_NAME_MPP_X, PROPERTY_NAME_MPP_Y, OpenSlide
+    from openslide import PROPERTY_NAME_MPP_X, PROPERTY_NAME_MPP_Y
+    from ratiopath.openslide import OpenSlide
 
     with OpenSlide(str(slide_path)) as slide:
         if not 0 <= level < slide.level_count:
@@ -224,9 +225,12 @@ def read_slide_geometry(
         downsample = float(slide.level_downsamples[level])
         base_mpp_x = _optional_positive_float(slide.properties.get(PROPERTY_NAME_MPP_X))
         base_mpp_y = _optional_positive_float(slide.properties.get(PROPERTY_NAME_MPP_Y))
+        if base_mpp_x is not None and base_mpp_y is not None:
+            mpp_x, mpp_y = slide.slide_resolution(level)
+        else:
+            mpp_x = configured_mpp
+            mpp_y = configured_mpp
 
-    mpp_x = base_mpp_x * downsample if base_mpp_x else configured_mpp
-    mpp_y = base_mpp_y * downsample if base_mpp_y else configured_mpp
     return SlideGeometry(
         width=int(width),
         height=int(height),
@@ -274,7 +278,9 @@ def _validate_frame(frame: pd.DataFrame, path: Path) -> None:
     try:
         coordinates = frame[["x", "y"]].to_numpy(dtype=np.float64)
     except (TypeError, ValueError) as error:
-        raise ValueError(f"{path}: tile coordinates must be numeric integers.") from error
+        raise ValueError(
+            f"{path}: tile coordinates must be numeric integers."
+        ) from error
     if not np.isfinite(coordinates).all():
         raise ValueError(f"{path}: tile coordinates contain NaN or infinity.")
     if (coordinates < 0).any() or (coordinates != np.floor(coordinates)).any():
