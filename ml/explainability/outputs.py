@@ -68,15 +68,13 @@ class SignedMaskPaths:
 
 
 @dataclass(frozen=True, slots=True)
-class _ScaledTileIndex:
-    """Tile rectangles and their intersections with TIFF storage tiles."""
+class _AssembledScalarMask:
+    """Compact ratiopath mask plus its selected-level pixel size."""
 
-    x0: NDArray[np.int64]
-    y0: NDArray[np.int64]
-    x1: NDArray[np.int64]
-    y1: NDArray[np.int64]
-    scores: NDArray[np.float64]
-    buckets: dict[tuple[int, int], list[int]]
+    values: NDArray[np.float32]
+    coverage: NDArray[np.uint32]
+    cell_height: int
+    cell_width: int
 
 
 def make_tile_table(
@@ -229,25 +227,27 @@ def rasterize_tile_scores(
     *,
     geometry: SlideGeometry,
     tile_extent: int,
+    stride: int,
     raster_downsample: int = 1,
     max_pixels: int = 64_000_000,
 ) -> RasterizedMask:
-    """Rasterize signed tile scores, averaging overlaps and clipping boundaries.
+    """Rasterize signed tile scores with ratiopath overlap aggregation.
 
-    This helper materializes a raster and is intended for downsampled previews or
-    analysis.  The OME-TIFF writer below streams storage tiles and should be used
-    for full-resolution WSI masks. Non-finite tile scores are treated as absent and
-    do not contribute to coverage.
+    Ratiopath expands scalar tile outputs on its compact GCD-aligned grid and uses
+    ``MeanAggregator`` to average overlaps. This helper samples that grid at the
+    requested selected-level downsample for previews or analysis. Non-finite tile
+    scores are absent and do not contribute to coverage.
     """
     _validate_geometry(geometry)
     if tile_extent <= 0:
         raise ValueError("tile_extent must be positive.")
+    if stride <= 0:
+        raise ValueError("stride must be positive.")
     if raster_downsample <= 0:
         raise ValueError("raster_downsample must be positive.")
     if max_pixels <= 0:
         raise ValueError("max_pixels must be positive.")
 
-    x_array, y_array, score_array = _tile_arrays(x, y, scores)
     height = math.ceil(geometry.height / raster_downsample)
     width = math.ceil(geometry.width / raster_downsample)
     if height * width > max_pixels:
@@ -256,25 +256,25 @@ def rasterize_tile_scores(
             "raster_downsample or write_signed_ome_tiffs for streaming output."
         )
 
-    sums: NDArray[np.float32] = np.zeros((height, width), dtype=np.float32)
-    coverage: NDArray[np.uint32] = np.zeros((height, width), dtype=np.uint32)
-    for tile_x, tile_y, score in zip(x_array, y_array, score_array, strict=True):
-        if not np.isfinite(score):
-            continue
-        x0, y0, x1, y1 = _scaled_rectangle(
-            int(tile_x),
-            int(tile_y),
-            tile_extent,
-            geometry,
-            raster_downsample,
-        )
-        if x0 >= x1 or y0 >= y1:
-            continue
-        sums[y0:y1, x0:x1] += np.float32(score)
-        coverage[y0:y1, x0:x1] += 1
-
-    np.divide(sums, coverage, out=sums, where=coverage > 0)
-    return RasterizedMask(values=sums, coverage=coverage, downsample=raster_downsample)
+    assembled = _assemble_scalar_mask(
+        x,
+        y,
+        scores,
+        geometry=geometry,
+        tile_extent=tile_extent,
+        stride=stride,
+    )
+    values, coverage = _sample_assembled_mask(
+        assembled,
+        height=height,
+        width=width,
+        factor=raster_downsample,
+    )
+    return RasterizedMask(
+        values=values,
+        coverage=coverage,
+        downsample=raster_downsample,
+    )
 
 
 def cohort_percentile_scale(
@@ -323,19 +323,24 @@ def write_signed_ome_tiffs(
     *,
     geometry: SlideGeometry,
     tile_extent: int,
+    stride: int,
     scale: float,
     pyramid_factors: Sequence[int] | None = None,
     tile_size: int = 512,
 ) -> SignedMaskPaths:
     """Write positive/negative pyramidal OME-BigTIFF masks without a dense WSI.
 
-    Each TIFF storage tile is rasterized independently. Overlapping attribution
-    tiles are averaged before separating positive and negative values. Pyramid
-    factors are integer downsample factors relative to the selected WSI level.
+    Ratiopath first assembles scalar scores and averages overlaps on a compact
+    GCD-aligned mask. This module then streams that mask into OME-TIFF storage
+    tiles because ratiopath's generic BigTIFF writer does not emit OME metadata.
+    Pyramid factors are integer downsample factors relative to the selected WSI
+    level.
     """
     _validate_geometry(geometry)
     if tile_extent <= 0:
         raise ValueError("tile_extent must be positive.")
+    if stride <= 0:
+        raise ValueError("stride must be positive.")
     if not np.isfinite(scale) or scale <= 0:
         raise ValueError("scale must be finite and positive.")
     if tile_size <= 0 or tile_size % 16:
@@ -343,20 +348,15 @@ def write_signed_ome_tiffs(
     if not stem or Path(stem).name != stem:
         raise ValueError("stem must be a non-empty filename stem, not a path.")
 
-    x_array, y_array, score_array = _tile_arrays(x, y, scores)
     factors = _pyramid_factors(geometry, tile_size, pyramid_factors)
-    indexes = [
-        _build_scaled_index(
-            x_array,
-            y_array,
-            score_array,
-            geometry=geometry,
-            tile_extent=tile_extent,
-            factor=factor,
-            storage_tile_size=tile_size,
-        )
-        for factor in factors
-    ]
+    assembled = _assemble_scalar_mask(
+        x,
+        y,
+        scores,
+        geometry=geometry,
+        tile_extent=tile_extent,
+        stride=stride,
+    )
 
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -365,7 +365,7 @@ def write_signed_ome_tiffs(
     _write_one_ome_tiff(
         positive,
         stem=f"{stem}_positive",
-        indexes=indexes,
+        assembled=assembled,
         factors=factors,
         geometry=geometry,
         scale=scale,
@@ -375,7 +375,7 @@ def write_signed_ome_tiffs(
     _write_one_ome_tiff(
         negative,
         stem=f"{stem}_negative",
-        indexes=indexes,
+        assembled=assembled,
         factors=factors,
         geometry=geometry,
         scale=scale,
@@ -567,9 +567,7 @@ def write_summary_png(
         axis = flat_axes[panel_index]
         axis.imshow(thumbnail_array)
         coverage_values = (
-            None
-            if attribution_coverages is None
-            else attribution_coverages.get(name)
+            None if attribution_coverages is None else attribution_coverages.get(name)
         )
         coverage = (
             np.isfinite(array)
@@ -1326,24 +1324,95 @@ def _validate_geometry(geometry: SlideGeometry) -> None:
             raise ValueError(f"Slide {name} must be finite and positive.")
 
 
-def _scaled_rectangle(
-    x: int,
-    y: int,
-    tile_extent: int,
+def _assemble_scalar_mask(
+    x: ArrayLike,
+    y: ArrayLike,
+    scores: ArrayLike,
+    *,
     geometry: SlideGeometry,
+    tile_extent: int,
+    stride: int,
+) -> _AssembledScalarMask:
+    """Assemble scalar tile outputs through ratiopath's compact mean mask."""
+    from ratiopath.masks.mask_builders import MaskBuilder, MeanAggregator
+
+    x_array, y_array, score_array = _tile_arrays(x, y, scores)
+    if (x_array < 0).any() or (y_array < 0).any():
+        raise ValueError("Ratiopath mask coordinates must be non-negative.")
+    if (x_array % stride).any() or (y_array % stride).any():
+        raise ValueError(
+            "Tile coordinates are not aligned to the configured stride; refusing "
+            "to snap explanation masks to a different grid."
+        )
+
+    builder = MaskBuilder(
+        source_extents=(geometry.height, geometry.width),
+        source_tile_extent=(tile_extent, tile_extent),
+        output_tile_extent=(1, 1),
+        stride=(stride, stride),
+        n_channels=1,
+        storage="inmemory",
+        aggregation=MeanAggregator,
+        dtype=np.float32,
+    )
+    try:
+        maximum_y = int(builder.span[0] - tile_extent)
+        maximum_x = int(builder.span[1] - tile_extent)
+        if (x_array > maximum_x).any() or (y_array > maximum_y).any():
+            raise ValueError(
+                "Tile coordinates fall outside the regular grid represented by "
+                "the configured slide extent, tile extent, and stride."
+            )
+
+        finite = np.isfinite(score_array)
+        if finite.any():
+            coordinates = np.stack((y_array[finite], x_array[finite]), axis=1)
+            values = score_array[finite].astype(np.float32, copy=False)[:, np.newaxis]
+            builder.update_batch(values, coordinates)
+        result = builder.finalize()
+        mask = np.asarray(result["mask"][0], dtype=np.float32).copy()
+        coverage = np.asarray(result["overlap_counter"][0], dtype=np.uint32).copy()
+        span = np.asarray(builder.span, dtype=np.int64)
+        mask_extents = np.asarray(builder.mask_extents, dtype=np.int64)
+        if (span % mask_extents).any():
+            raise RuntimeError(
+                "Ratiopath produced a non-integral scalar-mask pixel extent."
+            )
+        cell_height, cell_width = (span // mask_extents).tolist()
+    finally:
+        builder.cleanup()
+
+    return _AssembledScalarMask(
+        values=mask,
+        coverage=coverage,
+        cell_height=int(cell_height),
+        cell_width=int(cell_width),
+    )
+
+
+def _sample_assembled_mask(
+    assembled: _AssembledScalarMask,
+    *,
+    height: int,
+    width: int,
     factor: int,
-) -> tuple[int, int, int, int]:
-    base_x0 = max(0, x)
-    base_y0 = max(0, y)
-    base_x1 = min(geometry.width, x + tile_extent)
-    base_y1 = min(geometry.height, y + tile_extent)
-    if base_x0 >= base_x1 or base_y0 >= base_y1:
-        return 0, 0, 0, 0
+    output_y: int = 0,
+    output_x: int = 0,
+) -> tuple[NDArray[np.float32], NDArray[np.uint32]]:
+    """Sample a compact ratiopath mask in selected-level output coordinates."""
+    source_y = (np.arange(height, dtype=np.int64) + output_y) * factor
+    source_x = (np.arange(width, dtype=np.int64) + output_x) * factor
+    mask_y = np.minimum(
+        source_y // assembled.cell_height,
+        assembled.values.shape[0] - 1,
+    )
+    mask_x = np.minimum(
+        source_x // assembled.cell_width,
+        assembled.values.shape[1] - 1,
+    )
     return (
-        base_x0 // factor,
-        base_y0 // factor,
-        math.ceil(base_x1 / factor),
-        math.ceil(base_y1 / factor),
+        assembled.values[np.ix_(mask_y, mask_x)],
+        assembled.coverage[np.ix_(mask_y, mask_x)],
     )
 
 
@@ -1379,60 +1448,13 @@ def _pyramid_factors(
     return requested_factors
 
 
-def _build_scaled_index(
-    x: NDArray[np.int64],
-    y: NDArray[np.int64],
-    scores: NDArray[np.float64],
-    *,
-    geometry: SlideGeometry,
-    tile_extent: int,
-    factor: int,
-    storage_tile_size: int,
-) -> _ScaledTileIndex:
-    rectangles: list[tuple[int, int, int, int]] = []
-    kept_scores: list[float] = []
-    for tile_x, tile_y, score in zip(x, y, scores, strict=True):
-        if not np.isfinite(score):
-            continue
-        rectangle = _scaled_rectangle(
-            int(tile_x), int(tile_y), tile_extent, geometry, factor
-        )
-        if rectangle[0] >= rectangle[2] or rectangle[1] >= rectangle[3]:
-            continue
-        rectangles.append(rectangle)
-        kept_scores.append(float(score))
-
-    if rectangles:
-        rectangle_array = np.asarray(rectangles, dtype=np.int64)
-        x0, y0, x1, y1 = rectangle_array.T
-    else:
-        x0 = y0 = x1 = y1 = np.empty(0, dtype=np.int64)
-    buckets: dict[tuple[int, int], list[int]] = {}
-    for index in range(len(rectangles)):
-        first_column = int(x0[index]) // storage_tile_size
-        last_column = (int(x1[index]) - 1) // storage_tile_size
-        first_row = int(y0[index]) // storage_tile_size
-        last_row = (int(y1[index]) - 1) // storage_tile_size
-        for row in range(first_row, last_row + 1):
-            for column in range(first_column, last_column + 1):
-                buckets.setdefault((row, column), []).append(index)
-
-    return _ScaledTileIndex(
-        x0=x0,
-        y0=y0,
-        x1=x1,
-        y1=y1,
-        scores=np.asarray(kept_scores, dtype=np.float64),
-        buckets=buckets,
-    )
-
-
 def _iter_scaled_mask_tiles(
-    index: _ScaledTileIndex,
+    assembled: _AssembledScalarMask,
     *,
     height: int,
     width: int,
     storage_tile_size: int,
+    factor: int,
     scale: float,
     polarity: str,
 ) -> Iterator[NDArray[np.uint8]]:
@@ -1444,30 +1466,22 @@ def _iter_scaled_mask_tiles(
         for tile_column in range(tile_columns):
             global_x0 = tile_column * storage_tile_size
             global_x1 = min(width, global_x0 + storage_tile_size)
-            sums: NDArray[np.float32] = np.zeros(
+            values: NDArray[np.float32] = np.zeros(
                 (storage_tile_size, storage_tile_size), dtype=np.float32
             )
-            coverage: NDArray[np.uint32] = np.zeros(
-                (storage_tile_size, storage_tile_size), dtype=np.uint32
+            sampled, _ = _sample_assembled_mask(
+                assembled,
+                height=global_y1 - global_y0,
+                width=global_x1 - global_x0,
+                factor=factor,
+                output_y=global_y0,
+                output_x=global_x0,
             )
-            for tile_index in index.buckets.get((tile_row, tile_column), ()):
-                x0 = max(global_x0, int(index.x0[tile_index]))
-                y0 = max(global_y0, int(index.y0[tile_index]))
-                x1 = min(global_x1, int(index.x1[tile_index]))
-                y1 = min(global_y1, int(index.y1[tile_index]))
-                local_x0 = x0 - global_x0
-                local_y0 = y0 - global_y0
-                local_x1 = x1 - global_x0
-                local_y1 = y1 - global_y0
-                sums[local_y0:local_y1, local_x0:local_x1] += np.float32(
-                    index.scores[tile_index]
-                )
-                coverage[local_y0:local_y1, local_x0:local_x1] += 1
-            np.divide(sums, coverage, out=sums, where=coverage > 0)
+            values[: sampled.shape[0], : sampled.shape[1]] = sampled
             if polarity == "positive":
-                scaled = np.clip(sums / scale, 0.0, 1.0)
+                scaled = np.clip(values / scale, 0.0, 1.0)
             else:
-                scaled = np.clip(-sums / scale, 0.0, 1.0)
+                scaled = np.clip(-values / scale, 0.0, 1.0)
             yield np.rint(scaled * 255).astype(np.uint8)
 
 
@@ -1475,7 +1489,7 @@ def _write_one_ome_tiff(
     path: Path,
     *,
     stem: str,
-    indexes: Sequence[_ScaledTileIndex],
+    assembled: _AssembledScalarMask,
     factors: Sequence[int],
     geometry: SlideGeometry,
     scale: float,
@@ -1483,9 +1497,7 @@ def _write_one_ome_tiff(
     polarity: str,
 ) -> None:
     with tifffile.TiffWriter(path, bigtiff=True, ome=True) as writer:
-        for level_index, (factor, index) in enumerate(
-            zip(factors, indexes, strict=True)
-        ):
+        for level_index, factor in enumerate(factors):
             height = math.ceil(geometry.height / factor)
             width = math.ceil(geometry.width / factor)
             metadata = None
@@ -1505,10 +1517,11 @@ def _write_one_ome_tiff(
                 subfiletype = 1
             writer.write(
                 data=_iter_scaled_mask_tiles(
-                    index,
+                    assembled,
                     height=height,
                     width=width,
                     storage_tile_size=tile_size,
+                    factor=factor,
                     scale=scale,
                     polarity=polarity,
                 ),

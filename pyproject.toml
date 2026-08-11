@@ -17,7 +17,7 @@ dependencies = [
     "rationai-mlkit",
     "rationai-masks>=1.1.1",
     "rationai-tiling>=1.1.1",
-    "ratiopath>=1.2.0",
+    "ratiopath>=1.4.2",
     "rationai-sdk",
     "timm>=1.0.25",
 ]

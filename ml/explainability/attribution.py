@@ -24,6 +24,7 @@ from ml.models.heads.mlp import MLPHead
 
 SupportedAggregator = MeanPool | MaxPool | AttentionMIL
 SupportedHead = LinearHead | MLPHead
+_MAX_IG_TILE_BATCH_SIZE = 4096
 
 
 @dataclass(frozen=True)
@@ -186,9 +187,7 @@ def leave_one_out(
             return LeaveOneOutResult(full, missing, missing.clone())
 
         if isinstance(aggregator, MeanPool):
-            without_tile = _mean_leave_one_out_outputs(
-                head, bag, head_batch_size
-            )
+            without_tile = _mean_leave_one_out_outputs(head, bag, head_batch_size)
         elif isinstance(aggregator, MaxPool):
             without_tile = _max_leave_one_out_outputs(head, bag, head_batch_size)
         else:
@@ -239,47 +238,55 @@ def integrated_gradients(
     """Compute manual Integrated Gradients through aggregator and head.
 
     ``baseline`` is one neutral embedding vector and is repeated to the bag size.
-    The integral uses ``steps + 1`` points and the trapezoidal rule.  Feature-level
-    contributions are reduced immediately to signed tile scores, avoiding an
-    ``(tiles, features, outputs)`` attribution allocation.
+    Mean and attention pooling use ``steps + 1`` points and the trapezoidal rule.
+    Max pooling instead has an exact pooled-space solution for the supported
+    linear and two-layer ReLU heads.  This avoids evaluating the non-differentiable
+    all-tiles-tied baseline and assigns each pooled-feature contribution to the
+    tile or tiles that attain its maximum.
+
+    Feature-level contributions are reduced immediately to signed tile scores,
+    avoiding an ``(tiles, features, outputs)`` attribution allocation.
     """
     validate_pipeline(aggregator, head, bag)
     baseline = _validate_baseline(baseline, bag)
     if steps < 1:
         raise ValueError(f"Integrated Gradients steps must be positive; got {steps}.")
 
-    baseline_bag = baseline.unsqueeze(0).expand_as(bag)
-    displacement = bag - baseline_bag
-    attributions = torch.zeros(
-        (bag.shape[0], head.out_dim),
-        dtype=bag.dtype,
-        device=bag.device,
-    )
-
     with _evaluation_mode(aggregator, head):
+        baseline_bag = baseline.unsqueeze(0).expand_as(bag)
         with torch.no_grad():
             full_output = _forward_raw_unchecked(aggregator, head, bag).scores
             baseline_output = _forward_raw_unchecked(
                 aggregator, head, baseline_bag
             ).scores
 
-        for point in range(steps + 1):
-            alpha = point / steps
-            interpolated = (baseline_bag + alpha * displacement).detach()
-            interpolated.requires_grad_(True)
-            scores = _forward_raw_unchecked(aggregator, head, interpolated).scores
-            trapezoid_weight = 0.5 if point in (0, steps) else 1.0
+        if isinstance(aggregator, MaxPool):
+            with torch.no_grad():
+                attributions = _max_integrated_gradients(head, bag, baseline)
+        else:
+            displacement = bag - baseline_bag
+            attributions = torch.zeros(
+                (bag.shape[0], head.out_dim),
+                dtype=bag.dtype,
+                device=bag.device,
+            )
+            for point in range(steps + 1):
+                alpha = point / steps
+                interpolated = (baseline_bag + alpha * displacement).detach()
+                interpolated.requires_grad_(True)
+                scores = _forward_raw_unchecked(aggregator, head, interpolated).scores
+                trapezoid_weight = 0.5 if point in (0, steps) else 1.0
 
-            for output_index in range(head.out_dim):
-                gradient = torch.autograd.grad(
-                    scores[output_index],
-                    interpolated,
-                    retain_graph=output_index < head.out_dim - 1,
-                )[0]
-                tile_contribution = (gradient * displacement).sum(dim=1)
-                attributions[:, output_index].add_(
-                    tile_contribution.detach(), alpha=trapezoid_weight / steps
-                )
+                for output_index in range(head.out_dim):
+                    gradient = torch.autograd.grad(
+                        scores[output_index],
+                        interpolated,
+                        retain_graph=output_index < head.out_dim - 1,
+                    )[0]
+                    tile_contribution = (gradient * displacement).sum(dim=1)
+                    attributions[:, output_index].add_(
+                        tile_contribution.detach(), alpha=trapezoid_weight / steps
+                    )
 
     output_difference = full_output - baseline_output
     residual = output_difference - attributions.sum(dim=0)
@@ -367,6 +374,86 @@ def _forward_raw_unchecked(
     return RawPipelineOutput(scores=scores, pooled=pooled, attention=attention)
 
 
+def _max_integrated_gradients(head: Head, bag: Tensor, baseline: Tensor) -> Tensor:
+    """Compute exact max-pooling IG and map pooled features back to tiles.
+
+    Repeating one baseline vector for every tile makes the max-pooled path
+    ``baseline + alpha * (bag.amax(0) - baseline)`` for every ``alpha > 0``.
+    The maximizing tile for each feature is therefore constant along the open
+    path.  Computing IG in pooled space avoids the ambiguous gradient at
+    ``alpha == 0``, where every baseline tile ties.
+    """
+    maximum = bag.amax(dim=0)
+    feature_attributions = _head_feature_integrated_gradients(
+        head,
+        baseline,
+        maximum,
+    )
+
+    maximum_count = torch.zeros(
+        bag.shape[1],
+        dtype=torch.int64,
+        device=bag.device,
+    )
+    for tile_chunk in bag.split(_MAX_IG_TILE_BATCH_SIZE):
+        maximum_count.add_((tile_chunk == maximum.unsqueeze(0)).sum(dim=0))
+    maximum_count = maximum_count.clamp_min(1).to(dtype=bag.dtype)
+    attribution_per_winner = feature_attributions / maximum_count.unsqueeze(1)
+    attributions = torch.empty(
+        (bag.shape[0], head.out_dim),
+        dtype=bag.dtype,
+        device=bag.device,
+    )
+    for start in range(0, bag.shape[0], _MAX_IG_TILE_BATCH_SIZE):
+        stop = min(start + _MAX_IG_TILE_BATCH_SIZE, bag.shape[0])
+        is_maximum = bag[start:stop] == maximum.unsqueeze(0)
+        attributions[start:stop] = (
+            is_maximum.to(dtype=bag.dtype) @ attribution_per_winner
+        )
+    return attributions
+
+
+def _head_feature_integrated_gradients(
+    head: Head,
+    baseline: Tensor,
+    features: Tensor,
+) -> Tensor:
+    """Return exact feature-by-output IG for a supported prediction head."""
+    displacement = features - baseline
+    if isinstance(head, LinearHead):
+        return displacement.unsqueeze(1) * head.linear.weight.transpose(0, 1)
+
+    assert isinstance(head, MLPHead)
+    linear_layers = [layer for layer in head.net if isinstance(layer, nn.Linear)]
+    if len(linear_layers) != 2:
+        raise RuntimeError(
+            "Exact max-pooling IG expects MLPHead to contain exactly two linear "
+            f"layers; found {len(linear_layers)}."
+        )
+    first, second = linear_layers
+
+    preactivation_start = first(baseline)
+    preactivation_end = first(features)
+    slope = preactivation_end - preactivation_start
+    active_fraction = torch.empty_like(slope)
+
+    increasing = slope > 0
+    decreasing = slope < 0
+    constant = ~(increasing | decreasing)
+    active_fraction[increasing] = (
+        preactivation_end[increasing] / slope[increasing]
+    ).clamp(0, 1)
+    active_fraction[decreasing] = (
+        preactivation_start[decreasing] / -slope[decreasing]
+    ).clamp(0, 1)
+    active_fraction[constant] = (preactivation_start[constant] > 0).to(
+        dtype=baseline.dtype
+    )
+
+    mean_gradient = second.weight @ (active_fraction.unsqueeze(1) * first.weight)
+    return displacement.unsqueeze(1) * mean_gradient.transpose(0, 1)
+
+
 def _mean_leave_one_out_outputs(
     head: Head,
     bag: Tensor,
@@ -394,9 +481,7 @@ def _max_leave_one_out_outputs(
     for start in range(0, bag.shape[0], batch_size):
         is_unique_maximum = (
             bag[start : start + batch_size] == maximum.unsqueeze(0)
-        ) & (
-            maximum_count == 1
-        ).unsqueeze(0)
+        ) & (maximum_count == 1).unsqueeze(0)
         pooled = torch.where(
             is_unique_maximum,
             second_maximum.unsqueeze(0),
@@ -443,8 +528,7 @@ def _attention_leave_one_out_outputs(
         chunk_normalized = normalized64[start:stop]
         chunk_denominator = denominator[start:stop]
         pooled_without64 = (
-            pooled64.unsqueeze(0)
-            - chunk_attention.unsqueeze(1) * chunk_normalized
+            pooled64.unsqueeze(0) - chunk_attention.unsqueeze(1) * chunk_normalized
         ) / chunk_denominator.unsqueeze(1)
         pooled_without = pooled_without64.to(dtype=bag.dtype)
 
@@ -496,9 +580,7 @@ def _validate_baseline(baseline: Tensor, bag: Tensor) -> Tensor:
 
 def _validate_head_batch_size(head_batch_size: int) -> None:
     if head_batch_size < 1:
-        raise ValueError(
-            f"head_batch_size must be positive; got {head_batch_size}."
-        )
+        raise ValueError(f"head_batch_size must be positive; got {head_batch_size}.")
 
 
 @contextmanager

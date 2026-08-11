@@ -19,6 +19,7 @@ import logging
 import os
 import shutil
 import tempfile
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -28,6 +29,7 @@ import mlflow
 import pandas as pd
 from mlflow import MlflowClient
 from omegaconf import OmegaConf
+from rationai.mlkit.stream import StreamCapture, StreamLogger
 
 from ml.explainability.checkpoint import (
     CheckpointBootstrap,
@@ -47,6 +49,18 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 DEFAULT_XOPAT_UI_URI = "https://xopat.rationai.cloud.trusted.e-infra.cz/"
+MLFLOW_CONSOLE_LOG = "console.log"
+
+
+class _MlflowConsoleLogger(StreamLogger):
+    """Write captured stdout/stderr to the explanation run's standard log."""
+
+    def __init__(self, client: MlflowClient, run_id: str) -> None:
+        self.client = client
+        self.run_id = run_id
+
+    def log_stream(self, text: str) -> None:
+        self.client.log_text(self.run_id, text, MLFLOW_CONSOLE_LOG)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -357,11 +371,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
 
         result = None
-        with mlflow.start_run(
-            experiment_id=experiment_id,
-            run_name=run_name,
-            tags=tags,
-        ) as explanation_run:
+        with (
+            mlflow.start_run(
+                experiment_id=experiment_id,
+                run_name=run_name,
+                tags=tags,
+            ) as explanation_run,
+            StreamCapture(_MlflowConsoleLogger(client, explanation_run.info.run_id)),
+        ):
             review_url = _mlflow_run_url(
                 args.mlflow_ui_uri,
                 experiment_id,
@@ -396,6 +413,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "aggregator": type(module.aggregator).__name__,
                     "head": type(module.head).__name__,
                     "ig_steps": int(config.explain.ig.steps),
+                    "ig_integration": (
+                        "exact_max_pool"
+                        if type(module.aggregator).__name__ == "MaxPool"
+                        else "trapezoidal"
+                    ),
+                    "ratiopath_version": package_version("ratiopath"),
                 }
             )
             try:
