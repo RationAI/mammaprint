@@ -3,6 +3,8 @@ label_mode: ${label_mode}
 artifact_path: predictions
 filename: predictions.csv
 table_filename: predictions.json
+report_background_artifact_path: report/background
+report_background_filename: slides.parquet
 classification_outputs_are_logits: true
 threshold: 0.5
 save_dir: null

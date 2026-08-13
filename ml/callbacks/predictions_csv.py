@@ -10,7 +10,11 @@ import torch
 from lightning.pytorch import Callback, LightningModule, Trainer
 from torch import Tensor
 
-from ml.callbacks._targets import prediction_targets
+from ml.callbacks._targets import (
+    PredictionTarget,
+    prediction_targets,
+    report_item_id,
+)
 from ml.typing import MILSample
 
 
@@ -37,6 +41,8 @@ class PredictionCSVCallback(Callback):
         artifact_path: str = "predictions",
         filename: str = "predictions.csv",
         table_filename: str = "predictions.json",
+        report_background_artifact_path: str = "report/background",
+        report_background_filename: str = "slides.parquet",
         classification_outputs_are_logits: bool = True,
         threshold: float = 0.5,
         save_dir: str | None = None,
@@ -48,14 +54,20 @@ class PredictionCSVCallback(Callback):
         self.artifact_path = artifact_path.strip("/")
         self.filename = filename
         self.table_filename = table_filename
+        self.report_background_artifact_path = report_background_artifact_path.strip(
+            "/"
+        )
+        self.report_background_filename = report_background_filename
         self.classification_outputs_are_logits = classification_outputs_are_logits
         self.threshold = threshold
         self.save_dir = Path(save_dir) if save_dir is not None else None
         self._rows: list[dict[str, Any]] = []
+        self._background_rows: list[dict[str, Any]] = []
 
     def on_predict_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
         """Reset state when the same callback instance is reused."""
         self._rows.clear()
+        self._background_rows.clear()
 
     def on_predict_batch_end(
         self,
@@ -82,9 +94,11 @@ class PredictionCSVCallback(Callback):
             )
 
         for prediction, (_, label, metadata) in zip(predictions, batch, strict=True):
+            item_id = report_item_id(metadata["slide_id"])
             row: dict[str, Any] = {
                 "record_num": metadata["record_num"],
                 "slide_id": metadata["slide_id"],
+                "report_item_id": item_id,
             }
             for target in self.targets:
                 raw = float(prediction[target.output_index])
@@ -116,6 +130,15 @@ class PredictionCSVCallback(Callback):
                         }
                     )
             self._rows.append(row)
+            self._background_rows.append(
+                {
+                    "report_item_id": item_id,
+                    "slide_id": metadata["slide_id"],
+                    "record_num": metadata["record_num"],
+                    "slide_path": str(metadata["slide_path"]),
+                    "ground_truth": _ground_truth(label, self.targets),
+                }
+            )
 
     def on_predict_epoch_end(
         self, trainer: Trainer, pl_module: LightningModule
@@ -133,6 +156,7 @@ class PredictionCSVCallback(Callback):
             )
 
         frame = pd.DataFrame(self._rows)
+        background_frame = pd.DataFrame(self._background_rows)
         raw_logger = trainer.logger
         if not hasattr(raw_logger, "log_artifact") or not hasattr(
             raw_logger, "log_table"
@@ -148,11 +172,23 @@ class PredictionCSVCallback(Callback):
             path = self.save_dir / self.filename
             frame.to_csv(path, index=False)
             mlflow_logger.log_artifact(str(path), artifact_path=self.artifact_path)
+            background_path = self.save_dir / self.report_background_filename
+            background_frame.to_parquet(background_path, index=False)
+            mlflow_logger.log_artifact(
+                str(background_path),
+                artifact_path=self.report_background_artifact_path,
+            )
         else:
             with TemporaryDirectory() as tmp_dir:
                 path = Path(tmp_dir) / self.filename
                 frame.to_csv(path, index=False)
                 mlflow_logger.log_artifact(str(path), artifact_path=self.artifact_path)
+                background_path = Path(tmp_dir) / self.report_background_filename
+                background_frame.to_parquet(background_path, index=False)
+                mlflow_logger.log_artifact(
+                    str(background_path),
+                    artifact_path=self.report_background_artifact_path,
+                )
 
         table_path = "/".join(
             part for part in (self.artifact_path, self.table_filename) if part
@@ -164,6 +200,18 @@ class PredictionCSVCallback(Callback):
             self.artifact_path,
             self.filename,
         )
+
+
+def _ground_truth(label: Tensor, targets: tuple[PredictionTarget, ...]) -> str:
+    """Format the configured truth values for the report's slide badge."""
+    parts: list[str] = []
+    for target in targets:
+        value = float(label[target.output_index])
+        if target.is_classification:
+            parts.append("Luminal A" if value >= 0.5 else "Luminal B")
+        else:
+            parts.append(f"MammaPrint index: {value:.4g}")
+    return " | ".join(parts)
 
 
 __all__ = ["PredictionCSVCallback"]

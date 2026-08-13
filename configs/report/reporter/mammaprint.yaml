@@ -1,0 +1,47 @@
+# @package reporter
+# Pathologist landing page built by the same external `report` package used by
+# prostate-gleason-grading. Runtime values are supplied by ml.pathologist_report.
+_target_: report.reporter.ReportAssembler
+title: ${oc.env:MAMMAPRINT_REPORT_TITLE}
+template_asset_path: report_template.html
+
+# Restrict the report to the prediction split. PredictionCSVCallback writes this
+# small parquet with the original WSI path and a human-readable ground truth.
+background:
+  _target_: report.masks.ParquetSlideDatasetMLFlowMaskRetriever
+  artifact_uris:
+    - ${oc.env:MAMMAPRINT_PREDICTION_ARTIFACT_URI}/report/background
+  item_name_col: report_item_id
+  item_path_col: slide_path
+  ground_truth_col: ground_truth
+  layer_name: H&E WSI
+
+# Both retrievers are safe for single-task runs: a missing artifact directory is
+# simply an empty layer. Joint runs display both overlays in the same xOpat view.
+mask_retrievers:
+  - _target_: report.masks.RunIDMlflowMaskRetriever
+    run_id: ${oc.env:MAMMAPRINT_PREDICTION_RUN_ID}
+    dir_name: heatmaps/local_tile_prediction/luminal_a_probability
+    layer_name: Local Luminal A probability
+    shader_conf:
+      type: classify-heatmap
+      colorHigh: "#b2182b"
+      colorLow: "#2166ac"
+      opacity: 0.7
+  - _target_: report.masks.RunIDMlflowMaskRetriever
+    run_id: ${oc.env:MAMMAPRINT_PREDICTION_RUN_ID}
+    dir_name: heatmaps/local_tile_prediction/mammaprint_index
+    layer_name: Local MammaPrint index (0.5 = index 0)
+    shader_conf:
+      type: classify-heatmap
+      colorHigh: "#b2182b"
+      colorLow: "#2166ac"
+      opacity: 0.7
+
+metrics_run_ids: []
+evaluation_runs: {}
+
+save:
+  _target_: report.save.RunIDMLFlowReportAttacher
+  artifact_path: report.html
+  run_id: ${oc.env:MAMMAPRINT_PREDICTION_RUN_ID}

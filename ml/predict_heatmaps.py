@@ -18,10 +18,18 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
+import mlflow
 from mlflow import MlflowClient
 from mlflow.artifacts import download_artifacts
 from omegaconf import OmegaConf
+
+from ml.pathologist_report import (
+    DEFAULT_CONFIG_DIR,
+    DEFAULT_MLFLOW_UI_URI,
+    build_pathologist_report,
+)
 
 
 HYDRA_ARTIFACT = "configs/hydra.yaml"
@@ -106,6 +114,7 @@ def build_command(
     run_id: str,
     source_run_name: str,
     split: str,
+    invocation_id: str | None = None,
 ) -> list[str]:
     """Construct the exact Hydra predict invocation."""
     run_name = f"🎯 Tile predictions: {source_run_name}"
@@ -114,7 +123,7 @@ def build_command(
         "+callbacks@trainer.callbacks.tile_probability_heatmaps="
         "tile_probability_heatmaps",
     ]
-    return [
+    command = [
         "uv",
         "run",
         "-m",
@@ -129,6 +138,27 @@ def build_command(
         f"+logger.tags.source_run_id={run_id}",
         f"+logger.tags.source_checkpoint_uri={json.dumps(checkpoint_uri)}",
     ]
+    if invocation_id is not None:
+        command.append(f"+logger.tags.prediction_invocation_id={invocation_id}")
+    return command
+
+
+def find_prediction_run(client: MlflowClient, invocation_id: str) -> str:
+    """Resolve the one new run carrying a unique invocation tag."""
+    experiment_ids = [
+        experiment.experiment_id for experiment in client.search_experiments()
+    ]
+    runs = client.search_runs(
+        experiment_ids=experiment_ids,
+        filter_string=(f"tags.prediction_invocation_id = '{invocation_id}'"),
+        max_results=2,
+    )
+    if len(runs) != 1:
+        raise RuntimeError(
+            f"Expected one prediction run for invocation {invocation_id}, found "
+            f"{len(runs)}."
+        )
+    return runs[0].info.run_id
 
 
 def parse_args() -> argparse.Namespace:
@@ -151,6 +181,19 @@ def parse_args() -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Additional Hydra override applied after the source run; repeatable.",
     )
+    parser.add_argument(
+        "--report",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Build and attach the RationAI pathologist report (default: on).",
+    )
+    parser.add_argument("--report-user", default=os.getenv("USER", "unknown"))
+    parser.add_argument("--report-title")
+    parser.add_argument("--report-config-dir", type=Path, default=DEFAULT_CONFIG_DIR)
+    parser.add_argument(
+        "--mlflow-ui-uri",
+        default=os.getenv("MLFLOW_UI_URI", DEFAULT_MLFLOW_UI_URI),
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -161,6 +204,7 @@ def main() -> int:
     client = MlflowClient(tracking_uri=args.tracking_uri)
     source_run = client.get_run(run_id)
     source_run_name = source_run.data.tags.get("mlflow.runName", run_id)
+    invocation_id = uuid4().hex
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
@@ -177,17 +221,43 @@ def main() -> int:
             run_id,
             source_run_name,
             args.split,
+            invocation_id,
         )
         print(f"Source run: {run_id}")
         print(f"Checkpoint: {checkpoint}")
         print("Predict command:")
         print("  " + " ".join(command))
         if args.dry_run:
+            if args.report:
+                print(
+                    "[dry-run] A report would be attached after resolving the new "
+                    "prediction run id."
+                )
             return 0
         environment = os.environ.copy()
         if args.tracking_uri is not None:
             environment["MLFLOW_TRACKING_URI"] = args.tracking_uri
-        return subprocess.run(command, check=False, env=environment).returncode
+        prediction = subprocess.run(command, check=False, env=environment)
+        if prediction.returncode != 0:
+            return prediction.returncode
+
+        prediction_run_id = find_prediction_run(client, invocation_id)
+        print(f"PREDICTION_RUN_ID={prediction_run_id}")
+        if not args.report:
+            return 0
+
+        tracking_uri = args.tracking_uri or os.getenv("MLFLOW_TRACKING_URI")
+        if tracking_uri is None:
+            tracking_uri = mlflow.get_tracking_uri()
+        return build_pathologist_report(
+            client=client,
+            prediction_run_id=prediction_run_id,
+            tracking_uri=tracking_uri,
+            user=args.report_user,
+            title=args.report_title,
+            config_dir=args.report_config_dir,
+            mlflow_ui_uri=args.mlflow_ui_uri,
+        )
 
 
 if __name__ == "__main__":

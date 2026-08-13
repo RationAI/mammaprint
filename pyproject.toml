@@ -17,20 +17,26 @@ dependencies = [
     "rationai-mlkit",
     "rationai-masks>=1.1.1",
     "rationai-tiling>=1.1.1",
-    "ratiopath>=1.2.0",
+    "ratiopath>=1.4.2",
     "rationai-sdk",
     "timm>=1.0.25",
 ]
+
+[project.optional-dependencies]
+job = ["rationai-kube-jobs"]
 
 [dependency-groups]
 dev = [
     "ruff>=0.14.1",
     "mypy>=1.19.1",
+    "report",
 ]
 
 [tool.uv.sources]
 rationai-masks = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/masks.git" }
 rationai-mlkit = { git = "https://github.com/RationAI/mlkit.git" }
+rationai-kube-jobs = { git = "ssh://git@gitlab.ics.muni.cz/rationai/infrastructure/kube-jobs" }
 rationai-tiling = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/tiling.git" }
 rationai-sdk = { git = "https://github.com/RationAI/rationai-sdk-python.git" } 
 ratiopath = { git = "https://github.com/RationAI/ratiopath.git" }
+report = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/tools/report.git", rev = "23ff289aa833e1c42924ad2d0efd1e5ee2490240" }

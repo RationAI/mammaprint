@@ -1,7 +1,6 @@
 """Prostate-style local tile prediction heatmaps for embedding MIL models."""
 
 import logging
-import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Protocol, cast
@@ -14,7 +13,11 @@ from ratiopath.masks.mask_builders import MaskBuilder
 from ratiopath.masks.mask_builders.aggregation import MeanAggregator
 from torch import Tensor
 
-from ml.callbacks._targets import PredictionTarget, prediction_targets
+from ml.callbacks._targets import (
+    PredictionTarget,
+    prediction_targets,
+    report_item_id,
+)
 from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.max import MaxPool
 from ml.models.aggregators.mean import MeanPool
@@ -27,14 +30,6 @@ logger = logging.getLogger(__name__)
 
 class _ArtifactLogger(Protocol):
     def log_artifact(self, local_path: str, artifact_path: str) -> None: ...
-
-
-def _safe_filename(value: str) -> str:
-    """Make an identifier safe for use as one artifact filename."""
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._")
-    if not safe:
-        raise ValueError(f"Slide id {value!r} cannot form a safe filename.")
-    return safe
 
 
 def _slide_level_extents(metadata: SlideMetadata) -> tuple[int, int]:
@@ -121,11 +116,22 @@ def _display_values(
     raw: Tensor,
     target: PredictionTarget,
     classification_outputs_are_logits: bool,
+    regression_display_transform: str,
 ) -> np.ndarray:
-    """Transform one raw output channel into its heatmap values."""
+    """Transform one raw output channel into a viewer-safe ``[0, 1]`` value."""
     values = raw[:, target.output_index]
     if target.is_classification and classification_outputs_are_logits:
         values = torch.sigmoid(values)
+    elif not target.is_classification:
+        if regression_display_transform == "sigmoid":
+            # MammaPrint's decision boundary is zero. Sigmoid maps it to the
+            # viewer midpoint (0.5), while retaining direction and ordering.
+            values = torch.sigmoid(values)
+        else:
+            raise ValueError(
+                "regression_display_transform must be 'sigmoid'; got "
+                f"{regression_display_transform!r}."
+            )
     return values.detach().float().cpu().numpy()
 
 
@@ -144,6 +150,7 @@ class TileProbabilityHeatmapCallback(Callback):
         artifact_path: str = "heatmaps/local_tile_prediction",
         batch_size: int = 8192,
         classification_outputs_are_logits: bool = True,
+        regression_display_transform: str = "sigmoid",
         save_dir: str | None = None,
     ) -> None:
         super().__init__()
@@ -153,6 +160,7 @@ class TileProbabilityHeatmapCallback(Callback):
         self.artifact_path = artifact_path.strip("/")
         self.batch_size = batch_size
         self.classification_outputs_are_logits = classification_outputs_are_logits
+        self.regression_display_transform = regression_display_transform
         self.save_dir = Path(save_dir) if save_dir is not None else None
 
     def on_predict_batch_end(
@@ -199,7 +207,10 @@ class TileProbabilityHeatmapCallback(Callback):
         values = np.stack(
             [
                 _display_values(
-                    raw_outputs, target, self.classification_outputs_are_logits
+                    raw_outputs,
+                    target,
+                    self.classification_outputs_are_logits,
+                    self.regression_display_transform,
                 )
                 for target in self.targets
             ],
@@ -222,7 +233,7 @@ class TileProbabilityHeatmapCallback(Callback):
                 builder,
                 compact_mask,
                 metadata,
-                _safe_filename(metadata["slide_id"]),
+                report_item_id(metadata["slide_id"]),
             )
         finally:
             builder.cleanup()
@@ -257,11 +268,9 @@ class TileProbabilityHeatmapCallback(Callback):
         for channel, target in enumerate(self.targets):
             target_dir = output_dir / target.name
             target_dir.mkdir(parents=True, exist_ok=True)
-            target_mask = mask[channel : channel + 1]
-            if target.is_classification:
-                target_mask = (target_mask * 255).clip(0, 255).astype(np.uint8)
-            else:
-                target_mask = target_mask.astype(np.float32, copy=False)
+            target_mask = (
+                (mask[channel : channel + 1] * 255).clip(0, 255).astype(np.uint8)
+            )
             image = builder.resize_to_source(target_mask, kernel="nearest")
             path = target_dir / f"{slide_name}.tiff"
             write_big_tiff(

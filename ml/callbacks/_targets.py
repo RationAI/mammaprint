@@ -1,5 +1,6 @@
 """Shared output semantics for prediction callbacks."""
 
+import re
 from dataclasses import dataclass
 
 from ml.data.datasets.labels import LabelMode
@@ -12,6 +13,14 @@ class PredictionTarget:
     name: str
     output_index: int
     is_classification: bool
+
+
+def report_item_id(slide_id: str) -> str:
+    """Return the shared, artifact-safe item key used by masks and reports."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", slide_id).strip("._")
+    if not safe:
+        raise ValueError(f"Slide id {slide_id!r} cannot form a report item id.")
+    return safe
 
 
 def prediction_targets(label_mode: str | LabelMode) -> tuple[PredictionTarget, ...]:
@@ -29,4 +38,4 @@ def prediction_targets(label_mode: str | LabelMode) -> tuple[PredictionTarget, .
     raise ValueError(f"Unsupported label mode: {mode}")
 
 
-__all__ = ["PredictionTarget", "prediction_targets"]
+__all__ = ["PredictionTarget", "prediction_targets", "report_item_id"]
