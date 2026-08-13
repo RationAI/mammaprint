@@ -1,5 +1,6 @@
 from collections.abc import Mapping
-from typing import TypedDict
+from pathlib import Path
+from typing import NotRequired, TypedDict
 
 from torch import Tensor
 
@@ -16,9 +17,22 @@ type TilesPredictSample = tuple[Tensor, TileMetadata]
 
 
 class SlideMetadata(TypedDict):
-    """Metadata for a slide-level MIL sample."""
+    """Metadata needed for slide prediction and spatial heatmap rendering.
+
+    Tile coordinates are expressed at ``level`` and index the rows in the bag.
+    Keeping them beside the bag lets a prediction callback build an aligned mask
+    without re-downloading or re-reading the embedding parquet.
+    """
 
     slide_id: str
+    record_num: NotRequired[str]
+    slide_path: NotRequired[Path]
+    level: NotRequired[int]
+    mpp: NotRequired[float]
+    tile_extent: NotRequired[int]
+    stride: NotRequired[int]
+    x: NotRequired[Tensor]
+    y: NotRequired[Tensor]
 
 
 class LevelSpec(TypedDict):
@@ -33,6 +47,7 @@ class LevelSpec(TypedDict):
 
     mpp: float
     tile_extent: int
+    stride: int
     uris: Mapping[str, str]
 
 

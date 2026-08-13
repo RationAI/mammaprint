@@ -97,9 +97,7 @@ class MammaprintModule(pl.LightningModule):
         prediction = self.output_activation(self.head(pooled))  # (out_dim,)
         return prediction, attention
 
-    def _forward_batch(
-        self, bags: Sequence[Bag]
-    ) -> tuple[Tensor, list[Tensor | None]]:
+    def _forward_batch(self, bags: Sequence[Bag]) -> tuple[Tensor, list[Tensor | None]]:
         """Run a batch of variable-length bags, stacking per-slide predictions."""
         predictions: list[Tensor] = []
         attentions: list[Tensor | None] = []
@@ -138,15 +136,22 @@ class MammaprintModule(pl.LightningModule):
     def test_step(self, batch: list[MILSample], batch_idx: int) -> Tensor:
         return self._step(batch, "test", self.test_metrics)
 
-    def predict_step(
-        self, batch: list[MILSample], batch_idx: int
-    ) -> dict[str, Any]:
-        bags, _, metadata = _unpack_batch(batch)
+    def predict_step(self, batch: list[MILSample], batch_idx: int) -> dict[str, Any]:
+        bags, labels, metadata = _unpack_batch(batch)
         predictions, attentions = self._forward_batch(bags)
         return {
             "predictions": predictions,
+            "labels": torch.stack(labels),
             "attentions": attentions,
-            "metadata": metadata,
+            # Coordinate tensors stay in ``batch`` for the heatmap callback. Do
+            # not retain them in Trainer.predict's returned output collection.
+            "metadata": [
+                {
+                    "slide_id": item["slide_id"],
+                    "record_num": item.get("record_num", ""),
+                }
+                for item in metadata
+            ],
         }
 
     def configure_optimizers(self) -> Any:

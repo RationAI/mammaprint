@@ -69,6 +69,7 @@ class DataModule(pl.LightningDataModule):
             "fit": ("train", "val"),
             "validate": ("val",),
             "test": ("test",),
+            "predict": ("predict",),
         }.get(stage or "", ("train", "val", "test"))
         for split in needed:
             self._build(split)
@@ -92,6 +93,10 @@ class DataModule(pl.LightningDataModule):
 
     def test_dataloader(self) -> DataLoader[Sample]:
         return self._dataloader("test", shuffle=False)
+
+    def predict_dataloader(self) -> DataLoader[Sample]:
+        """Return the configured inference split without shuffling slides."""
+        return self._dataloader("predict", shuffle=False)
 
 
 __all__ = ["DataModule", "mil_collate"]

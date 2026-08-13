@@ -15,7 +15,6 @@ Run with, e.g.::
 """
 
 import logging
-import logging
 import random
 
 import hydra
@@ -45,7 +44,16 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # config.mode selects the Lightning stage (fit/validate/test/predict);
     # config.checkpoint (or null) resumes training / loads weights for eval.
     run_stage = getattr(trainer, config.mode)
-    run_stage(module, datamodule=datamodule, ckpt_path=config.checkpoint)
+    stage_kwargs = {
+        "model": module,
+        "datamodule": datamodule,
+        "ckpt_path": config.checkpoint,
+    }
+    if config.mode == "predict":
+        # Callbacks consume each batch immediately. Avoid retaining every slide's
+        # outputs (especially per-tile attention vectors) until the run finishes.
+        stage_kwargs["return_predictions"] = False
+    run_stage(**stage_kwargs)
 
     # After training, evaluate the best checkpoint on the test split so runs are
     # directly comparable on held-out data. "best" points at the ModelCheckpoint's

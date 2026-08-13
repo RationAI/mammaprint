@@ -39,7 +39,9 @@ def load_labeled_slides(
         A dataframe with a ``name`` (slide stem) column and the label column, keeping
         only rows that carry a label.
     """
-    slides = pd.read_csv(data_mapping)
+    # ``record_num`` is an identifier rather than a number. Reading it as text
+    # preserves leading zeroes in prediction/review artifacts.
+    slides = pd.read_csv(data_mapping, dtype={"record_num": "string"})
     slides = process_slides(slides, mode=label_mode)
 
     target_columns = get_target_columns(label_mode)
@@ -68,9 +70,7 @@ def split_uri(card: Mapping[str, object], key: str, split: str, level: int) -> s
     """
     uris = card.get(key)
     if not isinstance(uris, Mapping):
-        raise KeyError(
-            f"Level {level} data card is missing a '{key}' split->URI map."
-        )
+        raise KeyError(f"Level {level} data card is missing a '{key}' split->URI map.")
     uri = uris.get(split)
     if not isinstance(uri, str):
         raise KeyError(

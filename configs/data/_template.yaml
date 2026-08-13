@@ -26,3 +26,6 @@ datamodule:
   test:
     <<: *dataset
     split: test
+  predict:
+    <<: *dataset
+    split: ${predict_split}

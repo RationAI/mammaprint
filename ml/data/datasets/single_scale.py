@@ -56,6 +56,15 @@ class SingleScaleDataset(Dataset[MILSample]):
         self.label_mode = LabelMode(label_mode)
         (level, card) = next(iter(levels.items()))
         self.level = int(level)
+        try:
+            self.mpp = float(card["mpp"])
+            self.tile_extent = int(card["tile_extent"])
+            self.stride = int(card["stride"])
+        except KeyError as error:
+            raise KeyError(
+                f"Level {self.level} must define mpp, tile_extent, and stride "
+                "for spatial prediction heatmaps."
+            ) from error
 
         uri = split_uri(dict(card), "uris", split, self.level)
         self.embeddings_dir = download_level_sources({self.level: uri})[self.level]
@@ -73,8 +82,24 @@ class SingleScaleDataset(Dataset[MILSample]):
             (self.embeddings_dir / row["name"]).with_suffix(".parquet")
         )
         bag = torch.from_numpy(np.stack(frame["embedding"].to_numpy())).float()
+        x = torch.from_numpy(frame["x"].to_numpy(dtype=np.int64, copy=True))
+        y = torch.from_numpy(frame["y"].to_numpy(dtype=np.int64, copy=True))
+        if len(x) != len(bag) or len(y) != len(bag):
+            raise ValueError(
+                f"Slide {row['name']!r}: coordinate and embedding counts differ."
+            )
         label = get_label(row, self.label_mode)
-        metadata: SlideMetadata = {"slide_id": row["name"]}
+        metadata: SlideMetadata = {
+            "slide_id": str(row["name"]),
+            "record_num": str(row["record_num"]),
+            "slide_path": Path(row["path"]),
+            "level": self.level,
+            "mpp": self.mpp,
+            "tile_extent": self.tile_extent,
+            "stride": self.stride,
+            "x": x,
+            "y": y,
+        }
         return bag, label, metadata
 
 

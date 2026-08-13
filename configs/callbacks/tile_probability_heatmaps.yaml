@@ -1,0 +1,6 @@
+_target_: ml.callbacks.TileProbabilityHeatmapCallback
+label_mode: ${label_mode}
+artifact_path: heatmaps/local_tile_prediction
+batch_size: 8192  # suitable for identity-encoded embeddings on one H100
+classification_outputs_are_logits: true
+save_dir: null

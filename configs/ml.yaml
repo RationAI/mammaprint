@@ -10,6 +10,7 @@ seed: ${random_seed:}
 #   mode=test checkpoint=/path/to/best.ckpt
 mode: fit  # fit | validate | test | predict
 checkpoint: null  # path to a .ckpt to resume (fit) or load weights (validate/test/predict)
+predict_split: test  # train | val | test; used only when mode=predict
 
 # After a `fit` run, evaluate the best checkpoint on the test split so models are
 # directly comparable on held-out data right after training. Ignored unless mode=fit.
