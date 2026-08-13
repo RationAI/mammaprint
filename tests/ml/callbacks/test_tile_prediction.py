@@ -22,6 +22,7 @@ from ml.callbacks.tile_probability_heatmaps import (
 from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.max import MaxPool
 from ml.models.aggregators.mean import MeanPool
+from ml.models.aggregators.transformer import TransformerMIL
 from ml.models.encoders.identity import IdentityEncoder
 from ml.models.heads.linear import LinearHead
 from ml.models.heads.mlp import MLPHead
@@ -70,7 +71,12 @@ class SingletonOutputsTest(unittest.TestCase):
     def test_matches_direct_one_tile_bags_for_all_supported_models(self) -> None:
         torch.manual_seed(7)
         bag = torch.randn(9, 4)
-        aggregators = (MeanPool(4), MaxPool(4), AttentionMIL(4, 3))
+        aggregators = (
+            MeanPool(4),
+            MaxPool(4),
+            AttentionMIL(4, 3),
+            TransformerMIL(4, num_heads=2, num_layers=2, dropout=0.0),
+        )
         for aggregator in aggregators:
             for mlp in (False, True):
                 with self.subTest(aggregator=type(aggregator).__name__, mlp=mlp):

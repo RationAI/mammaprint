@@ -21,6 +21,7 @@ from ml.callbacks._targets import (
 from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.max import MaxPool
 from ml.models.aggregators.mean import MeanPool
+from ml.models.aggregators.transformer import TransformerMIL
 from ml.models.module import MammaprintModule
 from ml.typing import MILSample, SlideMetadata
 
@@ -87,7 +88,8 @@ def singleton_outputs(module: MammaprintModule, bag: Tensor, batch_size: int) ->
 
     Mean and max pooling are identities for singleton bags. Gated attention first
     applies its learned LayerNorm, while its singleton softmax weight is exactly
-    one. These closed forms reproduce direct one-tile model calls without a Python
+    one. Transformer MIL is evaluated on batched two-token sequences (CLS + one
+    tile). These paths reproduce direct one-tile model calls without a Python
     forward pass per tile.
     """
     if bag.ndim != 2:
@@ -100,16 +102,42 @@ def singleton_outputs(module: MammaprintModule, bag: Tensor, batch_size: int) ->
         local_features = encoded
     elif isinstance(module.aggregator, AttentionMIL):
         local_features = module.aggregator.norm(encoded)
+    elif isinstance(module.aggregator, TransformerMIL):
+        local_features = _transformer_singleton_features(
+            module.aggregator, encoded, batch_size
+        )
     else:
         raise TypeError(
-            "Tile probability heatmaps support mean, max, and gated-attention "
-            f"aggregators; got {type(module.aggregator).__name__}."
+            "Tile probability heatmaps support mean, max, gated-attention, and "
+            f"transformer aggregators; got {type(module.aggregator).__name__}."
         )
 
     predictions = []
     for chunk in local_features.split(batch_size):
         predictions.append(module.output_activation(module.head(chunk)))
     return torch.cat(predictions, dim=0)
+
+
+def _transformer_singleton_features(
+    aggregator: TransformerMIL, encoded: Tensor, batch_size: int
+) -> Tensor:
+    """Return exact TransformerMIL pooled features for one-tile bags in batches."""
+    pooled = []
+    for chunk in encoded.split(batch_size):
+        cls = aggregator.cls_token.expand(len(chunk), 1, -1)
+        sequence = torch.cat((cls, chunk.unsqueeze(1)), dim=1)
+        if aggregator.blocks is not None:
+            sequence = aggregator.blocks(sequence)
+
+        normed = aggregator.final_norm(sequence)
+        attended, _ = aggregator.final_attn(
+            normed,
+            normed,
+            normed,
+            need_weights=False,
+        )
+        pooled.append((sequence + attended)[:, 0])
+    return torch.cat(pooled, dim=0)
 
 
 def _display_values(
