@@ -43,9 +43,9 @@ def build_report_command(
         "metadata.experiment_name=MammaPrint",
         "metadata.run_name=MammaPrint pathologist report",
         "metadata.description=Pathologist review of local tile predictions",
-        f"+reporter.evaluation_runs.{prediction_run_id}.artifact_file="
-        "predictions/predictions.json",
-        f"+reporter.evaluation_runs.{prediction_run_id}.slide_item_key=report_item_id",
+        f"++reporter.evaluation_runs={{{prediction_run_id}:"
+        "{artifact_file:predictions/predictions.json,"
+        "slide_item_key:report_item_id}}",
     ]
 
 

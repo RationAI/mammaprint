@@ -93,7 +93,9 @@ class PathologistReportTest(unittest.TestCase):
         )
         self.assertIn("+reporter=mammaprint", command)
         self.assertIn(
-            "+reporter.evaluation_runs.run123.slide_item_key=report_item_id",
+            "++reporter.evaluation_runs={run123:"
+            "{artifact_file:predictions/predictions.json,"
+            "slide_item_key:report_item_id}}",
             command,
         )
 
