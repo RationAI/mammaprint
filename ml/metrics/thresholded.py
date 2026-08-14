@@ -16,9 +16,10 @@ from torchmetrics.classification import (
     BinaryRecall,
     BinarySpecificity,
 )
+from torchmetrics.wrappers import MetricInputTransformer
 
 
-class ThresholdedBinaryMetric(Metric):
+class ThresholdedBinaryMetric(MetricInputTransformer):
     """Wraps a binary metric, binarizing continuous preds/targets at a threshold.
 
     Both ``preds`` and ``target`` are mapped to ``{0, 1}`` via ``value >= threshold``
@@ -26,43 +27,56 @@ class ThresholdedBinaryMetric(Metric):
 
     Args:
         metric: The binary metric to delegate to (already instantiated).
-        threshold: Decision boundary applied to both preds and targets (default 0.0).
+        threshold: Decision boundary applied to predictions (default 0.0).
+        target_threshold: Decision boundary applied to continuous targets. Defaults
+            to ``threshold`` for regression-derived classification. Set this to
+            ``0.5`` when targets are already binary labels and predictions are
+            logits thresholded at zero.
     """
 
-    def __init__(self, metric: Metric, threshold: float = 0.0) -> None:
-        super().__init__()
-        self.metric = metric
+    def __init__(
+        self,
+        metric: Metric,
+        threshold: float = 0.0,
+        target_threshold: float | None = None,
+    ) -> None:
+        super().__init__(metric)
         self.threshold = threshold
+        self.target_threshold = (
+            threshold if target_threshold is None else target_threshold
+        )
 
-    def update(self, preds: Tensor, target: Tensor) -> None:
-        pred_cls = (preds >= self.threshold).long()
-        target_cls = (target >= self.threshold).long()
-        self.metric.update(pred_cls, target_cls)
+    def transform_pred(self, pred: Tensor) -> Tensor:
+        return (pred >= self.threshold).long()
 
-    def compute(self) -> Tensor:
-        return self.metric.compute()
-
-    def reset(self) -> None:
-        super().reset()
-        self.metric.reset()
+    def transform_target(self, target: Tensor) -> Tensor:
+        return (target >= self.target_threshold).long()
 
 
-def thresholded_f1(threshold: float = 0.0) -> ThresholdedBinaryMetric:
-    return ThresholdedBinaryMetric(BinaryF1Score(), threshold)
+def thresholded_f1(
+    threshold: float = 0.0, target_threshold: float | None = None
+) -> ThresholdedBinaryMetric:
+    return ThresholdedBinaryMetric(BinaryF1Score(), threshold, target_threshold)
 
 
-def thresholded_precision(threshold: float = 0.0) -> ThresholdedBinaryMetric:
-    return ThresholdedBinaryMetric(BinaryPrecision(), threshold)
+def thresholded_precision(
+    threshold: float = 0.0, target_threshold: float | None = None
+) -> ThresholdedBinaryMetric:
+    return ThresholdedBinaryMetric(BinaryPrecision(), threshold, target_threshold)
 
 
-def thresholded_recall(threshold: float = 0.0) -> ThresholdedBinaryMetric:
+def thresholded_recall(
+    threshold: float = 0.0, target_threshold: float | None = None
+) -> ThresholdedBinaryMetric:
     """Recall (a.k.a. sensitivity) == TP / (TP + FN)."""
-    return ThresholdedBinaryMetric(BinaryRecall(), threshold)
+    return ThresholdedBinaryMetric(BinaryRecall(), threshold, target_threshold)
 
 
-def thresholded_specificity(threshold: float = 0.0) -> ThresholdedBinaryMetric:
+def thresholded_specificity(
+    threshold: float = 0.0, target_threshold: float | None = None
+) -> ThresholdedBinaryMetric:
     """Specificity == TN / (TN + FP)."""
-    return ThresholdedBinaryMetric(BinarySpecificity(), threshold)
+    return ThresholdedBinaryMetric(BinarySpecificity(), threshold, target_threshold)
 
 
 __all__ = [

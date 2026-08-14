@@ -1,3 +1,6 @@
 # @package ml.metrics
 specificity:
-  _target_: torchmetrics.classification.BinarySpecificity
+  _target_: ml.metrics.BinaryLogitMetric
+  decision_threshold: 0.0
+  metric:
+    _target_: torchmetrics.classification.BinarySpecificity

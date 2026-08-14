@@ -9,9 +9,10 @@ existing binary and regression metrics be reused unchanged for the joint model.
 
 from torch import Tensor
 from torchmetrics import Metric
+from torchmetrics.wrappers import MetricInputTransformer
 
 
-class ColumnMetric(Metric):
+class ColumnMetric(MetricInputTransformer):
     """Wraps a metric, feeding it one column of ``(B, 2)`` preds/targets.
 
     Args:
@@ -20,19 +21,14 @@ class ColumnMetric(Metric):
     """
 
     def __init__(self, metric: Metric, column: int) -> None:
-        super().__init__()
-        self.metric = metric
+        super().__init__(metric)
         self.column = column
 
-    def update(self, preds: Tensor, target: Tensor) -> None:
-        self.metric.update(preds[:, self.column], target[:, self.column])
+    def transform_pred(self, pred: Tensor) -> Tensor:
+        return pred[:, self.column]
 
-    def compute(self) -> Tensor:
-        return self.metric.compute()
-
-    def reset(self) -> None:
-        super().reset()
-        self.metric.reset()
+    def transform_target(self, target: Tensor) -> Tensor:
+        return target[:, self.column]
 
 
 __all__ = ["ColumnMetric"]
