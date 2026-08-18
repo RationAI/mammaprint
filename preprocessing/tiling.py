@@ -74,6 +74,12 @@ def add_missing_epithelium_overlap(batch: DataBatch) -> DataBatch:
     return batch
 
 
+def add_missing_cancer_overlap(batch: DataBatch) -> DataBatch:
+    """Fill a NaN ``cancer_overlap`` when no cancer mask is configured."""
+    batch["cancer_overlap"] = np.nan
+    return batch
+
+
 def add_tile_overlap(
     tiles: Dataset,
     roi: Polygon,
@@ -252,6 +258,7 @@ def tiling(
     tissue_masks_path: str | None,
     qc_masks_path: str | None,
     epithelium_masks_path: str | None,
+    cancer_masks_path: str | None,
 ) -> list[dict[str, Any]]:
     """Generate tile coordinates for a single slide."""
     slide_path = Path(row["path"])
@@ -265,6 +272,10 @@ def tiling(
         str(Path(epithelium_masks_path) / tiff_slide_name)
         if epithelium_masks_path
         else ""
+    )
+
+    cancer_mask = (
+        str(Path(cancer_masks_path) / tiff_slide_name) if cancer_masks_path else ""
     )
 
     if qc_masks_path:
@@ -288,6 +299,7 @@ def tiling(
             "mpp_y": row["mpp_y"],
             "tissue_mask_path": tissue_mask,
             "epithelium_mask_path": epithelium_mask,
+            "cancer_mask_path": cancer_mask,
             "blur_mask_path": blur_mask,
             "folding_mask_path": folding_mask,
             "residual_mask_path": residual_mask,
@@ -323,6 +335,10 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         None
         if config.dataset.mlflow_uris.epithelium_masks is None
         else download_artifacts(config.dataset.mlflow_uris.epithelium_masks)
+    )
+    cancer_masks_uri = config.dataset.mlflow_uris.get("cancer_masks")
+    cancer_masks_path = (
+        None if cancer_masks_uri is None else download_artifacts(cancer_masks_uri)
     )
     qc_masks_path = config.dataset.paths.qc_masks or None
 
@@ -373,6 +389,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             tissue_masks_path=tissue_masks_path,
             qc_masks_path=qc_masks_path,
             epithelium_masks_path=epithelium_masks_path,
+            cancer_masks_path=cancer_masks_path,
         ),
         num_cpus=0.25,
     ).repartition(target_num_rows_per_block=BATCH_SIZE)
@@ -471,11 +488,41 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             batch_format="pandas",
         )
 
+    # Cancer-mask discovery mode records the foreground fraction without filtering.
+    # Once a cutoff has been selected, setting cancer_threshold applies the production gate.
+    if cancer_masks_path:
+        print("[INFO] Computing overlap: cancer_overlap from cancer_mask_path")
+        tiles = add_tile_overlap(
+            tiles,
+            full_roi,
+            "cancer_mask_path",
+            "cancer_overlap",
+            keep="nonzero",
+        )
+        cancer_threshold = config.get("cancer_threshold")
+        if cancer_threshold is None:
+            print(
+                "[INFO] Cancer threshold is unset; recording overlap without filtering"
+            )
+        else:
+            print(f"[INFO] Filtering cancer_overlap > {cancer_threshold}")
+            tiles = tiles.filter(expr=col("cancer_overlap") > cancer_threshold)
+    else:
+        print(
+            "[INFO] Skipping cancer overlap: "
+            "dataset.mlflow_uris.cancer_masks is not set"
+        )
+        tiles = tiles.map_batches(
+            add_missing_cancer_overlap,
+            batch_format="pandas",
+        )
+
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
         [
             "tissue_mask_path",
             "epithelium_mask_path",
+            "cancer_mask_path",
             "blur_mask_path",
             "folding_mask_path",
             "residual_mask_path",

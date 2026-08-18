@@ -1,0 +1,11 @@
+# @package _global_
+# Level-0 tiling (cancer_mask masks). mpp/tile_extent/stride come from
+# /data/levels/l0; coverage thresholds from /experiment/preprocessing/tiling/_thresholds.
+# Only the output data_name is variant-specific.
+# To re-derive thresholds for this level/variant, add overrides below _self_.
+defaults:
+  - /data/levels/l0@_global_
+  - /experiment/preprocessing/tiling/_thresholds
+  - _self_
+
+data_name: mou_0_224_cancer_mask

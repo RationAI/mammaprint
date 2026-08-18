@@ -8,3 +8,4 @@ dataset:
   mlflow_uris:
     tissue_masks: mlflow-artifacts:/3/1d67612f123e46f6a3c6183257106512/artifacts/tissue_masks
     epithelium_masks: null
+    cancer_masks: mlflow-artifacts:/2/70b1c915966d43e3b5be46668075bd93/artifacts/heatmaps
