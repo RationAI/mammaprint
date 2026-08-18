@@ -19,7 +19,7 @@ from ratiopath.tiling import grid_tiles, tile_overlay_overlap
 from ratiopath.tiling.utils import row_hash
 from ray.data import Dataset
 from ray.data.block import DataBatch
-from ray.data.expressions import col
+from ray.data.expressions import col, lit
 from shapely.geometry import box
 from shapely.geometry.polygon import Polygon
 
@@ -66,18 +66,6 @@ def _ray_init_kwargs() -> dict[str, Any]:
         kwargs["object_store_memory"] = int(float(memory_bytes) * RAY_OBJECT_STORE_FRACTION)
 
     return kwargs
-
-
-def add_missing_epithelium_overlap(batch: DataBatch) -> DataBatch:
-    """Fill a NaN ``epithelium_overlap`` when no epithelium mask is configured."""
-    batch["epithelium_overlap"] = np.nan
-    return batch
-
-
-def add_missing_cancer_overlap(batch: DataBatch) -> DataBatch:
-    """Fill a NaN ``cancer_overlap`` when no cancer mask is configured."""
-    batch["cancer_overlap"] = np.nan
-    return batch
 
 
 def add_tile_overlap(
@@ -483,10 +471,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             "[INFO] Skipping epithelium overlap: "
             "dataset.mlflow_uris.epithelium_masks is not set"
         )
-        tiles = tiles.map_batches(
-            add_missing_epithelium_overlap,
-            batch_format="pandas",
-        )
+        tiles = tiles.with_column("epithelium_overlap", lit(float("nan")))
 
     # Cancer-mask discovery mode records the foreground fraction without filtering.
     # Once a cutoff has been selected, setting cancer_threshold applies the production gate.
@@ -512,10 +497,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             "[INFO] Skipping cancer overlap: "
             "dataset.mlflow_uris.cancer_masks is not set"
         )
-        tiles = tiles.map_batches(
-            add_missing_cancer_overlap,
-            batch_format="pandas",
-        )
+        tiles = tiles.with_column("cancer_overlap", lit(float("nan")))
 
     # Drop unnecessary columns
     tiles = tiles.drop_columns(
