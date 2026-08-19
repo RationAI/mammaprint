@@ -11,7 +11,7 @@ from torchmetrics.regression import (
 )
 
 
-def _divide(numerator: int | float, denominator: int | float) -> float:
+def _divide(numerator: float, denominator: float) -> float:
     return numerator / denominator if denominator else math.nan
 
 

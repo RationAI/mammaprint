@@ -82,17 +82,15 @@ class RawTileSlideDataset(Dataset[MILSample]):
         slide_dataset = SlideDataset(paths=[local_dir], transforms=transform)
         # One TileDataset per slide, keyed by slide stem (matches data_mapping.name).
         # generate_datasets() yields TileDataset instances (each has .slide_path).
-        per_slide = cast(
-            "list[TileDataset]", list(slide_dataset.generate_datasets())
-        )
+        per_slide = cast("list[TileDataset]", list(slide_dataset.generate_datasets()))
         self.tile_datasets: dict[str, TileDataset] = {
             Path(td.slide_path).stem: td for td in per_slide
         }
 
         slides = load_labeled_slides(data_mapping, self.label_mode)
-        self.slides = slides[
-            slides["name"].isin(self.tile_datasets)
-        ].reset_index(drop=True)
+        self.slides = slides[slides["name"].isin(self.tile_datasets)].reset_index(
+            drop=True
+        )
 
     def __len__(self) -> int:
         return len(self.slides)

@@ -39,7 +39,7 @@ async def put_request(
             f"Request to {url} timed out after {request_timeout} seconds. Slide: {slide_name}"
         )
         return -1, "Timeout"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - return a failed request result
         slide_name = Path(data.get("wsi_path", "<unknown>")).name
         print(f"Request to {url} failed for {slide_name}: {exc}")
         return -1, str(exc)
@@ -118,7 +118,7 @@ async def generate_report(
         print(
             f"Report generation request to {url} timed out after {report_request_timeout} seconds."
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - report generation is best-effort
         print(f"Report generation request to {url} failed: {exc}")
 
 
@@ -171,7 +171,7 @@ async def qc_main(
             logger.experiment.log_artifacts(
                 run_id=logger.run_id, local_dir=Path(report_path).parent.as_posix()
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - artifact upload must not abort QC
             print(f"Could not upload report artifact from {report_path}")
 
 

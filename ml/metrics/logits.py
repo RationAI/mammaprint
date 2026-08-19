@@ -19,9 +19,7 @@ class BinaryLogitMetric(MetricInputTransformer):
     prediction CSV exactly.
     """
 
-    def __init__(
-        self, metric: Metric, decision_threshold: float | None = None
-    ) -> None:
+    def __init__(self, metric: Metric, decision_threshold: float | None = None) -> None:
         super().__init__(metric)
         self.decision_threshold = decision_threshold
 
