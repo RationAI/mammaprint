@@ -1,0 +1,23 @@
+# @package _global_
+# Retile the MammaPrint slides for the epithelium ONNX model. The training WSIs
+# were level 0 at 0.468 um/px; on the MammaPrint WSIs, level 1 (about 0.485
+# um/px) is the physically corresponding pyramid level. Asking ratiopath for
+# 0.468 um/px selects that closest available level. The 512/256 geometry exactly
+# matches training.
+defaults:
+  - /data/levels/l1@_global_
+  - /experiment/preprocessing/tiling/_thresholds
+  - _self_
+
+mpp: 0.468
+tile_extent: 512
+stride: 256
+data_name: mou_epithelium_512_tissue
+cancer_threshold: null
+
+# Generate the candidate dataset using tissue and QC masks only. Epithelium is
+# the output of the following inference step, not an input to this tiling run.
+dataset:
+  mlflow_uris:
+    epithelium_masks: null
+    cancer_masks: null

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import math
 import os
@@ -16,7 +17,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import onnxruntime as ort
 import openslide
+import pandas as pd
 import pyvips
+from mlflow.artifacts import download_artifacts
 from PIL import Image, ImageOps
 
 
@@ -140,6 +143,39 @@ class SlideSource:
         self.slide.close()
 
 
+class TiledSlideSource:
+    """Read patches using coordinates and a pyramid level from a tiled dataset."""
+
+    def __init__(self, path: Path, level: int, width: int, height: int) -> None:
+        self.slide = openslide.OpenSlide(path)
+        level_count = self.slide.level_count
+        if level < 0 or level >= level_count:
+            self.slide.close()
+            raise ValueError(
+                f"Invalid pyramid level {level} for {path}; "
+                f"the slide has {level_count} levels."
+            )
+        self.level = level
+        self.downsample = float(self.slide.level_downsamples[level])
+        self.width = width
+        self.height = height
+
+    def read_patch(self, x: int, y: int, tile_size: int) -> tuple[np.ndarray, int, int]:
+        width = min(tile_size, self.width - x)
+        height = min(tile_size, self.height - y)
+        rgba = self.slide.read_region(
+            (round(x * self.downsample), round(y * self.downsample)),
+            self.level,
+            (width, height),
+        )
+        rgb = Image.new("RGB", rgba.size, "white")
+        rgb.paste(rgba, mask=rgba.getchannel("A"))
+        return np.asarray(rgb, dtype=np.uint8), width, height
+
+    def close(self) -> None:
+        self.slide.close()
+
+
 class OnnxModel:
     def __init__(self, model_path: Path, provider: str) -> None:
         available = ort.get_available_providers()
@@ -181,7 +217,20 @@ def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate epithelial masks with the MLflow ONNX model."
     )
-    parser.add_argument("--input", dest="inputs", type=Path, nargs="+", required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--input", dest="inputs", type=Path, nargs="+")
+    inputs.add_argument(
+        "--data-mapping",
+        type=Path,
+        help="CSV file whose 'path' column contains slide or tile paths.",
+    )
+    inputs.add_argument(
+        "--tiled-dataset",
+        help=(
+            "Local directory or MLflow artifact URI containing slides.parquet "
+            "and tiles.parquet."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--model", default=DEFAULT_MODEL_URI)
     parser.add_argument(
@@ -261,7 +310,24 @@ def download_model(model: str, tracking_uri: str, cache_dir: Path) -> Path:
     return destination
 
 
-def discover_inputs(inputs: Sequence[Path]) -> list[InputImage]:
+def discover_inputs(
+    inputs: Sequence[Path] | None, data_mapping: Path | None
+) -> list[InputImage]:
+    if data_mapping is not None:
+        mapping_path = data_mapping.expanduser().resolve()
+        if not mapping_path.is_file():
+            raise FileNotFoundError(f"Data mapping does not exist: {mapping_path}")
+        with mapping_path.open(newline="", encoding="utf-8-sig") as mapping_file:
+            reader = csv.DictReader(mapping_file)
+            if reader.fieldnames is None or "path" not in reader.fieldnames:
+                raise ValueError(
+                    f"Data mapping must contain a 'path' column: {mapping_path}"
+                )
+            inputs = [Path(row["path"]) for row in reader if row["path"].strip()]
+
+    if inputs is None:
+        raise ValueError("Supply either --input or --data-mapping.")
+
     discovered: list[InputImage] = []
     for raw_path in inputs:
         path = raw_path.expanduser().resolve()
@@ -308,7 +374,10 @@ def batches(values: Sequence[int], batch_size: int) -> Iterator[Sequence[int]]:
 
 
 def extract_patch(
-    image: TileSource | SlideSource, x: int, y: int, tile_size: int
+    image: TileSource | SlideSource | TiledSlideSource,
+    x: int,
+    y: int,
+    tile_size: int,
 ) -> tuple[np.ndarray, int, int]:
     pixels, width, height = image.read_patch(x, y, tile_size)
     patch = np.full((tile_size, tile_size, 3), 255, dtype=np.uint8)
@@ -395,6 +464,92 @@ def predict_to_memmap(
     return mask
 
 
+def predict_coordinates_to_memmap(
+    image: TiledSlideSource,
+    model: OnnxModel,
+    temp_path: Path,
+    coordinates: Sequence[tuple[int, int]],
+    tile_size: int,
+    batch_size: int,
+    output_type: str,
+    threshold: float,
+) -> np.memmap:
+    """Predict a sparse tiled dataset and stitch its overlaps into a slide mask."""
+    grouped: dict[int, list[int]] = {}
+    for x, y in sorted(set(coordinates), key=lambda point: (point[1], point[0])):
+        if x < 0 or y < 0 or x >= image.width or y >= image.height:
+            raise ValueError(
+                f"Tile coordinate ({x}, {y}) is outside "
+                f"the {image.width} x {image.height} slide extent."
+            )
+        grouped.setdefault(y, []).append(x)
+
+    print(f"  predicting {len(coordinates)} tiled-dataset patches")
+    mask = np.memmap(
+        temp_path, dtype=np.uint8, mode="w+", shape=(image.height, image.width)
+    )
+    mask[:] = 0
+    pending_sum = np.zeros((tile_size, image.width), dtype=np.float32)
+    pending_count = np.zeros((tile_size, image.width), dtype=np.uint32)
+    pending_y = 0
+
+    def flush(rows: int) -> None:
+        nonlocal pending_y
+        if rows <= 0:
+            return
+        probabilities = np.divide(
+            pending_sum[:rows],
+            pending_count[:rows],
+            out=np.zeros_like(pending_sum[:rows]),
+            where=pending_count[:rows] != 0,
+        )
+        mask[pending_y : pending_y + rows] = mask_values(
+            probabilities, output_type, threshold
+        )
+        remaining = tile_size - rows
+        if remaining:
+            pending_sum[:remaining] = pending_sum[rows:]
+            pending_count[:remaining] = pending_count[rows:]
+        pending_sum[remaining:] = 0
+        pending_count[remaining:] = 0
+        pending_y += rows
+
+    completed = 0
+    for y, x_positions in grouped.items():
+        distance = y - pending_y
+        if distance > tile_size:
+            flush(tile_size)
+            pending_y = y
+        else:
+            flush(distance)
+
+        for x_batch in batches(x_positions, batch_size):
+            patches: list[np.ndarray] = []
+            sizes: list[tuple[int, int]] = []
+            for x in x_batch:
+                patch, width, height = extract_patch(image, x, y, tile_size)
+                patches.append(patch)
+                sizes.append((width, height))
+            predictions = model.predict(np.stack(patches))
+            for x, prediction, (width, height) in zip(
+                x_batch, predictions, sizes, strict=True
+            ):
+                pending_sum[:height, x : x + width] += prediction[:height, :width]
+                pending_count[:height, x : x + width] += 1
+            completed += len(x_batch)
+        print(
+            f"\r  predicted {completed}/{len(coordinates)} patches",
+            end="",
+            flush=True,
+        )
+
+    remaining = image.height - pending_y
+    flush(min(remaining, tile_size))
+    mask.flush()
+    print()
+    return mask
+
+
 def save_mask(
     mask: np.memmap,
     destination: Path,
@@ -422,11 +577,141 @@ def save_mask(
         image.pngsave(str(destination), compression=6)
 
 
+def resolve_tiled_dataset(source: str, tracking_uri: str, cache_dir: Path) -> Path:
+    local_path = Path(source).expanduser()
+    if local_path.is_dir():
+        return local_path.resolve()
+    if not source.startswith(("mlflow-artifacts:", "runs:/", "models:/")):
+        raise FileNotFoundError(f"Tiled dataset does not exist: {source}")
+
+    destination = cache_dir.expanduser() / "tiled-datasets"
+    destination.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading tiled dataset: {source}")
+    return Path(
+        download_artifacts(
+            artifact_uri=source,
+            dst_path=str(destination),
+            tracking_uri=tracking_uri,
+        )
+    )
+
+
+def read_tiled_table(dataset_path: Path, name: str) -> pd.DataFrame:
+    single_file = dataset_path / f"{name}.parquet"
+    partitioned = dataset_path / name
+    if single_file.is_file():
+        return pd.read_parquet(single_file)
+    if partitioned.is_dir():
+        return pd.read_parquet(partitioned)
+    raise FileNotFoundError(
+        f"Tiled dataset has neither {single_file.name} nor a {name}/ directory: "
+        f"{dataset_path}"
+    )
+
+
+def run_tiled_dataset(args: argparse.Namespace, model: OnnxModel, source: str) -> None:
+    dataset_path = resolve_tiled_dataset(source, args.tracking_uri, args.cache_dir)
+    slides = read_tiled_table(dataset_path, "slides")
+    tiles = read_tiled_table(dataset_path, "tiles")
+    if "tile_x" in tiles.columns and "x" not in tiles.columns:
+        tiles = tiles.rename(columns={"tile_x": "x", "tile_y": "y"})
+
+    required_slide_columns = {
+        "id",
+        "path",
+        "extent_x",
+        "extent_y",
+        "tile_extent_x",
+        "tile_extent_y",
+        "stride_x",
+        "stride_y",
+        "mpp_x",
+        "mpp_y",
+        "level",
+    }
+    required_tile_columns = {"slide_id", "x", "y"}
+    if missing := required_slide_columns - set(slides.columns):
+        raise ValueError(f"slides.parquet is missing columns: {sorted(missing)}")
+    if missing := required_tile_columns - set(tiles.columns):
+        raise ValueError(f"tiles.parquet is missing columns: {sorted(missing)}")
+
+    destinations: set[Path] = set()
+    records = slides.to_dict(orient="records")
+    for index, slide in enumerate(records, start=1):
+        path = Path(str(slide["path"])).expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"Slide does not exist: {path}")
+        tile_width = int(slide["tile_extent_x"])
+        tile_height = int(slide["tile_extent_y"])
+        stride_x = int(slide["stride_x"])
+        stride_y = int(slide["stride_y"])
+        if (tile_width, tile_height) != (args.tile_size, args.tile_size):
+            raise ValueError(
+                f"{path} was tiled at {tile_width} x {tile_height}; expected "
+                f"{args.tile_size} x {args.tile_size}."
+            )
+        if (stride_x, stride_y) != (args.stride, args.stride):
+            raise ValueError(
+                f"{path} was tiled with stride {stride_x} x {stride_y}; expected "
+                f"{args.stride} x {args.stride}."
+            )
+
+        slide_tiles = tiles.loc[tiles["slide_id"] == slide["id"], ["x", "y"]]
+        coordinates = [
+            (int(tile.x), int(tile.y)) for tile in slide_tiles.itertuples(index=False)
+        ]
+        mpp_x = float(slide["mpp_x"])
+        mpp_y = float(slide["mpp_y"])
+        print(
+            f"[{index}/{len(records)}] {path}\n"
+            f"  tiled level {int(slide['level'])}; MPP {mpp_x:.4g} x "
+            f"{mpp_y:.4g}; {len(coordinates)} retained tiles"
+        )
+        image = TiledSlideSource(
+            path,
+            int(slide["level"]),
+            int(slide["extent_x"]),
+            int(slide["extent_y"]),
+        )
+        destination = args.output_dir / path.with_suffix(".tiff").name
+        if destination in destinations:
+            raise ValueError(f"Multiple slides map to {destination}.")
+        destinations.add(destination)
+        try:
+            with tempfile.TemporaryDirectory(prefix="episeg-mask-") as temp_dir:
+                mask = predict_coordinates_to_memmap(
+                    image,
+                    model,
+                    Path(temp_dir) / "mask.raw",
+                    coordinates,
+                    args.tile_size,
+                    args.batch_size,
+                    args.output_type,
+                    args.threshold,
+                )
+                save_mask(
+                    mask,
+                    destination,
+                    True,
+                    math.sqrt(mpp_x * mpp_y),
+                    args.tile_size,
+                    not args.no_pyramid,
+                )
+                del mask
+        finally:
+            image.close()
+        print(f"  wrote {destination}")
+
+
 def run(args: argparse.Namespace) -> None:
     validate_args(args)
     model_path = download_model(args.model, args.tracking_uri, args.cache_dir)
     model = OnnxModel(model_path, args.provider)
-    inputs = discover_inputs(args.inputs)
+    if args.tiled_dataset is not None:
+        run_tiled_dataset(args, model, args.tiled_dataset)
+        return
+
+    inputs = discover_inputs(args.inputs, args.data_mapping)
     destinations: set[Path] = set()
     for index, input_image in enumerate(inputs, start=1):
         print(f"[{index}/{len(inputs)}] {input_image.path}")
@@ -442,12 +727,12 @@ def run(args: argparse.Namespace) -> None:
             if is_slide
             else TileSource(input_image.path)
         )
-        extension = ".tiff" if is_slide else ".png"
-        destination = (
-            args.output_dir
-            / input_image.relative_path.parent
-            / (f"{input_image.relative_path.stem}_mask{extension}")
+        filename = (
+            f"{input_image.relative_path.stem}.tiff"
+            if is_slide
+            else f"{input_image.relative_path.stem}_mask.png"
         )
+        destination = args.output_dir / input_image.relative_path.parent / filename
         if destination in destinations:
             raise ValueError(f"Multiple inputs map to {destination}.")
         destinations.add(destination)
