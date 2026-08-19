@@ -16,6 +16,7 @@ import logging
 import random
 
 import hydra
+from lightning.pytorch import seed_everything
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
 from rationai.mlkit.lightning.loggers import MLFlowLogger
@@ -33,6 +34,8 @@ OmegaConf.register_new_resolver(
 @hydra.main(config_path="../configs", config_name="ml", version_base=None)
 @autolog
 def main(config: DictConfig, logger: MLFlowLogger) -> None:
+    seed_everything(int(config.seed), workers=True)
+
     # _recursive_=False: keep the per-split dataset nodes as DictConfig so the
     # DataModule can instantiate them lazily per stage in setup().
     datamodule = hydra.utils.instantiate(config.datamodule, _recursive_=False)

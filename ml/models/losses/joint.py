@@ -47,10 +47,8 @@ class JointLoss(nn.Module):
         super().__init__()
         self.w_cls = w_cls
         self.w_reg = w_reg
-        # Registered as a buffer so BCE's pos_weight follows the module's device.
-        pw = None if pos_weight is None else torch.tensor([pos_weight])
-        self.register_buffer("_pos_weight", pw)
-        self.cls_loss = nn.BCEWithLogitsLoss(pos_weight=self._pos_weight)
+        pw: Tensor | None = None if pos_weight is None else torch.tensor([pos_weight])
+        self.cls_loss = nn.BCEWithLogitsLoss(pos_weight=pw)
         self.reg_loss = nn.MSELoss()
 
     def forward(self, y_pred: Tensor, y: Tensor) -> Tensor:

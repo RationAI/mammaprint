@@ -40,6 +40,12 @@ def load_labeled_slides(
         only rows that carry a label.
     """
     slides = pd.read_csv(data_mapping)
+    raw_target_columns = {
+        LabelMode.TYPE: ["type"],
+        LabelMode.INDEX: ["mammaprint_index"],
+        LabelMode.BOTH: ["type", "mammaprint_index"],
+    }[label_mode]
+    slides = slides.dropna(subset=raw_target_columns)
     slides = process_slides(slides, mode=label_mode)
 
     target_columns = get_target_columns(label_mode)
@@ -68,9 +74,7 @@ def split_uri(card: Mapping[str, object], key: str, split: str, level: int) -> s
     """
     uris = card.get(key)
     if not isinstance(uris, Mapping):
-        raise KeyError(
-            f"Level {level} data card is missing a '{key}' split->URI map."
-        )
+        raise KeyError(f"Level {level} data card is missing a '{key}' split->URI map.")
     uri = uris.get(split)
     if not isinstance(uri, str):
         raise KeyError(

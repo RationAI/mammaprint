@@ -38,6 +38,7 @@ class DataModule(pl.LightningDataModule):
         persistent_workers: Keep workers alive between epochs.
         **datasets: One entry per split (``train``/``val``/``test``), each an
             unresolved dataset ``DictConfig`` instantiated in :meth:`setup`.
+            Prediction reuses the test split.
     """
 
     def __init__(
@@ -69,6 +70,7 @@ class DataModule(pl.LightningDataModule):
             "fit": ("train", "val"),
             "validate": ("val",),
             "test": ("test",),
+            "predict": ("test",),
         }.get(stage or "", ("train", "val", "test"))
         for split in needed:
             self._build(split)
@@ -91,6 +93,9 @@ class DataModule(pl.LightningDataModule):
         return self._dataloader("val", shuffle=False)
 
     def test_dataloader(self) -> DataLoader[Sample]:
+        return self._dataloader("test", shuffle=False)
+
+    def predict_dataloader(self) -> DataLoader[Sample]:
         return self._dataloader("test", shuffle=False)
 
 
