@@ -73,7 +73,7 @@ def add_tile_overlap(
     roi: Polygon,
     path_col: str,
     overlap_col: str,
-    keep: Literal["zero", "nonzero"],
+    keep: Literal["zero", "nonzero", "mean"],
     background: str = "0",
 ) -> Dataset:
     """Compute a per-tile coverage score against a mask overlay.
@@ -84,14 +84,17 @@ def add_tile_overlap(
 
     The masks are downsampled to a continuous ``[0, 255]`` range (they are NOT strictly binary):
     the background/clean pixel value is ``0`` and *any* non-zero value marks foreground (tissue) or
-    an artifact, depending on the mask. Two reductions are therefore supported via ``keep``:
+    an artifact, depending on the mask. Three reductions are supported via ``keep``:
 
     * ``keep="nonzero"`` (tissue/epithelium): score = fraction of non-zero pixels = foreground
       coverage. Keep tiles with a lot of tissue/epithelium.
     * ``keep="zero"`` (QC artifact masks: blur/folding/residual): score = fraction of ``0`` pixels =
       clean fraction. Keep tiles that are mostly artifact-free.
+    * ``keep="mean"`` (cancer probability heatmaps): score = mean pixel intensity divided by 255.
+      OpenSlide exposes grayscale TIFFs as repeated RGB channels, so the RGB mean remains the
+      original mean probability.
 
-    In both cases a downstream ``overlap > threshold`` filter keeps the desirable tiles.
+    In all cases a downstream ``overlap > threshold`` filter keeps the desirable tiles.
 
     The mask file path is read from the column ``path_col`` in the Ray Dataset. The function expects
     the dataset to contain tile coordinates and microns-per-pixel columns (``tile_x``, ``tile_y``,
@@ -110,7 +113,8 @@ def add_tile_overlap(
         Name of the output column to store the computed score in [0, 1].
     keep:
         Which pixels count as desirable: ``"zero"`` scores the clean (background) fraction,
-        ``"nonzero"`` scores the foreground fraction.
+        ``"nonzero"`` scores the foreground fraction, and ``"mean"`` scores normalized mean
+        intensity.
     background:
         Pixel value (as string) of the clean/background class. Defaults to ``"0"``.
 
@@ -137,6 +141,16 @@ def add_tile_overlap(
             # No mask / no readable pixels in the ROI -> score 0 so the tile is dropped.
             if not isinstance(s, dict) or not s:
                 return 0.0
+            if keep == "mean":
+                weighted_sum = 0.0
+                total_fraction = 0.0
+                for value, fraction in s.items():
+                    fraction = float(fraction or 0.0)
+                    weighted_sum += float(value) * fraction
+                    total_fraction += fraction
+                if total_fraction == 0.0:
+                    return 0.0
+                return weighted_sum / total_fraction / 255.0
             # Fraction of clean/background (== background value) pixels in the ROI.
             zero_fraction = s.get(background, 0.0) or 0.0
             # keep="zero": clean fraction; keep="nonzero": foreground (1 - clean) fraction.
@@ -473,7 +487,8 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         )
         tiles = tiles.with_column("epithelium_overlap", lit(float("nan")))
 
-    # Cancer-mask discovery mode records the foreground fraction without filtering.
+    # Cancer heatmaps store sigmoid probabilities as uint8 intensity (probability * 255).
+    # Discovery mode records the mean normalized probability without filtering.
     # Once a cutoff has been selected, setting cancer_threshold applies the production gate.
     if cancer_masks_path:
         print("[INFO] Computing overlap: cancer_overlap from cancer_mask_path")
@@ -482,7 +497,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             full_roi,
             "cancer_mask_path",
             "cancer_overlap",
-            keep="nonzero",
+            keep="mean",
         )
         cancer_threshold = config.get("cancer_threshold")
         if cancer_threshold is None:
