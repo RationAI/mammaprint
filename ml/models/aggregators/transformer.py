@@ -43,6 +43,8 @@ class TransformerMIL(Aggregator[Bag]):
                 f"feature_dim ({feature_dim}) must be divisible by num_heads "
                 f"({num_heads})."
             )
+        if num_layers < 1:
+            raise ValueError("num_layers must be at least 1.")
         self.feature_dim = feature_dim
         self.num_heads = num_heads
 
@@ -68,10 +70,19 @@ class TransformerMIL(Aggregator[Bag]):
             if num_layers > 1
             else None
         )
+        self.final_norm1 = nn.LayerNorm(feature_dim)
         self.final_attn = nn.MultiheadAttention(
             feature_dim, num_heads, dropout=dropout, batch_first=True
         )
-        self.final_norm = nn.LayerNorm(feature_dim)
+        self.final_attn_dropout = nn.Dropout(dropout)
+        self.final_norm2 = nn.LayerNorm(feature_dim)
+        self.final_ff = nn.Sequential(
+            nn.Linear(feature_dim, int(feature_dim * mlp_ratio)),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(int(feature_dim * mlp_ratio), feature_dim),
+        )
+        self.final_ff_dropout = nn.Dropout(dropout)
 
     @property
     def out_dim(self) -> int:
@@ -85,11 +96,14 @@ class TransformerMIL(Aggregator[Bag]):
             sequence = self.blocks(sequence)  # (1, N+1, D)
 
         # Final self-attention layer, keeping the CLS<-all attention map.
-        normed = self.final_norm(sequence)
+        normed = self.final_norm1(sequence)
         attended, attn_weights = self.final_attn(
             normed, normed, normed, need_weights=True, average_attn_weights=True
         )  # attended: (1, N+1, D); attn_weights: (1, N+1, N+1)
-        sequence = sequence + attended  # residual
+        sequence = sequence + self.final_attn_dropout(attended)
+        sequence = sequence + self.final_ff_dropout(
+            self.final_ff(self.final_norm2(sequence))
+        )
 
         slide_vector = sequence[0, 0]  # CLS embedding -> (D,)
 
