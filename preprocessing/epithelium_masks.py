@@ -5,6 +5,7 @@ from pathlib import Path
 import hydra
 import mlflow
 import pandas as pd
+from httpx import HTTPError
 from omegaconf import DictConfig
 from rationai.client import AsyncClient
 from rationai.mlkit import autolog, with_cli_args
@@ -37,7 +38,7 @@ async def segment_epithel(
                     output_path=output_path,
                     timeout=timeout,
                 )
-            except Exception as e:
+            except HTTPError as e:
                 print(f"Slide processing failed for {path}: {e}, error: {e!r}")
 
     async with AsyncClient(timeout=timeout) as client:
