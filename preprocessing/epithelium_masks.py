@@ -37,7 +37,7 @@ async def segment_epithel(
                     output_path=output_path,
                     timeout=timeout,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - isolate per-slide failures
                 print(f"Slide processing failed for {path}: {e}, error: {e!r}")
 
     async with AsyncClient(timeout=timeout) as client:

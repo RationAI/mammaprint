@@ -1,0 +1,3 @@
+# @package ml.metrics
+mae:
+  _target_: torchmetrics.MeanAbsoluteError

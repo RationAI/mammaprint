@@ -1,0 +1,11 @@
+# @package ml.metrics
+# Classification AUROC on the joint head's column 0 (class logit vs type label).
+# Sigmoid is applied consistently on every update before BinaryAUROC. This keeps
+# ranking correct for the slide dataloader's batch size of one.
+joint_auroc:
+  _target_: ml.metrics.ColumnMetric
+  column: 0
+  metric:
+    _target_: ml.metrics.BinaryLogitMetric
+    metric:
+      _target_: torchmetrics.classification.BinaryAUROC

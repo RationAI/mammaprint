@@ -1,0 +1,11 @@
+# @package dataset.levels.3
+defaults:
+  - /data/levels/l3@_here_
+  - _self_
+
+name: l3_tissue
+raw_uris:
+  all: "mlflow-artifacts:/3/6b1ba82c3d29423f87004e5223e4cf99/artifacts/mou_3_224_tissue"
+  train: "mlflow-artifacts:/3/<run_id>/artifacts/l3_tissue_train"
+  val: "mlflow-artifacts:/3/<run_id>/artifacts/l3_tissue_val"
+  test: "mlflow-artifacts:/3/<run_id>/artifacts/l3_tissue_test"
