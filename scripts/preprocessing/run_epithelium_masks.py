@@ -1,19 +1,123 @@
+"""Submit ONNX epithelium segmentation for mounted slides or image tiles."""
+
+from __future__ import annotations
+
+import argparse
+import shlex
+from pathlib import Path
+
 from kube_jobs import storage, submit_job
 
 
-submit_job(
-    job_name="mammaprint-preprocessing-epithelium-masks",
-    username=...,
-    cpu=1,
-    memory="4Gi",
-    gpu=None,
-    public=False,
-    script=[
-        "git clone https://github.com/rationAI/mammaprint workdir",
-        "cd workdir",
-        "export MLFLOW_TRACKING_URI=http://mlflow-s3.rationai-mlflow",
-        "uv sync --frozen",
-        "uv run -m preprocessing.epithelium_masks",
-    ],
-    storage=[storage.secure.DATA, storage.secure.PROJECTS],
+DEFAULT_BRANCH = "codex/epithelium-onnx-job"
+DEFAULT_REPOSITORY = "https://github.com/RationAI/MammaPrint.git"
+DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
+DEFAULT_MODEL_URI = (
+    "mlflow-artifacts:/10/39f821ed5b964c71a603cc6db196f9fd/artifacts/"
+    "checkpoints/epoch=19-step=32020/model.onnx/model.onnx"
 )
+
+
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Submit a job that downloads the epithelial ONNX model and "
+            "generates masks for mounted slides or image tiles."
+        )
+    )
+    parser.add_argument("--username", required=True)
+    parser.add_argument("--input", dest="inputs", type=Path, nargs="+", required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--kind", choices=("auto", "slide", "tile"), default="auto")
+    parser.add_argument("--model", default=DEFAULT_MODEL_URI)
+    parser.add_argument("--tracking-uri", default=DEFAULT_TRACKING_URI)
+    parser.add_argument("--source-mpp", type=float)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument(
+        "--output-type", choices=("binary", "probability"), default="binary"
+    )
+    parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--provider", default="auto")
+    parser.add_argument("--job-name", default="mammaprint-epithelium-onnx")
+    parser.add_argument("--cpu", type=int, default=4)
+    parser.add_argument("--memory", default="32Gi")
+    parser.add_argument("--gpu", default="A40", help="GPU type or 'none'.")
+    parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
+    parser.add_argument("--branch", default=DEFAULT_BRANCH)
+    parser.add_argument("--dry-run", action="store_true")
+    return parser
+
+
+def inference_command(args: argparse.Namespace) -> str:
+    values = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "preprocessing.epithelium_onnx",
+        "--input",
+        *(str(path) for path in args.inputs),
+        "--output-dir",
+        str(args.output_dir),
+        "--kind",
+        args.kind,
+        "--model",
+        args.model,
+        "--tracking-uri",
+        args.tracking_uri,
+        "--batch-size",
+        str(args.batch_size),
+        "--output-type",
+        args.output_type,
+        "--threshold",
+        str(args.threshold),
+        "--provider",
+        args.provider,
+    ]
+    if args.source_mpp is not None:
+        values.extend(("--source-mpp", str(args.source_mpp)))
+    return shlex.join(values)
+
+
+def job_commands(args: argparse.Namespace) -> list[str]:
+    return [
+        shlex.join(
+            [
+                "git",
+                "clone",
+                "--branch",
+                args.branch,
+                "--single-branch",
+                args.repository,
+                "workdir",
+            ]
+        ),
+        "cd workdir",
+        f"export MLFLOW_TRACKING_URI={shlex.quote(args.tracking_uri)}",
+        "uv sync --frozen",
+        inference_command(args),
+    ]
+
+
+def main() -> None:
+    args = argument_parser().parse_args()
+    commands = job_commands(args)
+    if args.dry_run:
+        print("\n".join(commands))
+        return
+
+    submit_job(
+        job_name=args.job_name,
+        username=args.username,
+        image="cerit.io/rationai/base:2.0.6",
+        cpu=args.cpu,
+        memory=args.memory,
+        gpu=None if args.gpu.lower() == "none" else args.gpu,
+        public=False,
+        script=commands,
+        storage=[storage.secure.DATA, storage.secure.PROJECTS],
+    )
+
+
+if __name__ == "__main__":
+    main()
