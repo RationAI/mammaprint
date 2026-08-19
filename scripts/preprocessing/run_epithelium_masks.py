@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 DEFAULT_BRANCH = "codex/epithelium-onnx-job"
 DEFAULT_REPOSITORY = "https://github.com/RationAI/MammaPrint.git"
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
+DEFAULT_MODEL_TRACKING_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz"
 DEFAULT_DATA_MAPPING = Path("/mnt/projects/mammaprint/data_mapping.csv")
 DEFAULT_OUTPUT_DIR = Path("/mnt/projects/mammaprint/epithelium_onnx_masks")
 DEFAULT_TILED_CONFIG = (
@@ -56,6 +57,10 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--kind", choices=("auto", "slide", "tile"), default="auto")
     parser.add_argument("--model", default=DEFAULT_MODEL_URI)
     parser.add_argument("--tracking-uri", default=DEFAULT_TRACKING_URI)
+    parser.add_argument("--model-tracking-uri", default=DEFAULT_MODEL_TRACKING_URI)
+    parser.add_argument("--experiment-name", default="MammaPrint")
+    parser.add_argument("--run-name", default="MammaPrint Epithelium ONNX Masks")
+    parser.add_argument("--artifact-path", default="epithelium_masks")
     parser.add_argument("--source-mpp", type=float)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--provider", default="auto")
@@ -95,6 +100,14 @@ def inference_command(args: argparse.Namespace) -> str:
             args.model,
             "--tracking-uri",
             args.tracking_uri,
+            "--model-tracking-uri",
+            args.model_tracking_uri,
+            "--experiment-name",
+            args.experiment_name,
+            "--run-name",
+            args.run_name,
+            "--artifact-path",
+            args.artifact_path,
             "--batch-size",
             str(args.batch_size),
             "--provider",

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import mlflow
 import numpy as np
 import onnxruntime as ort
 import openslide
@@ -31,7 +32,10 @@ DEFAULT_MODEL_URI = (
     "mlflow-artifacts:/10/39f821ed5b964c71a603cc6db196f9fd/artifacts/"
     "checkpoints/epoch=19-step=32020/model.onnx/model.onnx"
 )
-DEFAULT_TRACKING_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz"
+DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
+DEFAULT_MODEL_TRACKING_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz"
+DEFAULT_EXPERIMENT_NAME = "MammaPrint"
+DEFAULT_RUN_NAME = "MammaPrint Epithelium ONNX Masks"
 MODEL_MPP = 0.468
 TILE_SIZE = 512
 STRIDE = 256
@@ -236,6 +240,14 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tracking-uri",
         default=os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI),
+        help="MLflow server for the tiled dataset and output run.",
+    )
+    parser.add_argument(
+        "--model-tracking-uri",
+        default=os.environ.get(
+            "EPITHELIUM_MODEL_TRACKING_URI", DEFAULT_MODEL_TRACKING_URI
+        ),
+        help="MLflow server from which to download the ONNX model.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -250,6 +262,10 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--provider", default="auto")
     parser.add_argument("--no-pyramid", action="store_true")
+    parser.add_argument("--experiment-name", default=DEFAULT_EXPERIMENT_NAME)
+    parser.add_argument("--run-name", default=DEFAULT_RUN_NAME)
+    parser.add_argument("--artifact-path", default="epithelium_masks")
+    parser.add_argument("--no-mlflow-log", action="store_true")
     return parser
 
 
@@ -279,7 +295,7 @@ def download_model(model: str, tracking_uri: str, cache_dir: Path) -> Path:
 
     cache_dir = cache_dir.expanduser()
     cache_dir.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha256(model.encode()).hexdigest()[:16]
+    key = hashlib.sha256(f"{tracking_uri}\n{model}".encode()).hexdigest()[:16]
     destination = cache_dir / f"episeg-{key}.onnx"
     if destination.is_file() and destination.stat().st_size > 0:
         print(f"Using cached model: {destination}")
@@ -685,7 +701,7 @@ def run_tiled_dataset(args: argparse.Namespace, model: OnnxModel, source: str) -
 
 def run(args: argparse.Namespace) -> None:
     validate_args(args)
-    model_path = download_model(args.model, args.tracking_uri, args.cache_dir)
+    model_path = download_model(args.model, args.model_tracking_uri, args.cache_dir)
     model = OnnxModel(model_path, args.provider)
     if args.tiled_dataset is not None:
         run_tiled_dataset(args, model, args.tiled_dataset)
@@ -742,8 +758,33 @@ def run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argument_parser()
+    args = parser.parse_args()
     try:
-        run(parser.parse_args())
+        if args.no_mlflow_log:
+            run(args)
+            return
+
+        mlflow.set_tracking_uri(args.tracking_uri)
+        mlflow.set_experiment(args.experiment_name)
+        with mlflow.start_run(run_name=args.run_name):
+            mlflow.log_params(
+                {
+                    "model": args.model,
+                    "model_tracking_uri": args.model_tracking_uri,
+                    "tiled_dataset": args.tiled_dataset or "",
+                    "data_mapping": str(args.data_mapping or ""),
+                    "output_dir": str(args.output_dir),
+                    "mpp": args.mpp,
+                    "tile_size": args.tile_size,
+                    "stride": args.stride,
+                    "batch_size": args.batch_size,
+                    "provider": args.provider,
+                    "mask_encoding": "uint8_probability_0_255",
+                }
+            )
+            run(args)
+            mlflow.log_artifacts(str(args.output_dir), artifact_path=args.artifact_path)
+            print(f"Logged masks to {mlflow.get_artifact_uri(args.artifact_path)}")
     except (FileNotFoundError, OSError, ValueError, urllib.error.URLError) as error:
         parser.exit(2, f"error: {error}\n")
 
