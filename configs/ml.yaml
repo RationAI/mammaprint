@@ -1,7 +1,7 @@
 defaults:
   - base
   - _self_
-  # A +experiment config selects the data source (data/sources/*) and model pieces.
+  # Experiments select the data shape and model components.
 
 seed: ${random_seed:}
 

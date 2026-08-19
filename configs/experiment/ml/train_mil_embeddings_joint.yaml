@@ -21,7 +21,8 @@ defaults:
       - joint_specificity
       - joint_mse
   - /trainer: default
-  - /data/sources: single_l3_embed
+  - /data: _template
+  - optional /data/embedded: null
   - _self_
 
 label_mode: both
