@@ -5,7 +5,8 @@ from typing import Any
 
 import hydra
 import pandas as pd
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientSession, ClientTimeout
+from mlflow.exceptions import MlflowException
 from omegaconf import DictConfig
 from rationai.mlkit import autolog, with_cli_args
 from rationai.mlkit.lightning.loggers import MLFlowLogger
@@ -39,7 +40,7 @@ async def put_request(
             f"Request to {url} timed out after {request_timeout} seconds. Slide: {slide_name}"
         )
         return -1, "Timeout"
-    except Exception as exc:
+    except ClientError as exc:
         slide_name = Path(data.get("wsi_path", "<unknown>")).name
         print(f"Request to {url} failed for {slide_name}: {exc}")
         return -1, str(exc)
@@ -118,7 +119,7 @@ async def generate_report(
         print(
             f"Report generation request to {url} timed out after {report_request_timeout} seconds."
         )
-    except Exception as exc:
+    except (ClientError, TypeError, ValueError) as exc:
         print(f"Report generation request to {url} failed: {exc}")
 
 
@@ -171,7 +172,7 @@ async def qc_main(
             logger.experiment.log_artifacts(
                 run_id=logger.run_id, local_dir=Path(report_path).parent.as_posix()
             )
-        except Exception:
+        except (MlflowException, OSError):
             print(f"Could not upload report artifact from {report_path}")
 
 

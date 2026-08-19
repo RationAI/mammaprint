@@ -10,8 +10,9 @@ submit_job(
     gpu="A40",
     public=False,
     script=[
-        "git clone https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint workdir",
+        "git clone https://github.com/rationAI/mammaprint workdir",
         "cd workdir",
+        "export MLFLOW_TRACKING_URI=http://mlflow-s3.rationai-mlflow",
         "export HF_TOKEN=<YOUR_HF_TOKEN>",
         "uv sync --frozen",
         "uv run -m preprocessing.embeddings +experiment=preprocessing/embeddings/...",
