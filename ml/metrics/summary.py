@@ -8,9 +8,6 @@ from torchmetrics.classification import BinaryAUROC
 from torchmetrics.regression import (
     MeanAbsoluteError,
     MeanSquaredError,
-    PearsonCorrCoef,
-    R2Score,
-    SpearmanCorrCoef,
 )
 
 
@@ -41,13 +38,6 @@ def binary_logit_summary(logits: Tensor, targets: Tensor) -> dict[str, float]:
     specificity = _divide(tn, tn + fp)
     f1 = _divide(2 * tp, 2 * tp + fp + fn)
 
-    true_positive_rate = (tp + fn) / total
-    predicted_positive_rate = (tp + fp) / total
-    expected_agreement = (
-        true_positive_rate * predicted_positive_rate
-        + (1 - true_positive_rate) * (1 - predicted_positive_rate)
-    )
-    kappa = _divide(accuracy - expected_agreement, 1 - expected_agreement)
     auroc = math.nan
     if targets.unique().numel() == 2:
         # Sigmoid is monotonic, but makes the input contract explicit and avoids
@@ -65,7 +55,6 @@ def binary_logit_summary(logits: Tensor, targets: Tensor) -> dict[str, float]:
         "recall": recall,
         "specificity": specificity,
         "f1": f1,
-        "cohen_kappa": kappa,
         "auroc": auroc,
     }
 
@@ -86,16 +75,7 @@ def regression_summary(predictions: Tensor, targets: Tensor) -> dict[str, float]
     result = {
         "mae": float(MeanAbsoluteError()(predictions, targets)),
         "mse": float(MeanSquaredError()(predictions, targets)),
-        "pearson": math.nan,
-        "spearman": math.nan,
-        "r2": math.nan,
     }
-    if predictions.numel() >= 2:
-        if predictions.std() > 0 and targets.std() > 0:
-            result["pearson"] = float(PearsonCorrCoef()(predictions, targets))
-            result["spearman"] = float(SpearmanCorrCoef()(predictions, targets))
-        if targets.var() > 0:
-            result["r2"] = float(R2Score()(predictions, targets))
 
     thresholded = binary_logit_summary(predictions, (targets >= 0).long())
     result.update(

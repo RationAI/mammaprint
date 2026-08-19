@@ -1,11 +1,8 @@
 # @package _global_
-# Raw-tile data shape: DataModule over RawTileSlideDataset (image bags).
-# A data/sources/* selector pulls this in plus ONE data/tiled/* card (with raw_uris).
-# Dataset spec written once (&dataset on `train`); val/test override only `split`.
 dataset:
-  levels: ???            # filled by the selected data/tiled/* card
+  levels: ???
   data_mapping: ${project_path}/data_mapping.csv
-  max_tiles: 256         # per-slide tile cap (random-sampled if exceeded)
+  max_tiles: 256
 
 datamodule:
   _target_: ml.data.DataModule

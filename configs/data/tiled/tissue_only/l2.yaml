@@ -1,10 +1,4 @@
 # @package dataset.levels.2
-# Level-2 RAW-TILE card (tissue masks). Physical facts come from
-# /data/levels/l2; only the variant name + artifact URIs live here.
-# `raw_uris.all` is the whole (un-split) tiled artifact read by the embeddings
-# step. Per-split URIs are produced from it by:
-#   python scripts/preprocessing/split_dataset.py --kind tiled \
-#     --uri <the `all` URI below> --name l2_tissue
 defaults:
   - /data/levels/l2@_here_
   - _self_

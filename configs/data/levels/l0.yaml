@@ -1,8 +1,3 @@
-# Physical facts for pyramid level 0, shared across every mask variant and
-# across the tiled card / embedded card / tiling experiment that use this level.
-# Pulled in via a defaults @-redirect:
-#   variant cards (package dataset.levels.0):  - /data/levels/l0@_here_
-#   tiling experiments (package _global_):        - /data/levels/l0@_global_
 level: 0
 mpp: 0.24
 tile_extent: 224

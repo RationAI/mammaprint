@@ -19,9 +19,7 @@ defaults:
       - joint_precision
       - joint_recall
       - joint_specificity
-      - joint_cohen_kappa
       - joint_mse
-      - joint_pearson
   - /trainer: default
   - /data/sources: single_l3_embed
   - _self_

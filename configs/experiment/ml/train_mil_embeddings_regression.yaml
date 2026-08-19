@@ -1,7 +1,7 @@
 # @package _global_
 # Linear head on precomputed level-3 embeddings, REGRESSION of the MammaPrint index:
 # identity encoder (frozen embeddings) -> mean-pool -> linear head (out_dim=1).
-# Regression twin of train_mil_embeddings (label_mode=index, MSE, correlation metrics).
+# Regression twin of train_mil_embeddings (label_mode=index, MSE).
 defaults:
   - /ml: module
   - /ml/encoder@ml.encoder: identity
@@ -14,9 +14,6 @@ defaults:
   - /ml/metrics:
       - mae
       - mse
-      - pearson
-      - spearman
-      - r2
       - thresholded_f1
       - thresholded_precision
       - thresholded_recall

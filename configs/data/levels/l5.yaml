@@ -1,8 +1,3 @@
-# Physical facts for pyramid level 5, shared across every mask variant and
-# across the tiled card / embedded card / tiling experiment that use this level.
-# Pulled in via a defaults @-redirect:
-#   variant cards (package dataset.levels.5):  - /data/levels/l5@_here_
-#   tiling experiments (package _global_):        - /data/levels/l5@_global_
 level: 5
 mpp: 7.76
 tile_extent: 224

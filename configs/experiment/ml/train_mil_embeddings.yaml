@@ -17,7 +17,6 @@ defaults:
       - binary_precision
       - binary_recall
       - binary_specificity
-      - binary_cohen_kappa
   - /trainer: default
   - /data/sources: single_l3_embed
   - _self_
