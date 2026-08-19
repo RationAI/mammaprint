@@ -7,6 +7,7 @@ import shlex
 from pathlib import Path
 
 from kube_jobs import storage, submit_job
+from omegaconf import OmegaConf
 
 
 DEFAULT_BRANCH = "codex/epithelium-onnx-job"
@@ -14,10 +15,19 @@ DEFAULT_REPOSITORY = "https://github.com/RationAI/MammaPrint.git"
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
 DEFAULT_DATA_MAPPING = Path("/mnt/projects/mammaprint/data_mapping.csv")
 DEFAULT_OUTPUT_DIR = Path("/mnt/projects/mammaprint/epithelium_onnx_masks")
+DEFAULT_TILED_CONFIG = (
+    Path(__file__).resolve().parents[2]
+    / "configs/data/tiled/tissue_only/epithelium_512.yaml"
+)
 DEFAULT_MODEL_URI = (
     "mlflow-artifacts:/10/39f821ed5b964c71a603cc6db196f9fd/artifacts/"
     "checkpoints/epoch=19-step=32020/model.onnx/model.onnx"
 )
+
+
+def configured_tiled_dataset() -> str:
+    config = OmegaConf.load(DEFAULT_TILED_CONFIG)
+    return str(config.raw_uris.all)
 
 
 def argument_parser() -> argparse.ArgumentParser:
@@ -37,7 +47,10 @@ def argument_parser() -> argparse.ArgumentParser:
     )
     inputs.add_argument(
         "--tiled-dataset",
-        help="MLflow artifact URI or local directory with slides/tiles parquet files.",
+        help=(
+            "MLflow artifact URI or local directory with slides/tiles parquet files "
+            f"(default: raw_uris.all in {DEFAULT_TILED_CONFIG.name})."
+        ),
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--kind", choices=("auto", "slide", "tile"), default="auto")
@@ -72,10 +85,10 @@ def inference_command(args: argparse.Namespace) -> str:
         values.extend(("--tiled-dataset", args.tiled_dataset))
     elif args.inputs:
         values.extend(("--input", *(str(path) for path in args.inputs)))
+    elif args.data_mapping:
+        values.extend(("--data-mapping", str(args.data_mapping)))
     else:
-        values.extend(
-            ("--data-mapping", str(args.data_mapping or DEFAULT_DATA_MAPPING))
-        )
+        values.extend(("--tiled-dataset", configured_tiled_dataset()))
     values.extend(
         [
             "--output-dir",

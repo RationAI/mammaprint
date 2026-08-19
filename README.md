@@ -37,13 +37,15 @@ from `configs/data/default.yaml`, and logs a raw tiled dataset named
 running inference on irrelevant tiles; it does not create or consume
 embeddings.
 
-Then copy that tiling run's artifact URI from MLflow and submit inference:
+The successful tiled artifact is registered in
+`configs/data/tiled/tissue_only/epithelium_512.yaml`, so submit inference with:
 
 ```bash
 uv run --extra submit python scripts/preprocessing/run_epithelium_masks.py \
-  --username <cluster-username> \
-  --tiled-dataset mlflow-artifacts:/3/<tiling-run-id>/artifacts/mou_epithelium_512_tissue
+  --username <cluster-username>
 ```
+
+Use `--tiled-dataset <uri-or-directory>` to override the registered artifact.
 
 The inference job downloads the ONNX model and tiled metadata, reads the raw RGB
 pixels from the original slides at the recorded level and coordinates, blends
@@ -53,7 +55,8 @@ used by `preprocessing/tiling.py`, so the directory can be used as slide-level
 epithelium masks later.
 
 You can still skip the pre-tiling step and process the configured slide mapping
-directly by omitting `--tiled-dataset`, or pass selected files with `--input`.
+directly with `--data-mapping /mnt/projects/mammaprint/data_mapping.csv`, or pass
+selected files with `--input`.
 Use `--kind tile` only for already-extracted raw RGB images. Direct slide masks
 are pyramidal BigTIFF files; ordinary image-tile masks are same-size PNG files.
 The default is a binary 0/255 mask at threshold 0.5. Add `--output-type

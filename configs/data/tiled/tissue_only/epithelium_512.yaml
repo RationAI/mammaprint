@@ -1,0 +1,14 @@
+# @package dataset.levels.1
+# Raw-tile dataset prepared for the epithelium ONNX model. The tiling run asked
+# for the model's 0.468 um/px training resolution, which selects the closest
+# available MammaPrint pyramid level (L1, about 0.485 um/px), with the exact
+# 512-pixel tile and 256-pixel stride used during training.
+defaults:
+  - /data/levels/l1@_here_
+  - _self_
+
+name: mou_epithelium_512_tissue
+tile_extent: 512
+stride: 256
+raw_uris:
+  all: "mlflow-artifacts:/3/a5c784ec411d46e5bfbecbaacf2cb27a/artifacts/mou_epithelium_512_tissue"
