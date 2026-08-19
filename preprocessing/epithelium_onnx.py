@@ -248,10 +248,6 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tile-size", type=int, default=TILE_SIZE)
     parser.add_argument("--stride", type=int, default=STRIDE)
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument(
-        "--output-type", choices=("binary", "probability"), default="binary"
-    )
-    parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--provider", default="auto")
     parser.add_argument("--no-pyramid", action="store_true")
     return parser
@@ -264,8 +260,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--stride must be positive and no larger than --tile-size.")
     if args.mpp <= 0 or (args.source_mpp is not None and args.source_mpp <= 0):
         raise ValueError("MPP values must be positive.")
-    if not 0 <= args.threshold <= 1:
-        raise ValueError("--threshold must be between 0 and 1.")
 
 
 def download_model(model: str, tracking_uri: str, cache_dir: Path) -> Path:
@@ -385,12 +379,8 @@ def extract_patch(
     return np.moveaxis(patch, -1, 0), width, height
 
 
-def mask_values(
-    probabilities: np.ndarray, output_type: str, threshold: float
-) -> np.ndarray:
+def mask_values(probabilities: np.ndarray) -> np.ndarray:
     probabilities = np.clip(probabilities, 0.0, 1.0)
-    if output_type == "binary":
-        return np.where(probabilities >= threshold, 255, 0).astype(np.uint8)
     return np.rint(probabilities * 255).astype(np.uint8)
 
 
@@ -401,8 +391,6 @@ def predict_to_memmap(
     tile_size: int,
     stride: int,
     batch_size: int,
-    output_type: str,
-    threshold: float,
 ) -> np.memmap:
     x_positions = positions(image.width, tile_size, stride)
     y_positions = positions(image.height, tile_size, stride)
@@ -425,9 +413,7 @@ def predict_to_memmap(
             out=np.zeros_like(pending_sum[:rows]),
             where=pending_count[:rows] != 0,
         )
-        mask[pending_y : pending_y + rows] = mask_values(
-            probabilities, output_type, threshold
-        )
+        mask[pending_y : pending_y + rows] = mask_values(probabilities)
         remaining = tile_size - rows
         if remaining:
             pending_sum[:remaining] = pending_sum[rows:]
@@ -471,8 +457,6 @@ def predict_coordinates_to_memmap(
     coordinates: Sequence[tuple[int, int]],
     tile_size: int,
     batch_size: int,
-    output_type: str,
-    threshold: float,
 ) -> np.memmap:
     """Predict a sparse tiled dataset and stitch its overlaps into a slide mask."""
     grouped: dict[int, list[int]] = {}
@@ -503,9 +487,7 @@ def predict_coordinates_to_memmap(
             out=np.zeros_like(pending_sum[:rows]),
             where=pending_count[:rows] != 0,
         )
-        mask[pending_y : pending_y + rows] = mask_values(
-            probabilities, output_type, threshold
-        )
+        mask[pending_y : pending_y + rows] = mask_values(probabilities)
         remaining = tile_size - rows
         if remaining:
             pending_sum[:remaining] = pending_sum[rows:]
@@ -686,8 +668,6 @@ def run_tiled_dataset(args: argparse.Namespace, model: OnnxModel, source: str) -
                     coordinates,
                     args.tile_size,
                     args.batch_size,
-                    args.output_type,
-                    args.threshold,
                 )
                 save_mask(
                     mask,
@@ -745,8 +725,6 @@ def run(args: argparse.Namespace) -> None:
                     args.tile_size,
                     args.stride,
                     args.batch_size,
-                    args.output_type,
-                    args.threshold,
                 )
                 save_mask(
                     mask,

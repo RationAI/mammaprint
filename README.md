@@ -59,9 +59,10 @@ directly with `--data-mapping /mnt/projects/mammaprint/data_mapping.csv`, or pas
 selected files with `--input`.
 Use `--kind tile` only for already-extracted raw RGB images. Direct slide masks
 are pyramidal BigTIFF files; ordinary image-tile masks are same-size PNG files.
-The default is a binary 0/255 mask at threshold 0.5. Add `--output-type
-probability` to retain probabilities, `--source-mpp <value>` if slide MPP
-metadata is missing, or `--dry-run` to print commands without submitting.
+Masks always retain the blended epithelial probabilities and store them as
+grayscale values from 0 to 255 (`pixel / 255` recovers the approximate 0-to-1
+probability). Add `--source-mpp <value>` if slide MPP metadata is missing, or
+`--dry-run` to print commands without submitting.
 
 For example, to process selected raw image tiles:
 

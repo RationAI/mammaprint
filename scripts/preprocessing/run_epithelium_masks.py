@@ -58,10 +58,6 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tracking-uri", default=DEFAULT_TRACKING_URI)
     parser.add_argument("--source-mpp", type=float)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument(
-        "--output-type", choices=("binary", "probability"), default="binary"
-    )
-    parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--provider", default="auto")
     parser.add_argument("--job-name", default="mammaprint-epithelium-onnx")
     parser.add_argument("--cpu", type=int, default=4)
@@ -101,10 +97,6 @@ def inference_command(args: argparse.Namespace) -> str:
             args.tracking_uri,
             "--batch-size",
             str(args.batch_size),
-            "--output-type",
-            args.output_type,
-            "--threshold",
-            str(args.threshold),
             "--provider",
             args.provider,
         ]
