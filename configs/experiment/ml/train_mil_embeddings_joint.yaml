@@ -22,7 +22,7 @@ defaults:
       - joint_mse
   - /trainer: default
   - /data: _template
-  - optional /data/embedded: null
+  - /data/embedded: tissue_only/l3
   - _self_
 
 label_mode: both

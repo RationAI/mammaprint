@@ -20,7 +20,7 @@ defaults:
       - thresholded_specificity
   - /trainer: default
   - /data: _template
-  - optional /data/embedded: null
+  - /data/embedded: tissue_only/l3
   - _self_
 
 label_mode: index
