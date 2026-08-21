@@ -29,11 +29,11 @@ if TYPE_CHECKING:
 
 
 DEFAULT_MODEL_URI = (
-    "mlflow-artifacts:/10/39f821ed5b964c71a603cc6db196f9fd/artifacts/"
+    "mlflow-artifacts://mlflow.rationai-mlflow:5000/10/"
+    "39f821ed5b964c71a603cc6db196f9fd/artifacts/"
     "checkpoints/epoch=19-step=32020/model.onnx/model.onnx"
 )
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
-DEFAULT_MODEL_TRACKING_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz"
 DEFAULT_EXPERIMENT_NAME = "MammaPrint"
 DEFAULT_RUN_NAME = "MammaPrint Epithelium ONNX Masks"
 MODEL_MPP = 0.468
@@ -243,13 +243,6 @@ def argument_parser() -> argparse.ArgumentParser:
         help="MLflow server for the tiled dataset and output run.",
     )
     parser.add_argument(
-        "--model-tracking-uri",
-        default=os.environ.get(
-            "EPITHELIUM_MODEL_TRACKING_URI", DEFAULT_MODEL_TRACKING_URI
-        ),
-        help="MLflow server from which to download the ONNX model.",
-    )
-    parser.add_argument(
         "--cache-dir",
         type=Path,
         default=Path.home() / ".cache" / "mammaprint" / "episeg",
@@ -283,10 +276,24 @@ def download_model(model: str, tracking_uri: str, cache_dir: Path) -> Path:
     if local_path.is_file():
         return local_path.resolve()
     if model.startswith("mlflow-artifacts:"):
-        artifact_path = model.removeprefix("mlflow-artifacts:").lstrip("/")
-        url = (
-            f"{tracking_uri.rstrip('/')}/api/2.0/mlflow-artifacts/artifacts/"
+        artifact_uri = urllib.parse.urlparse(model)
+        tracking = urllib.parse.urlparse(tracking_uri)
+        if not tracking.scheme or not tracking.netloc:
+            raise ValueError(f"MLflow tracking URI must be HTTP(S): {tracking_uri}")
+        artifact_path = artifact_uri.path.lstrip("/")
+        endpoint = (
+            f"{tracking.path.rstrip('/')}/api/2.0/mlflow-artifacts/artifacts/"
             f"{urllib.parse.quote(artifact_path, safe='/')}"
+        )
+        url = urllib.parse.urlunparse(
+            (
+                tracking.scheme,
+                artifact_uri.netloc or tracking.netloc,
+                endpoint,
+                "",
+                "",
+                "",
+            )
         )
     elif model.startswith(("http://", "https://")):
         url = model
@@ -701,7 +708,7 @@ def run_tiled_dataset(args: argparse.Namespace, model: OnnxModel, source: str) -
 
 def run(args: argparse.Namespace) -> None:
     validate_args(args)
-    model_path = download_model(args.model, args.model_tracking_uri, args.cache_dir)
+    model_path = download_model(args.model, args.tracking_uri, args.cache_dir)
     model = OnnxModel(model_path, args.provider)
     if args.tiled_dataset is not None:
         run_tiled_dataset(args, model, args.tiled_dataset)
@@ -770,7 +777,6 @@ def main() -> None:
             mlflow.log_params(
                 {
                     "model": args.model,
-                    "model_tracking_uri": args.model_tracking_uri,
                     "tiled_dataset": args.tiled_dataset or "",
                     "data_mapping": str(args.data_mapping or ""),
                     "output_dir": str(args.output_dir),

@@ -52,10 +52,11 @@ pixels from the original slides at the recorded level and coordinates, blends
 overlapping predictions, and writes one pyramidal TIFF per slide to
 `/mnt/projects/mammaprint/epithelium_onnx_masks`. Filenames match the convention
 used by `preprocessing/tiling.py`, so the directory can be used as slide-level
-epithelium masks later. The ONNX model is downloaded from the old trusted MLflow
-server, while the tiled dataset is downloaded from—and the resulting masks are
-logged to—the new internal MLflow server. Override either endpoint with
-`--model-tracking-uri` or `--tracking-uri`, respectively.
+epithelium masks later. The model URI embeds the old MLflow artifact server as
+`mlflow-artifacts://mlflow.rationai-mlflow:5000/...`, while the default tracking
+URI remains the new `http://mlflow-s3.rationai-mlflow`. This downloads the model
+from the old server but downloads the tiled dataset from—and logs the masks
+to—the new server.
 
 You can still skip the pre-tiling step and process the configured slide mapping
 directly with `--data-mapping /mnt/projects/mammaprint/data_mapping.csv`, or pass

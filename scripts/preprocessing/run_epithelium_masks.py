@@ -13,7 +13,6 @@ from omegaconf import OmegaConf
 DEFAULT_BRANCH = "codex/epithelium-onnx-job"
 DEFAULT_REPOSITORY = "https://github.com/RationAI/MammaPrint.git"
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
-DEFAULT_MODEL_TRACKING_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz"
 DEFAULT_DATA_MAPPING = Path("/mnt/projects/mammaprint/data_mapping.csv")
 DEFAULT_OUTPUT_DIR = Path("/mnt/projects/mammaprint/epithelium_onnx_masks")
 DEFAULT_TILED_CONFIG = (
@@ -21,7 +20,8 @@ DEFAULT_TILED_CONFIG = (
     / "configs/data/tiled/tissue_only/epithelium_512.yaml"
 )
 DEFAULT_MODEL_URI = (
-    "mlflow-artifacts:/10/39f821ed5b964c71a603cc6db196f9fd/artifacts/"
+    "mlflow-artifacts://mlflow.rationai-mlflow:5000/10/"
+    "39f821ed5b964c71a603cc6db196f9fd/artifacts/"
     "checkpoints/epoch=19-step=32020/model.onnx/model.onnx"
 )
 
@@ -57,7 +57,6 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--kind", choices=("auto", "slide", "tile"), default="auto")
     parser.add_argument("--model", default=DEFAULT_MODEL_URI)
     parser.add_argument("--tracking-uri", default=DEFAULT_TRACKING_URI)
-    parser.add_argument("--model-tracking-uri", default=DEFAULT_MODEL_TRACKING_URI)
     parser.add_argument("--experiment-name", default="MammaPrint")
     parser.add_argument("--run-name", default="MammaPrint Epithelium ONNX Masks")
     parser.add_argument("--artifact-path", default="epithelium_masks")
@@ -100,8 +99,6 @@ def inference_command(args: argparse.Namespace) -> str:
             args.model,
             "--tracking-uri",
             args.tracking_uri,
-            "--model-tracking-uri",
-            args.model_tracking_uri,
             "--experiment-name",
             args.experiment_name,
             "--run-name",
