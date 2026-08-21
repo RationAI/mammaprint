@@ -15,9 +15,6 @@ defaults:
   - /ml/metrics:
       - mae
       - mse
-      - pearson
-      - spearman
-      - r2
       - thresholded_f1
       - thresholded_precision
       - thresholded_recall

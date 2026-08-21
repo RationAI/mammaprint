@@ -11,7 +11,7 @@ defaults:
 
 name: l2_tissue_embed
 uris:
-  all: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_embed"
-  train: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_embed_train"
-  val: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_embed_val"
-  test: "mlflow-artifacts:/3/<run_id>/artifacts/l2_tissue_embed_test"
+  all: "mlflow-artifacts:/3/d70b72d842604ebe93d3fbd9e1dfd2f5/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/b11db2e5ec074e1da3c172ea41880c5c/artifacts/l2_tissue_only_mask_embed_train"
+  val: "mlflow-artifacts:/3/8134ea19af804e8aaf51680157575cf2/artifacts/l2_tissue_only_mask_embed_val"
+  test: "mlflow-artifacts:/3/d8479367bf224405b3a77bbc7b7ac289/artifacts/l2_tissue_only_mask_embed_test"

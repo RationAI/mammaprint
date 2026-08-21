@@ -14,10 +14,13 @@ defaults:
   - /ml/optimizer@ml.optimizer: adam
   - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
   - /ml/metrics:
+      - joint_accuracy
       - joint_auroc
       - joint_f1
+      - joint_precision
+      - joint_recall
+      - joint_specificity
       - joint_mse
-      - joint_pearson
   - /trainer: default
   - /data: _template
   - optional /data/embedded: null
