@@ -10,7 +10,7 @@
 # The whole (un-split) tiled artifact URI lives in the matching raw-tile card's
 # `raw_uris.all`; embeddings.py reads it via `dataset.path` below.
 defaults:
-  - /data/tiled/cancer_mask/l5
+  - /data/tiled/cancer_mask_5/l5
   - /preprocessing/tile_encoder: virchow2
   - _self_
 
