@@ -15,7 +15,6 @@ Run with, e.g.::
 """
 
 import logging
-import logging
 import random
 
 import hydra
