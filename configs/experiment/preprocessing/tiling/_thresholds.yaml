@@ -8,6 +8,7 @@
 #   folding 0.1   - kept lenient: folding masks are slide-inconsistent, so a low gate avoids uneven
 #                   filtering while still removing majority-folded tiles.
 #   residual 0.5  - drops heavily-contaminated tiles (some slides are ~66% residual artifact).
+#   cancer 0.5    - keeps tiles with mean cancer probability above 0.5.
 # Inherited across all levels; re-verify against a level's own distributions if
 # you re-tile it (mask resolution differs by mpp) by overriding these in that
 # experiment after `_thresholds` in its defaults list.
@@ -15,3 +16,4 @@ tissue_threshold: 0.25
 blur_threshold: 0.5
 folding_threshold: 0.1
 residual_threshold: 0.5
+cancer_threshold: 0.5
