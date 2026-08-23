@@ -62,7 +62,14 @@ def argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifact-path", default="epithelium_masks")
     parser.add_argument("--source-mpp", type=float)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--provider", default="auto")
+    parser.add_argument(
+        "--provider",
+        default="CUDAExecutionProvider",
+        help=(
+            "ONNX Runtime execution provider. GPU jobs require "
+            "CUDAExecutionProvider and fail instead of falling back to CPU."
+        ),
+    )
     parser.add_argument("--job-name", default="mammaprint-epithelium-onnx")
     parser.add_argument("--cpu", type=int, default=4)
     parser.add_argument("--memory", default="32Gi")

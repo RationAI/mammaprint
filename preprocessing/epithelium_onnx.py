@@ -183,17 +183,46 @@ class TiledSlideSource:
 class OnnxModel:
     def __init__(self, model_path: Path, provider: str) -> None:
         available = ort.get_available_providers()
-        providers = None if provider == "auto" else [provider]
         if provider != "auto" and provider not in available:
             raise ValueError(
                 f"Provider {provider!r} is unavailable; available: "
                 f"{', '.join(available)}"
             )
+
+        cuda_provider = "CUDAExecutionProvider"
+        use_cuda = provider == cuda_provider or (
+            provider == "auto" and cuda_provider in available
+        )
+        if use_cuda:
+            try:
+                ort.preload_dlls(directory="")
+            except OSError as error:
+                raise RuntimeError(
+                    "Could not preload the CUDA and cuDNN libraries installed in "
+                    "the Python environment."
+                ) from error
+
+        if provider == "auto":
+            providers = (
+                [cuda_provider, "CPUExecutionProvider"]
+                if use_cuda
+                else ["CPUExecutionProvider"]
+            )
+        else:
+            providers = [provider]
+
         options = ort.SessionOptions()
         options.log_severity_level = 3
         self.session = ort.InferenceSession(
             str(model_path), sess_options=options, providers=providers
         )
+        active_providers = self.session.get_providers()
+        if provider == cuda_provider and cuda_provider not in active_providers:
+            raise RuntimeError(
+                "CUDAExecutionProvider was requested but ONNX Runtime fell back "
+                f"to {', '.join(active_providers)}. Check the CUDA/cuDNN versions "
+                "and library paths before rerunning the job."
+            )
         model_input = self.session.get_inputs()[0]
         if model_input.type != "tensor(uint8)" or len(model_input.shape) != 4:
             raise ValueError(
@@ -204,9 +233,7 @@ class OnnxModel:
             raise ValueError(f"Expected RGB input; got {model_input.shape}.")
         self.input_name = model_input.name
         self.output_name = self.session.get_outputs()[0].name
-        print(
-            f"Loaded {model_path.name} with {', '.join(self.session.get_providers())}"
-        )
+        print(f"Loaded {model_path.name} with {', '.join(active_providers)}")
 
     def predict(self, batch: np.ndarray) -> np.ndarray:
         output = self.session.run([self.output_name], {self.input_name: batch})[0]
