@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import torch
 from torch.utils.data import Dataset
 
@@ -28,6 +29,17 @@ from ml.typing import LevelSpec, MILSample, SlideMetadata
 
 
 logger = logging.getLogger(__name__)
+
+
+def _empty_embedding_slides(directory: Path, slide_ids: set[str]) -> tuple[str, ...]:
+    """Return slide IDs whose Parquet files contain no tile rows."""
+    return tuple(
+        sorted(
+            slide_id
+            for slide_id in slide_ids
+            if pq.read_metadata(directory / f"{slide_id}.parquet").num_rows == 0
+        )
+    )
 
 
 class SingleScaleDataset(Dataset[MILSample]):
@@ -62,6 +74,17 @@ class SingleScaleDataset(Dataset[MILSample]):
 
         slides = load_labeled_slides(data_mapping, self.label_mode)
         present = available_slides({self.level: self.embeddings_dir})
+        self.empty_slides = _empty_embedding_slides(self.embeddings_dir, present)
+        if self.empty_slides:
+            logger.warning(
+                "Excluding %d slide(s) with empty embedding bags from the %s "
+                "split at level %d: %s",
+                len(self.empty_slides),
+                split,
+                self.level,
+                ", ".join(self.empty_slides),
+            )
+            present.difference_update(self.empty_slides)
         self.slides = slides[slides["name"].isin(present)].reset_index(drop=True)
 
     def __len__(self) -> int:
