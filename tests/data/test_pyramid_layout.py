@@ -92,6 +92,17 @@ class PyramidLayoutTest(unittest.TestCase):
                 tile_extent=256,
             )
 
+    def test_normalizes_hydra_level_sequence_to_tuple(self) -> None:
+        layout = PyramidLayout.from_levels(
+            self.levels,
+            anchor_level=5,
+            level_order=[5, 4, 3],
+            tile_extent=256,
+        )
+
+        self.assertIsInstance(layout.level_order, tuple)
+        self.assertEqual(layout.level_order, (5, 4, 3))
+
 
 if __name__ == "__main__":
     unittest.main()

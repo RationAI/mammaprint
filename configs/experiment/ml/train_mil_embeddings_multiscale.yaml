@@ -1,0 +1,52 @@
+# @package _global_
+# Complete L5/L4/L3 embedding pyramids: local transformer -> slide attention -> head.
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: identity
+  - /ml/aggregator@ml.aggregator: multiscale
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: bce
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - binary_accuracy
+      - binary_auroc
+      - binary_f1
+      - binary_precision
+      - binary_recall
+      - binary_specificity
+  - /trainer: default
+  - /data: _pyramid_template
+  - /data/pyramid: tissue_only_l5_l4_l3
+  - _self_
+
+label_mode: type
+feature_dim: 2560
+
+pyramid:
+  anchor_level: 5
+  level_order: [5, 4, 3]
+  level_ratios: [1, 2, 4]
+  tile_extent: 224
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Hierarchical pyramid MIL — L5/L4/L3 Virchow2 embeddings
+  description: |
+    Complete spatially aligned 1/4/16 embedding pyramids assembled lazily from
+    existing artifacts. A shared local transformer produces pyramid vectors and
+    gated attention pools them into a slide representation for luminal typing.
+  hyperparameters:
+    encoder: ${ml.encoder._target_}
+    aggregator: ${ml.aggregator._target_}
+    anchor_level: ${pyramid.anchor_level}
+    level_order: ${pyramid.level_order}
+    tile_extent: ${pyramid.tile_extent}
+    num_heads: ${ml.aggregator.num_heads}
+    num_layers: ${ml.aggregator.num_layers}
+    head: ${ml.head._target_}
+    loss: ${ml.loss._target_}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}

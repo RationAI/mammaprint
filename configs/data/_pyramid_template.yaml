@@ -1,0 +1,29 @@
+# @package _global_
+# Complete, lazily aligned embedding pyramids. The selected data/pyramid card
+# fills dataset.levels with existing per-level embedding artifacts.
+dataset:
+  levels: ???
+  data_mapping: ${project_path}/data_mapping.csv
+
+datamodule:
+  _target_: ml.data.DataModule
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  train: &dataset
+    _target_: ml.data.PyramidScaleDataset
+    _convert_: all
+    split: train
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    anchor_level: ${pyramid.anchor_level}
+    level_order: ${pyramid.level_order}
+    tile_extent: ${pyramid.tile_extent}
+    label_mode: ${label_mode}
+  val:
+    <<: *dataset
+    split: val
+  test:
+    <<: *dataset
+    split: test
