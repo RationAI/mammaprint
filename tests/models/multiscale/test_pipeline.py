@@ -143,10 +143,11 @@ class ModularMultiScaleMILPipelineTest(unittest.TestCase):
             feature_export=True,
         )
 
-        exported, attention = model(PyramidBag(torch.randn(3, 21, 2)))
+        exported, attention = model.export_features(
+            PyramidBag(torch.randn(3, 21, 2))
+        )
 
         self.assertEqual(tuple(exported.shape), (3, 6))
-        self.assertIsNone(model.out_dim)
         self.assertIsNone(attention)
 
     def test_slide_max_reduces_only_regions_and_preserves_token_axes(self) -> None:

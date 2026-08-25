@@ -1,7 +1,6 @@
 """Runtime composition for validated modular multi-scale MIL pipelines."""
 
 from collections.abc import Sequence
-from typing import cast
 
 from torch import Tensor, nn
 
@@ -154,9 +153,33 @@ class ModularMultiScaleMIL(Aggregator[PyramidBag]):
 
     @property
     def out_dim(self) -> int:
-        return cast("int", self.spec.out_dim)
+        if self.spec.feature_export:
+            raise ValueError(
+                "Feature-export pipeline is explicit export-only; use "
+                "export_features() instead of composing it with a head."
+            )
+        out_dim = self.spec.out_dim
+        if out_dim is None:
+            raise ValueError(
+                "Pipeline does not produce a slide vector and cannot be composed "
+                "with a head."
+            )
+        return out_dim
 
     def forward(self, bag: PyramidBag) -> tuple[Tensor, Tensor | None]:
+        if self.spec.feature_export:
+            raise RuntimeError(
+                "Feature-export pipelines must be run with export_features()."
+            )
+        return self._run_pipeline(bag)
+
+    def export_features(self, bag: PyramidBag) -> tuple[Tensor, Tensor | None]:
+        """Run an explicitly configured export pipeline without a prediction head."""
+        if not self.spec.feature_export:
+            raise RuntimeError("export_features() requires feature_export=True.")
+        return self._run_pipeline(bag)
+
+    def _run_pipeline(self, bag: PyramidBag) -> tuple[Tensor, Tensor | None]:
         self._validate_bag(bag)
         representation = self.feature_adapter(bag)
         representation = self.within_level(representation)
