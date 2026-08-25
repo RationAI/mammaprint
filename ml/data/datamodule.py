@@ -17,10 +17,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset
 
-from ml.typing import MILSample
-
-
-type Sample = MILSample
+from ml.typing import Sample
 
 
 def mil_collate[S](batch: Sequence[S]) -> list[S]:
