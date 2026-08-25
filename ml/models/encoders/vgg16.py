@@ -7,7 +7,7 @@ from torchvision.models import VGG16_Weights, vgg16
 from ml.models.encoders.base import Encoder
 
 
-class VGG16Encoder(Encoder):
+class VGG16Encoder(Encoder[Tensor, Tensor]):
     """Encodes raw tiles with VGG16 convolutional features + global max pool.
 
     Applies the ``torchvision`` VGG16 ``features`` stack to every tile in a bag

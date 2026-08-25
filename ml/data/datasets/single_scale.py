@@ -25,7 +25,7 @@ from ml.data.datasets._sources import (
     split_uri,
 )
 from ml.data.datasets.labels import LabelMode, get_label
-from ml.typing import LevelSpec, MILSample, SlideMetadata
+from ml.typing import Bag, LevelSpec, MILSample, SlideMetadata
 
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ class SingleScaleDataset(Dataset[MILSample]):
         frame = pd.read_parquet(
             (self.embeddings_dir / row["name"]).with_suffix(".parquet")
         )
-        bag = torch.from_numpy(np.stack(frame["embedding"].to_numpy())).float()
+        bag = Bag(torch.from_numpy(np.stack(frame["embedding"].to_numpy())).float())
         label = get_label(row, self.label_mode)
         metadata: SlideMetadata = {"slide_id": row["name"]}
         return bag, label, metadata

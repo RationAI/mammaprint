@@ -37,7 +37,7 @@ class LevelSpec(TypedDict):
 
 
 # ── Single-level types (always shipped) ──────────────────────────────────────
-type Bag = Tensor
+Bag = NewType("Bag", Tensor)
 """A bag of per-slide items: tile features ``(N, D)`` or raw tiles ``(N, C, H, W)``.
 
 The coordinate-aware single-scale path (``SpatialScaleDataset`` +
@@ -49,6 +49,9 @@ other dataset or aggregator produces or consumes those extra columns.
 type MILSample = tuple[Bag, Tensor, SlideMetadata]
 """A single-level slide-level training sample: ``(bag, label, metadata)``."""
 
+type SampleOf[BagT: Tensor] = tuple[BagT, Tensor, SlideMetadata]
+"""A slide sample parameterized by the exact bag tensor type."""
+
 
 # ── Multilevel types ──────────────────────────────────────────────────────────
 type Coordinate = tuple[int, int]
@@ -57,7 +60,7 @@ type Coordinate = tuple[int, int]
 PyramidBag = NewType("PyramidBag", Tensor)
 """Tensor ``(R, K, D)``: regions, ordered pyramid tokens, embedding features."""
 
-type PyramidSample = tuple[PyramidBag, Tensor, SlideMetadata]
+type PyramidSample = SampleOf[PyramidBag]
 """A multiscale training sample: ``(pyramids, label, metadata)``."""
 
 type Sample = MILSample | PyramidSample

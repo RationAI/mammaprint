@@ -27,7 +27,7 @@ from ml.data.datasets._sources import (
     split_uri,
 )
 from ml.data.datasets.labels import LabelMode, get_label
-from ml.typing import LevelSpec, MILSample, SlideMetadata
+from ml.typing import Bag, LevelSpec, MILSample, SlideMetadata
 
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class RawTileSlideDataset(Dataset[MILSample]):
             indices = self.rng.choice(n, self.max_tiles, replace=False).tolist()
             logger.debug("Slide %s: sampled %d/%d tiles.", name, self.max_tiles, n)
 
-        images = torch.stack([tiles[i][0] for i in indices])  # (N, C, H, W)
+        images = Bag(torch.stack([tiles[i][0] for i in indices]))  # (N, C, H, W)
         label = get_label(self.slides.iloc[idx], self.label_mode)
         metadata: SlideMetadata = {"slide_id": name}
         return images, label, metadata

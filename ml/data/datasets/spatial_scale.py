@@ -21,7 +21,7 @@ import torch
 
 from ml.data.datasets.labels import get_label
 from ml.data.datasets.single_scale import SingleScaleDataset
-from ml.typing import MILSample, SlideMetadata
+from ml.typing import Bag, MILSample, SlideMetadata
 
 
 class SpatialScaleDataset(SingleScaleDataset):
@@ -44,7 +44,7 @@ class SpatialScaleDataset(SingleScaleDataset):
         coords = torch.from_numpy(
             frame[["x", "y"]].to_numpy()
         ).float()  # (N, 2), level-0 pixel top-left corners
-        bag = torch.cat([features, coords], dim=1)  # (N, D + 2)
+        bag = Bag(torch.cat([features, coords], dim=1))  # (N, D + 2)
 
         label = get_label(row, self.label_mode)
         metadata: SlideMetadata = {"slide_id": row["name"]}
