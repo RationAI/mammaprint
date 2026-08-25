@@ -25,9 +25,6 @@ type RepresentationKind = Literal[
 
 _FEATURE_ADAPTERS = (None, "shared_linear")
 _WITHIN_LEVELS = (None, "mean", "max", "gated_attention", "shared_transformer")
-_LEVEL_FUSIONS = (None, "flatten", "concat", "mean", "gated_sum", "joint_transformer")
-_SLIDE_POOLS = (None, "mean", "max", "gated_attention")
-_FINALIZERS = (None, "flatten")
 
 
 @dataclass(frozen=True)
@@ -76,56 +73,65 @@ class MultiScalePipelineSpec:
             current = Representation("level_vectors", current.width)
         states.append(current)
 
-        self._validate_name("level_fusion", self.level_fusion, _LEVEL_FUSIONS, current)
         if current.kind == "pyramid_tokens":
-            accepted_token_fusions = (None, "flatten", "joint_transformer")
-            if self.level_fusion not in accepted_token_fusions:
-                self._reject("level_fusion", current, accepted_token_fusions)
+            accepted_fusions: tuple[object, ...] = (
+                None,
+                "flatten",
+                "joint_transformer",
+            )
+        else:
+            accepted_fusions = (None, "concat", "mean", "gated_sum")
+        self._validate_name(
+            "level_fusion", self.level_fusion, accepted_fusions, current
+        )
+
+        if current.kind == "pyramid_tokens":
             if self.level_fusion == "flatten":
                 current = Representation("pyramid_vectors", 21 * current.width)
             elif self.level_fusion == "joint_transformer":
                 current = Representation("pyramid_vectors", current.width)
         elif current.kind == "level_vectors":
-            accepted_level_fusions = (None, "concat", "mean", "gated_sum")
-            if self.level_fusion not in accepted_level_fusions:
-                self._reject("level_fusion", current, accepted_level_fusions)
             if self.level_fusion == "concat":
                 current = Representation("pyramid_vectors", 3 * current.width)
             elif self.level_fusion in ("mean", "gated_sum"):
                 current = Representation("pyramid_vectors", current.width)
         states.append(current)
 
-        self._validate_name("slide_pool", self.slide_pool, _SLIDE_POOLS, current)
-        if self.slide_pool is None:
-            if not self.feature_export:
-                accepted_pools = (
-                    ("mean", "max", "gated_attention")
-                    if current.kind == "pyramid_vectors"
-                    else ("mean", "max")
-                )
-                self._reject("slide_pool", current, accepted_pools)
-        elif self.slide_pool == "gated_attention":
-            if current.kind != "pyramid_vectors":
-                self._reject("slide_pool", current, (None, "mean", "max"))
+        if current.kind == "pyramid_vectors":
+            accepted_pools: tuple[object, ...] = ("mean", "max", "gated_attention")
+        else:
+            accepted_pools = ("mean", "max")
+        if self.feature_export:
+            accepted_pools = (None, *accepted_pools)
+        self._validate_name("slide_pool", self.slide_pool, accepted_pools, current)
+
+        if self.slide_pool == "gated_attention":
             current = Representation("slide_vector", current.width)
-        elif current.kind == "pyramid_tokens":
+        elif self.slide_pool is not None and current.kind == "pyramid_tokens":
             current = Representation("token_slide", current.width)
-        elif current.kind == "level_vectors":
+        elif self.slide_pool is not None and current.kind == "level_vectors":
             current = Representation("level_slide", current.width)
-        elif current.kind == "pyramid_vectors":
+        elif self.slide_pool is not None and current.kind == "pyramid_vectors":
             current = Representation("slide_vector", current.width)
         states.append(current)
 
-        self._validate_name("finalizer", self.finalizer, _FINALIZERS, current)
+        if current.kind in ("pyramid_tokens", "level_vectors", "pyramid_vectors"):
+            accepted_finalizers: tuple[object, ...] = (None,) if self.feature_export else ()
+        elif current.kind in ("token_slide", "level_slide"):
+            accepted_finalizers = (
+                (None, "flatten") if self.feature_export else ("flatten",)
+            )
+        else:
+            accepted_finalizers = (None, "flatten")
+        self._validate_name(
+            "finalizer", self.finalizer, accepted_finalizers, current
+        )
+
         if self.finalizer == "flatten":
             if current.kind == "token_slide":
                 current = Representation("slide_vector", 21 * current.width)
             elif current.kind == "level_slide":
                 current = Representation("slide_vector", 3 * current.width)
-            elif current.kind != "slide_vector":
-                self._reject("finalizer", current, (None,))
-        if current.kind != "slide_vector" and not self.feature_export:
-            self._reject("finalizer", current, ("flatten",))
         states.append(current)
 
         return tuple(states)

@@ -124,7 +124,40 @@ class MultiScalePipelineSpecTest(unittest.TestCase):
             slide_pool="gated_attention",
             stage="slide_pool",
             representation="level_vectors",
-            accepted=("None", "mean", "max"),
+            accepted=("mean", "max"),
+        )
+
+    def test_unknown_token_fusion_lists_only_token_alternatives(self) -> None:
+        self._assert_unknown_stage_alternatives(
+            stage="level_fusion",
+            value="typo",
+            accepted=("None", "flatten", "joint_transformer"),
+            excluded=("concat", "mean", "gated_sum"),
+        )
+
+    def test_unknown_structured_slide_pool_lists_only_training_alternatives(
+        self,
+    ) -> None:
+        self._assert_unknown_stage_alternatives(
+            stage="slide_pool",
+            value="typo",
+            accepted=("mean", "max"),
+            excluded=("None", "gated_attention"),
+            within_level="mean",
+        )
+
+    def test_unknown_export_finalizer_lists_only_region_preserving_alternative(
+        self,
+    ) -> None:
+        self._assert_unknown_stage_alternatives(
+            stage="finalizer",
+            value="typo",
+            accepted=("None",),
+            excluded=("flatten",),
+            within_level="mean",
+            level_fusion="concat",
+            slide_pool=None,
+            feature_export=True,
         )
 
     def test_rejects_null_slide_pool_for_ordinary_training(self) -> None:
@@ -254,6 +287,39 @@ class MultiScalePipelineSpecTest(unittest.TestCase):
             self.assertIn(f"{field}={value!r}", message)
         for alternative in accepted:
             self.assertIn(alternative, message)
+
+    def _assert_unknown_stage_alternatives(
+        self,
+        *,
+        stage: str,
+        value: str,
+        accepted: tuple[str, ...],
+        excluded: tuple[str, ...],
+        within_level: str | None = None,
+        level_fusion: str | None = None,
+        slide_pool: str | None = "mean",
+        feature_export: bool = False,
+    ) -> None:
+        arguments = {
+            "feature_dim": 5,
+            "hidden_dim": 7,
+            "feature_adapter": None,
+            "within_level": within_level,
+            "level_fusion": level_fusion,
+            "slide_pool": slide_pool,
+            "finalizer": None,
+            "feature_export": feature_export,
+        }
+        arguments[stage] = value
+
+        with self.assertRaises(ValueError) as caught:
+            MultiScalePipelineSpec(**arguments)  # type: ignore[arg-type]
+
+        alternatives = str(caught.exception).split("Current spec:", maxsplit=1)[0]
+        for alternative in accepted:
+            self.assertIn(alternative, alternatives)
+        for invalid_alternative in excluded:
+            self.assertNotIn(invalid_alternative, alternatives)
 
 
 if __name__ == "__main__":
