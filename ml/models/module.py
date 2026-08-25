@@ -26,13 +26,13 @@ from torch import Tensor, nn
 from ml.models.aggregators.base import Aggregator
 from ml.models.encoders.base import Encoder
 from ml.models.heads.base import Head
-from ml.typing import Bag, MILSample, SlideMetadata
+from ml.typing import SampleOf, SlideMetadata
 
 
 logger = logging.getLogger(__name__)
 
 
-class MammaprintModule(pl.LightningModule):
+class MammaprintModule[InputBagT: Tensor, EncodedBagT: Tensor](pl.LightningModule):
     """MIL module composing encoder -> aggregator -> head.
 
     Args:
@@ -53,8 +53,8 @@ class MammaprintModule(pl.LightningModule):
 
     def __init__(
         self,
-        encoder: Encoder,
-        aggregator: Aggregator[Any],
+        encoder: Encoder[InputBagT, EncodedBagT],
+        aggregator: Aggregator[EncodedBagT],
         head: Head,
         output_activation: nn.Module | None = None,
         loss: nn.Module | None = None,
@@ -76,7 +76,7 @@ class MammaprintModule(pl.LightningModule):
         self.valid_metrics = base.clone(prefix="valid/")
         self.test_metrics = base.clone(prefix="test/")
 
-    def forward(self, bag: Bag) -> tuple[Tensor, Tensor | None]:
+    def forward(self, bag: InputBagT) -> tuple[Tensor, Tensor | None]:
         """Run one slide through encoder -> aggregator -> head.
 
         Args:
@@ -97,7 +97,9 @@ class MammaprintModule(pl.LightningModule):
         prediction = self.output_activation(self.head(pooled))  # (out_dim,)
         return prediction, attention
 
-    def _forward_batch(self, bags: Sequence[Bag]) -> tuple[Tensor, list[Tensor | None]]:
+    def _forward_batch(
+        self, bags: Sequence[InputBagT]
+    ) -> tuple[Tensor, list[Tensor | None]]:
         """Run a batch of variable-length bags, stacking per-slide predictions."""
         predictions: list[Tensor] = []
         attentions: list[Tensor | None] = []
@@ -109,7 +111,7 @@ class MammaprintModule(pl.LightningModule):
 
     def _step(
         self,
-        batch: list[MILSample],
+        batch: list[SampleOf[InputBagT]],
         stage: str,
         metrics: torchmetrics.MetricCollection,
     ) -> Tensor:
@@ -133,16 +135,24 @@ class MammaprintModule(pl.LightningModule):
         self.log_dict(metrics, on_step=False, on_epoch=True)
         return loss
 
-    def training_step(self, batch: list[MILSample], batch_idx: int) -> Tensor:
+    def training_step(
+        self, batch: list[SampleOf[InputBagT]], batch_idx: int
+    ) -> Tensor:
         return self._step(batch, "train", self.train_metrics)
 
-    def validation_step(self, batch: list[MILSample], batch_idx: int) -> Tensor:
+    def validation_step(
+        self, batch: list[SampleOf[InputBagT]], batch_idx: int
+    ) -> Tensor:
         return self._step(batch, "valid", self.valid_metrics)
 
-    def test_step(self, batch: list[MILSample], batch_idx: int) -> Tensor:
+    def test_step(
+        self, batch: list[SampleOf[InputBagT]], batch_idx: int
+    ) -> Tensor:
         return self._step(batch, "test", self.test_metrics)
 
-    def predict_step(self, batch: list[MILSample], batch_idx: int) -> dict[str, Any]:
+    def predict_step(
+        self, batch: list[SampleOf[InputBagT]], batch_idx: int
+    ) -> dict[str, Any]:
         bags, _, metadata = _unpack_batch(batch)
         predictions, attentions = self._forward_batch(bags)
         return {
@@ -167,9 +177,9 @@ class MammaprintModule(pl.LightningModule):
         return config
 
 
-def _unpack_batch(
-    batch: list[MILSample],
-) -> tuple[list[Bag], list[Tensor], list[SlideMetadata]]:
+def _unpack_batch[BagT: Tensor](
+    batch: list[SampleOf[BagT]],
+) -> tuple[list[BagT], list[Tensor], list[SlideMetadata]]:
     """Split a list-of-samples batch into parallel lists of bags/labels/metadata."""
     bags = [sample[0] for sample in batch]
     labels = [sample[1] for sample in batch]

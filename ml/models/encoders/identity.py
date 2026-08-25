@@ -5,7 +5,7 @@ from torch import Tensor
 from ml.models.encoders.base import Encoder
 
 
-class IdentityEncoder(Encoder):
+class IdentityEncoder[TensorT: Tensor](Encoder[TensorT, TensorT]):
     """Passes precomputed tile embeddings through unchanged.
 
     Used when training a head/aggregator on frozen per-slide embedding bags
@@ -25,7 +25,7 @@ class IdentityEncoder(Encoder):
     def out_dim(self) -> int:
         return self._out_dim
 
-    def forward(self, tiles: Tensor) -> Tensor:
+    def forward(self, tiles: TensorT) -> TensorT:
         return tiles
 
 

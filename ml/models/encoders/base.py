@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from torch import Tensor, nn
 
 
-class Encoder(nn.Module, ABC):
+class Encoder[InputT: Tensor, OutputT: Tensor](nn.Module, ABC):
     """Maps a bag of tiles ``(N, ...)`` to per-tile features ``(N, out_dim)``.
 
     Implementations must set :attr:`out_dim` so the downstream aggregator and head
@@ -29,7 +29,7 @@ class Encoder(nn.Module, ABC):
         """Dimensionality of a single per-tile feature vector."""
 
     @abstractmethod
-    def forward(self, tiles: Tensor) -> Tensor:
+    def forward(self, tiles: InputT) -> OutputT:
         """Encode a bag of tiles.
 
         Args:
