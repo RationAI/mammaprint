@@ -6,6 +6,7 @@ from ml.models.aggregators.base import Aggregator
 from ml.models.aggregators.max import MaxPool
 from ml.models.aggregators.mean import MeanPool
 from ml.models.aggregators.multiscale import (
+    ModularMultiScaleMIL,
     MultiScaleMIL,
     MultiScalePipelineSpec,
     Representation,
@@ -19,6 +20,7 @@ __all__ = [
     "AttentionMIL",
     "MaxPool",
     "MeanPool",
+    "ModularMultiScaleMIL",
     "MultiScaleMIL",
     "MultiScalePipelineSpec",
     "Representation",

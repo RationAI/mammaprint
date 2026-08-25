@@ -7,6 +7,7 @@ from torch import Tensor, nn
 
 from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.base import Aggregator
+from ml.models.aggregators.multiscale.pipeline import ModularMultiScaleMIL
 from ml.models.aggregators.multiscale.spec import (
     FeatureAdapterName,
     FinalizerName,
@@ -22,7 +23,9 @@ from ml.typing import PyramidBag
 
 
 class MultiScaleMIL(Aggregator[PyramidBag]):
-    """Transformer within each pyramid, then gated attention across pyramids."""
+    """Deprecated compatibility implementation of the prototype pipeline."""
+
+    __deprecated__ = "Use ModularMultiScaleMIL instead."
 
     def __init__(
         self,
@@ -107,6 +110,7 @@ __all__ = [
     "FeatureAdapterName",
     "FinalizerName",
     "LevelFusionName",
+    "ModularMultiScaleMIL",
     "MultiScaleMIL",
     "MultiScalePipelineSpec",
     "Representation",

@@ -29,6 +29,11 @@ class MultiScaleMILTest(unittest.TestCase):
         self.assertIsInstance(self.model.local_transformer, TransformerMIL)
         self.assertIsInstance(self.model.slide_attention, AttentionMIL)
 
+    def test_deprecated_legacy_entrypoint_points_to_modular_replacement(self) -> None:
+        message = getattr(MultiScaleMIL, "__deprecated__", "")
+
+        self.assertIn("ModularMultiScaleMIL", message)
+
     def test_rejects_wrong_token_count(self) -> None:
         with self.assertRaisesRegex(ValueError, "21 pyramid tokens"):
             self.model(PyramidBag(torch.randn(2, 20, 16)))
