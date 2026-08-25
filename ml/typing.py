@@ -83,18 +83,18 @@ are each tile's level-0 pixel ``(x, y)``; the spatial aggregator slices them off
 other dataset or aggregator produces or consumes those extra columns.
 """
 
-type MILSample = tuple[Bag, Tensor, SlideMetadata]
-"""A single-level slide-level training sample: ``(bag, label, metadata)``."""
+type SampleOf[BagT: Tensor, MetadataT] = tuple[BagT, Tensor, MetadataT]
+"""A slide sample parameterized by its exact bag and metadata types."""
 
-type SampleOf[BagT: Tensor] = tuple[BagT, Tensor, SlideMetadata]
-"""A slide sample parameterized by the exact bag tensor type."""
+type MILSample = SampleOf[Bag, SlideMetadata]
+"""A single-level slide-level training sample: ``(bag, label, metadata)``."""
 
 
 # ── Multilevel types ──────────────────────────────────────────────────────────
 PyramidBag = NewType("PyramidBag", Tensor)
 """Tensor ``(R, K, D)``: regions, ordered pyramid tokens, embedding features."""
 
-type PyramidSample = tuple[PyramidBag, Tensor, PyramidSlideMetadata]
+type PyramidSample = SampleOf[PyramidBag, PyramidSlideMetadata]
 """A multiscale training sample: ``(pyramids, label, metadata)``."""
 
 type Sample = MILSample | PyramidSample

@@ -15,12 +15,15 @@ from collections.abc import Sequence
 import lightning.pytorch as pl
 from hydra.utils import instantiate
 from omegaconf import DictConfig
+from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
-from ml.typing import Sample
+from ml.typing import Sample, SampleOf
 
 
-def mil_collate[S](batch: Sequence[S]) -> list[S]:
+def mil_collate[BagT: Tensor, MetadataT](
+    batch: Sequence[SampleOf[BagT, MetadataT]],
+) -> list[SampleOf[BagT, MetadataT]]:
     """Collate variable-length bags by keeping the batch as a list of samples."""
     return list(batch)
 
