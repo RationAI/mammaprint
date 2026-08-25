@@ -1,11 +1,35 @@
 """Lazy alignment of existing per-level embedding artifacts into pyramids."""
 
+import logging
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import NamedTuple
 
-from ml.typing import Coordinate, LevelSpec
+import numpy as np
+import pandas as pd
+import torch
+from torch import Tensor
+from torch.utils.data import Dataset
+
+from ml.data.datasets._sources import (
+    available_slides,
+    download_level_sources,
+    load_labeled_slides,
+    split_uri,
+)
+from ml.data.datasets.labels import LabelMode, get_label
+from ml.typing import (
+    Coordinate,
+    LevelSpec,
+    PyramidBag,
+    PyramidSample,
+    SlideMetadata,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class PyramidDiagnostics(NamedTuple):
@@ -28,7 +52,7 @@ class PyramidLayout:
     @classmethod
     def from_levels(
         cls,
-        levels: Mapping[str | int, LevelSpec],
+        levels: Mapping[int, LevelSpec] | Mapping[str, LevelSpec],
         *,
         anchor_level: int,
         level_order: tuple[int, ...],
@@ -107,4 +131,176 @@ class PyramidLayout:
         )
 
 
-__all__ = ["PyramidDiagnostics", "PyramidLayout"]
+class PyramidScaleDataset(Dataset[PyramidSample]):
+    """Lazily gather complete aligned pyramids from existing embedding Parquets."""
+
+    def __init__(
+        self,
+        split: str,
+        levels: Mapping[str | int, LevelSpec],
+        data_mapping: str | Path,
+        anchor_level: int,
+        level_order: tuple[int, ...],
+        tile_extent: int,
+        label_mode: str = "type",
+    ) -> None:
+        self.label_mode = LabelMode(label_mode)
+        self.levels = {int(level): card for level, card in levels.items()}
+        self.layout = PyramidLayout.from_levels(
+            self.levels,
+            anchor_level=anchor_level,
+            level_order=level_order,
+            tile_extent=tile_extent,
+        )
+        sources = {
+            level: split_uri(self.levels[level], "uris", split, level)
+            for level in self.layout.level_order
+        }
+        self.embeddings_dirs = download_level_sources(sources)
+
+        slides = load_labeled_slides(data_mapping, self.label_mode)
+        present = available_slides(self.embeddings_dirs)
+        slides = slides[slides["name"].isin(present)].reset_index(drop=True)
+
+        self.anchors_by_slide: dict[str, tuple[Coordinate, ...]] = {}
+        self.diagnostics: dict[str, PyramidDiagnostics] = {}
+        for name_value in slides["name"]:
+            name = str(name_value)
+            coordinates = self._read_coordinate_sets(name)
+            anchors = self._complete_anchors(name, coordinates)
+            if anchors:
+                self.anchors_by_slide[name] = anchors
+
+        self.slides = slides[
+            slides["name"].isin(self.anchors_by_slide)
+        ].reset_index(drop=True)
+        rejected = len(slides) - len(self.slides)
+        complete = sum(item.complete for item in self.diagnostics.values())
+        candidates = sum(item.candidates for item in self.diagnostics.values())
+        logger.info(
+            "Pyramid scan retained %d/%d anchors across %d slides; rejected %d "
+            "slides with no complete pyramid.",
+            complete,
+            candidates,
+            len(self.slides),
+            rejected,
+        )
+
+    def _parquet_path(self, level: int, slide_name: str) -> Path:
+        return (self.embeddings_dirs[level] / slide_name).with_suffix(".parquet")
+
+    def _read_coordinate_sets(
+        self, slide_name: str
+    ) -> dict[int, set[Coordinate]]:
+        result: dict[int, set[Coordinate]] = {}
+        for level in self.layout.level_order:
+            frame = pd.read_parquet(
+                self._parquet_path(level, slide_name), columns=["x", "y"]
+            )
+            points = tuple(
+                (int(x), int(y))
+                for x, y in frame[["x", "y"]].itertuples(index=False, name=None)
+            )
+            point_set = set(points)
+            if len(point_set) != len(points):
+                raise ValueError(
+                    f"Slide {slide_name!r} level {level} contains a duplicate "
+                    "coordinate."
+                )
+            result[level] = point_set
+        return result
+
+    def _complete_anchors(
+        self,
+        slide_name: str,
+        coordinates: Mapping[int, set[Coordinate]],
+    ) -> tuple[Coordinate, ...]:
+        candidates = tuple(
+            sorted(
+                coordinates[self.layout.anchor_level],
+                key=lambda point: (point[1], point[0]),
+            )
+        )
+        complete: list[Coordinate] = []
+        missing_by_level: dict[int, int] = {}
+        for anchor in candidates:
+            for level, required in self.layout.coordinates_by_level(anchor).items():
+                if not coordinates[level].issuperset(required):
+                    missing_by_level[level] = missing_by_level.get(level, 0) + 1
+                    break
+            else:
+                complete.append(anchor)
+
+        self.diagnostics[slide_name] = PyramidDiagnostics(
+            candidates=len(candidates),
+            complete=len(complete),
+            missing_by_level=missing_by_level,
+        )
+        return tuple(complete)
+
+    def __len__(self) -> int:
+        return len(self.slides)
+
+    def __getitem__(self, idx: int) -> PyramidSample:
+        row = self.slides.iloc[idx]
+        slide_name = str(row["name"])
+        embeddings_by_level: dict[int, dict[Coordinate, Tensor]] = {}
+        feature_dim: int | None = None
+
+        for level in self.layout.level_order:
+            frame = pd.read_parquet(self._parquet_path(level, slide_name))
+            required_columns = {"x", "y", "embedding"}
+            missing_columns = required_columns.difference(frame.columns)
+            if missing_columns:
+                raise ValueError(
+                    f"Slide {slide_name!r} level {level} is missing columns "
+                    f"{sorted(missing_columns)}."
+                )
+
+            level_embeddings: dict[Coordinate, Tensor] = {}
+            for x, y, embedding in frame[["x", "y", "embedding"]].itertuples(
+                index=False, name=None
+            ):
+                coordinate = (int(x), int(y))
+                if coordinate in level_embeddings:
+                    raise ValueError(
+                        f"Slide {slide_name!r} level {level} contains a duplicate "
+                        f"coordinate {coordinate}."
+                    )
+                vector = torch.from_numpy(np.array(embedding, copy=True)).float()
+                if vector.ndim != 1:
+                    raise ValueError(
+                        f"Slide {slide_name!r} level {level} has a non-vector "
+                        f"embedding at {coordinate}."
+                    )
+                if feature_dim is None:
+                    feature_dim = vector.numel()
+                elif vector.numel() != feature_dim:
+                    raise ValueError(
+                        f"Slide {slide_name!r} level {level} embedding width "
+                        f"{vector.numel()} does not match {feature_dim}."
+                    )
+                level_embeddings[coordinate] = vector
+            embeddings_by_level[level] = level_embeddings
+
+        regions: list[Tensor] = []
+        for anchor in self.anchors_by_slide[slide_name]:
+            tokens: list[Tensor] = []
+            for level, coordinates in self.layout.coordinates_by_level(anchor).items():
+                for coordinate in coordinates:
+                    try:
+                        tokens.append(embeddings_by_level[level][coordinate])
+                    except KeyError as error:
+                        raise RuntimeError(
+                            f"Slide {slide_name!r} level {level} lost coordinate "
+                            f"{coordinate} after its completeness scan."
+                        ) from error
+            regions.append(torch.stack(tokens))
+
+        bag = PyramidBag(torch.stack(regions).float())
+        label = get_label(row, self.label_mode)
+        metadata: SlideMetadata = {"slide_id": slide_name}
+        return bag, label, metadata
+
+
+__all__ = ["PyramidDiagnostics", "PyramidLayout", "PyramidScaleDataset"]
