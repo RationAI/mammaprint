@@ -2,8 +2,9 @@
 
 import logging
 import math
+import random
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import NamedTuple
 
@@ -23,9 +24,11 @@ from ml.data.datasets.labels import LabelMode, get_label
 from ml.typing import (
     Coordinate,
     LevelSpec,
+    OverlapPolicy,
     PyramidBag,
     PyramidSample,
-    SlideMetadata,
+    PyramidSelectionAudit,
+    PyramidSlideMetadata,
 )
 
 
@@ -144,8 +147,19 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
         level_order: Sequence[int],
         tile_extent: int,
         label_mode: str = "type",
+        require_complete: bool = True,
+        overlap_policy: OverlapPolicy | str = OverlapPolicy.NON_OVERLAPPING,
+        selection_seed: int = 0,
     ) -> None:
+        if not require_complete:
+            raise ValueError(
+                "require_complete=false is not supported; pyramid samples must be complete."
+            )
+
         self.label_mode = LabelMode(label_mode)
+        self.split = split
+        self.overlap_policy = OverlapPolicy(overlap_policy)
+        self.selection_seed = selection_seed
         self.levels = {int(level): card for level, card in levels.items()}
         self.layout = PyramidLayout.from_levels(
             self.levels,
@@ -165,23 +179,50 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
 
         self.anchors_by_slide: dict[str, tuple[Coordinate, ...]] = {}
         self.diagnostics: dict[str, PyramidDiagnostics] = {}
-        for name_value in slides["name"]:
-            name = str(name_value)
+        audit_records: list[PyramidSelectionAudit] = []
+        for _, row in slides.iterrows():
+            name = str(row["name"])
             coordinates = self._read_coordinate_sets(name)
             anchors = self._complete_anchors(name, coordinates)
+            diagnostics = self.diagnostics[name]
+            audit_records.append(
+                PyramidSelectionAudit(
+                    slide_id=name,
+                    split=split,
+                    label=self._mapping_label(row),
+                    candidates=diagnostics.candidates,
+                    complete_before_thinning=diagnostics.complete,
+                    retained=len(anchors),
+                    incomplete=diagnostics.candidates - diagnostics.complete,
+                    missing_by_level=diagnostics.missing_by_level,
+                    completion_rate=(
+                        diagnostics.complete / diagnostics.candidates
+                        if diagnostics.candidates
+                        else 0.0
+                    ),
+                    overlap_retention_rate=(
+                        len(anchors) / diagnostics.complete
+                        if diagnostics.complete
+                        else 0.0
+                    ),
+                    rejected=not anchors,
+                )
+            )
             if anchors:
                 self.anchors_by_slide[name] = anchors
+
+        self.audit_records: tuple[PyramidSelectionAudit, ...] = tuple(audit_records)
 
         self.slides = slides[
             slides["name"].isin(self.anchors_by_slide)
         ].reset_index(drop=True)
         rejected = len(slides) - len(self.slides)
-        complete = sum(item.complete for item in self.diagnostics.values())
-        candidates = sum(item.candidates for item in self.diagnostics.values())
+        retained = sum(item.retained for item in self.audit_records)
+        candidates = sum(item.candidates for item in self.audit_records)
         logger.info(
             "Pyramid scan retained %d/%d anchors across %d slides; rejected %d "
             "slides with no complete pyramid.",
-            complete,
+            retained,
             candidates,
             len(self.slides),
             rejected,
@@ -211,18 +252,80 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
             result[level] = point_set
         return result
 
+    def _mapping_label(self, row: pd.Series) -> str:
+        """Return a stable source-row label without inspecting a target tensor."""
+        match self.label_mode:
+            case LabelMode.TYPE:
+                return str(row["type"])
+            case LabelMode.INDEX:
+                return str(row["mammaprint_index"])
+            case LabelMode.BOTH:
+                return f"{row['type']}|{row['mammaprint_index']}"
+
+    def audit_frame(self) -> pd.DataFrame:
+        """Return the per-slide selection audit in mapping-row order."""
+        columns = [field.name for field in fields(PyramidSelectionAudit)]
+        return pd.DataFrame(
+            [asdict(record) for record in self.audit_records], columns=columns
+        )
+
+    def audit_summary(self) -> pd.DataFrame:
+        """Aggregate selection audit totals and retained-region quantiles by cohort."""
+        columns = [
+            "split",
+            "label",
+            "slides",
+            "rejected_slides",
+            "candidates",
+            "complete_before_thinning",
+            "retained",
+            "incomplete",
+            "completion_rate",
+            "overlap_retention_rate",
+            "retained_p25",
+            "retained_p50",
+            "retained_p75",
+        ]
+        frame = self.audit_frame()
+        if frame.empty:
+            return pd.DataFrame(columns=columns)
+
+        rows: list[dict[str, str | int | float]] = []
+        for (split, label), group in frame.groupby(["split", "label"], sort=True):
+            candidates = int(group["candidates"].sum())
+            complete = int(group["complete_before_thinning"].sum())
+            retained = int(group["retained"].sum())
+            rows.append(
+                {
+                    "split": str(split),
+                    "label": str(label),
+                    "slides": len(group),
+                    "rejected_slides": int(group["rejected"].sum()),
+                    "candidates": candidates,
+                    "complete_before_thinning": complete,
+                    "retained": retained,
+                    "incomplete": int(group["incomplete"].sum()),
+                    "completion_rate": complete / candidates if candidates else 0.0,
+                    "overlap_retention_rate": retained / complete if complete else 0.0,
+                    "retained_p25": float(group["retained"].quantile(0.25)),
+                    "retained_p50": float(group["retained"].quantile(0.50)),
+                    "retained_p75": float(group["retained"].quantile(0.75)),
+                }
+            )
+        return pd.DataFrame(rows, columns=columns)
+
     def _complete_anchors(
         self,
         slide_name: str,
         coordinates: Mapping[int, set[Coordinate]],
     ) -> tuple[Coordinate, ...]:
-        candidates = tuple(
-            sorted(
+        candidates = sorted(
                 coordinates[self.layout.anchor_level],
                 key=lambda point: (point[1], point[0]),
             )
-        )
+        random.Random(f"{self.selection_seed}:{slide_name}").shuffle(candidates)
         complete: list[Coordinate] = []
+        accepted: list[Coordinate] = []
         missing_by_level: dict[int, int] = {}
         for anchor in candidates:
             for level, required in self.layout.coordinates_by_level(anchor).items():
@@ -231,13 +334,29 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
                     break
             else:
                 complete.append(anchor)
+                if self.overlap_policy is OverlapPolicy.ALL or not any(
+                    self._overlaps(anchor, retained) for retained in accepted
+                ):
+                    accepted.append(anchor)
 
         self.diagnostics[slide_name] = PyramidDiagnostics(
             candidates=len(candidates),
             complete=len(complete),
             missing_by_level=missing_by_level,
         )
-        return tuple(complete)
+        return tuple(accepted)
+
+    def _overlaps(self, first: Coordinate, second: Coordinate) -> bool:
+        """Return whether L5 footprints intersect with strictly positive area."""
+        first_x, first_y = first
+        second_x, second_y = second
+        extent = self.layout.tile_extent
+        return (
+            first_x < second_x + extent
+            and second_x < first_x + extent
+            and first_y < second_y + extent
+            and second_y < first_y + extent
+        )
 
     def __len__(self) -> int:
         return len(self.slides)
@@ -300,7 +419,10 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
 
         bag = PyramidBag(torch.stack(regions).float())
         label = get_label(row, self.label_mode)
-        metadata: SlideMetadata = {"slide_id": slide_name}
+        metadata: PyramidSlideMetadata = {
+            "slide_id": slide_name,
+            "anchors": self.anchors_by_slide[slide_name],
+        }
         return bag, label, metadata
 
 

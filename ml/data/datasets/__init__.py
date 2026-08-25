@@ -7,12 +7,21 @@ them (``from ml.data.datasets import SlideDataset``) triggers the import on dema
 
 from typing import TYPE_CHECKING, Any
 
+from ml.data.datasets.pyramid import PyramidScaleDataset
+from ml.typing import OverlapPolicy, PyramidSelectionAudit
+
 
 if TYPE_CHECKING:
     from ml.data.datasets.tiles import SlideDataset, TileDataset
 
 
-__all__ = ["SlideDataset", "TileDataset"]
+__all__ = [
+    "OverlapPolicy",
+    "PyramidScaleDataset",
+    "PyramidSelectionAudit",
+    "SlideDataset",
+    "TileDataset",
+]
 
 
 def __getattr__(name: str) -> Any:

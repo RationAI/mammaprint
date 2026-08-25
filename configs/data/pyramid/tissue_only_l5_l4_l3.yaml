@@ -5,3 +5,8 @@ defaults:
   - /data/embedded/tissue_only/l4@dataset.levels.4
   - /data/embedded/tissue_only/l5@dataset.levels.5
   - _self_
+
+pyramid:
+  require_complete: true
+  overlap_policy: non_overlapping
+  selection_seed: 0

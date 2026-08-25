@@ -21,6 +21,9 @@ datamodule:
     level_order: ${pyramid.level_order}
     tile_extent: ${pyramid.tile_extent}
     label_mode: ${label_mode}
+    require_complete: ${pyramid.require_complete}
+    overlap_policy: ${pyramid.overlap_policy}
+    selection_seed: ${pyramid.selection_seed}
   val:
     <<: *dataset
     split: val

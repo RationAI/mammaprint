@@ -50,55 +50,55 @@ class PyramidScaleDatasetTest(unittest.TestCase):
     def _write_slide(
         self,
         *,
+        anchors: tuple[tuple[int, int], ...] = ((0, 0),),
         missing: tuple[int, int, int] | None = None,
         duplicate: tuple[int, int, int] | None = None,
         width_by_level: dict[int, int] | None = None,
     ) -> None:
-        coordinates = {
-            5: [(0, 0)],
-            4: [(0, 0), (2, 0), (0, 2), (2, 2)],
-            3: [
-                (0, 0),
-                (2, 0),
-                (4, 0),
-                (6, 0),
-                (0, 2),
-                (2, 2),
-                (4, 2),
-                (6, 2),
-                (0, 4),
-                (2, 4),
-                (4, 4),
-                (6, 4),
-                (0, 6),
-                (2, 6),
-                (4, 6),
-                (6, 6),
-            ],
+        coordinates: dict[int, set[tuple[int, int]]] = {
+            5: set(anchors),
+            4: set(),
+            3: set(),
         }
+        for x, y in anchors:
+            coordinates[4].update(
+                (2 * x + column * 2, 2 * y + row * 2)
+                for row in range(2)
+                for column in range(2)
+            )
+            coordinates[3].update(
+                (4 * x + column * 2, 4 * y + row * 2)
+                for row in range(4)
+                for column in range(4)
+            )
         if missing is not None:
             level, x, y = missing
             coordinates[level].remove((x, y))
-        if duplicate is not None:
-            level, x, y = duplicate
-            coordinates[level].append((x, y))
-
         widths = width_by_level or {}
         for level, points in coordinates.items():
+            output_points = tuple(points)
+            if duplicate is not None and level == duplicate[0]:
+                output_points += ((duplicate[1], duplicate[2]),)
             width = widths.get(level, 2)
             frame = pd.DataFrame(
                 {
-                    "x": [x for x, _ in points],
-                    "y": [y for _, y in points],
+                    "x": [x for x, _ in output_points],
+                    "y": [y for _, y in output_points],
                     "embedding": [
                         np.full(width, _code(level, x, y), dtype=np.float32)
-                        for x, y in points
+                        for x, y in output_points
                     ],
                 }
             )
             frame.to_parquet(self.dirs[level] / "slide_a.parquet", index=False)
 
-    def _dataset(self) -> PyramidScaleDataset:
+    def _dataset(
+        self,
+        *,
+        require_complete: bool = True,
+        overlap_policy: str = "non_overlapping",
+        selection_seed: int = 0,
+    ) -> PyramidScaleDataset:
         with patch(
             "ml.data.datasets.pyramid.download_level_sources",
             return_value=self.dirs,
@@ -111,6 +111,9 @@ class PyramidScaleDatasetTest(unittest.TestCase):
                 level_order=(5, 4, 3),
                 tile_extent=2,
                 label_mode="type",
+                require_complete=require_complete,
+                overlap_policy=overlap_policy,
+                selection_seed=selection_seed,
             )
 
     def test_returns_complete_pyramid_in_level_then_row_major_order(self) -> None:
@@ -121,7 +124,7 @@ class PyramidScaleDatasetTest(unittest.TestCase):
 
         self.assertEqual(tuple(bag.shape), (1, 21, 2))
         self.assertEqual(label.tolist(), [1.0])
-        self.assertEqual(metadata, {"slide_id": "slide_a"})
+        self.assertEqual(metadata, {"slide_id": "slide_a", "anchors": ((0, 0),)})
         self.assertEqual(
             bag[0, :, 0].tolist(),
             [
@@ -170,6 +173,55 @@ class PyramidScaleDatasetTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "embedding width"):
             dataset[0]
+
+    def test_metadata_anchors_match_the_returned_bag_region_order(self) -> None:
+        self._write_slide(anchors=((0, 0), (2, 0)))
+
+        dataset = self._dataset(overlap_policy="all")
+        bag, _, metadata = dataset[0]
+
+        self.assertEqual(len(metadata["anchors"]), 2)
+        self.assertEqual(
+            [bag[index, 0, 0].item() for index in range(2)],
+            [50_000.0 + anchor[0] for anchor in metadata["anchors"]],
+        )
+
+    def test_non_overlapping_selection_removes_intersecting_l5_footprints(self) -> None:
+        self._write_slide(anchors=((0, 0), (1, 0)))
+
+        dataset = self._dataset()
+
+        self.assertEqual(len(dataset.anchors_by_slide["slide_a"]), 1)
+
+    def test_non_overlapping_selection_keeps_boundary_touching_footprints(self) -> None:
+        self._write_slide(anchors=((0, 0), (2, 0)))
+
+        dataset = self._dataset()
+
+        self.assertEqual(set(dataset.anchors_by_slide["slide_a"]), {(0, 0), (2, 0)})
+
+    def test_all_overlap_policy_retains_intersecting_footprints(self) -> None:
+        self._write_slide(anchors=((0, 0), (1, 0)))
+
+        dataset = self._dataset(overlap_policy="all")
+
+        self.assertEqual(set(dataset.anchors_by_slide["slide_a"]), {(0, 0), (1, 0)})
+
+    def test_selection_seed_reproduces_anchor_order(self) -> None:
+        self._write_slide(anchors=((0, 0), (1, 0), (2, 0), (3, 0)))
+
+        first = self._dataset(selection_seed=91)
+        second = self._dataset(selection_seed=91)
+
+        self.assertEqual(
+            first.anchors_by_slide["slide_a"], second.anchors_by_slide["slide_a"]
+        )
+
+    def test_rejects_incomplete_pyramid_mode(self) -> None:
+        self._write_slide()
+
+        with self.assertRaisesRegex(ValueError, "require_complete"):
+            self._dataset(require_complete=False)
 
 
 if __name__ == "__main__":
