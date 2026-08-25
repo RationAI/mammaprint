@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import TypedDict
+from typing import NewType, TypedDict
 
 from torch import Tensor
 
@@ -50,18 +50,15 @@ type MILSample = tuple[Bag, Tensor, SlideMetadata]
 """A single-level slide-level training sample: ``(bag, label, metadata)``."""
 
 
-# ── Multilevel types (comment out this block to ship single-level only) ───────
-# Nothing single-level references these; the multilevel dataset/aggregator are the
-# only consumers, so removing/commenting them here + their imports drops multilevel.
-# type Region = dict[int, Tensor]
-# """One aligned multi-scale region: level -> that level's tiles ``(K_level, D)``.
+# ── Multilevel types ──────────────────────────────────────────────────────────
+type Coordinate = tuple[int, int]
+"""A tile's integer ``(x, y)`` top-left coordinate in its slide level."""
 
-# For example ``{3: (1, D), 2: (4, D)}`` is one coarse level-3 tile with the four
-# level-2 tiles that zoom into the same footprint.
-# """
+PyramidBag = NewType("PyramidBag", Tensor)
+"""Tensor ``(R, K, D)``: regions, ordered pyramid tokens, embedding features."""
 
-# type MultiScaleBag = list[Region]
-# """A slide as a list of aligned multi-scale regions (variable length)."""
+type PyramidSample = tuple[PyramidBag, Tensor, SlideMetadata]
+"""A multiscale training sample: ``(pyramids, label, metadata)``."""
 
-# type MultiScaleSample = tuple[MultiScaleBag, Tensor, SlideMetadata]
-# """A multi-scale slide-level training sample: ``(regions, label, metadata)``."""
+type Sample = MILSample | PyramidSample
+"""Any slide-level sample accepted by the shared data module."""
