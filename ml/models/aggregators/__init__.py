@@ -5,7 +5,11 @@ from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.base import Aggregator
 from ml.models.aggregators.max import MaxPool
 from ml.models.aggregators.mean import MeanPool
-from ml.models.aggregators.multiscale import MultiScaleMIL
+from ml.models.aggregators.multiscale import (
+    MultiScaleMIL,
+    MultiScalePipelineSpec,
+    Representation,
+)
 from ml.models.aggregators.spatial_transformer import SpatialTransformerMIL
 from ml.models.aggregators.transformer import TransformerMIL
 
@@ -16,6 +20,8 @@ __all__ = [
     "MaxPool",
     "MeanPool",
     "MultiScaleMIL",
+    "MultiScalePipelineSpec",
+    "Representation",
     "SpatialTransformerMIL",
     "TransformerMIL",
 ]
