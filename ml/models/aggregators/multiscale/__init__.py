@@ -1,4 +1,4 @@
-"""Hierarchical MIL over fixed-layout, lazily aligned embedding pyramids."""
+"""Multi-scale MIL aggregators and validated pipeline specifications."""
 
 from collections.abc import Sequence
 
@@ -7,6 +7,16 @@ from torch import Tensor, nn
 
 from ml.models.aggregators.attention import AttentionMIL
 from ml.models.aggregators.base import Aggregator
+from ml.models.aggregators.multiscale.spec import (
+    FeatureAdapterName,
+    FinalizerName,
+    LevelFusionName,
+    MultiScalePipelineSpec,
+    Representation,
+    RepresentationKind,
+    SlidePoolName,
+    WithinLevelName,
+)
 from ml.models.aggregators.transformer import TransformerMIL
 from ml.typing import PyramidBag
 
@@ -93,4 +103,14 @@ class MultiScaleMIL(Aggregator[PyramidBag]):
         return self.slide_attention(pyramid_vectors)
 
 
-__all__ = ["MultiScaleMIL"]
+__all__ = [
+    "FeatureAdapterName",
+    "FinalizerName",
+    "LevelFusionName",
+    "MultiScaleMIL",
+    "MultiScalePipelineSpec",
+    "Representation",
+    "RepresentationKind",
+    "SlidePoolName",
+    "WithinLevelName",
+]
