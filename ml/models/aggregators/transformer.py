@@ -88,30 +88,38 @@ class TransformerMIL(Aggregator[Bag]):
     def out_dim(self) -> int:
         return self.feature_dim
 
-    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
-        # bag: (N, D). Prepend CLS -> sequence (1, N+1, D) (batch dim of 1).
-        sequence = torch.cat([self.cls_token, bag], dim=0).unsqueeze(0)  # (1, N+1, D)
+    def forward_batched(self, bags: Tensor) -> tuple[Tensor, Tensor]:
+        """Pool ``(B, N, D)`` bags to ``(B, D)`` and return ``(B, N)`` weights."""
+        batch_size = bags.shape[0]
+        cls_tokens = self.cls_token.unsqueeze(0).expand(batch_size, -1, -1)
+        sequence = torch.cat([cls_tokens, bags], dim=1)  # (B, N+1, D)
 
         if self.blocks is not None:
-            sequence = self.blocks(sequence)  # (1, N+1, D)
+            sequence = self.blocks(sequence)  # (B, N+1, D)
 
         # Final self-attention layer, keeping the CLS<-all attention map.
         normed = self.final_norm1(sequence)
         attended, attn_weights = self.final_attn(
             normed, normed, normed, need_weights=True, average_attn_weights=True
-        )  # attended: (1, N+1, D); attn_weights: (1, N+1, N+1)
+        )  # attended: (B, N+1, D); attn_weights: (B, N+1, N+1)
         sequence = sequence + self.final_attn_dropout(attended)
         sequence = sequence + self.final_ff_dropout(
             self.final_ff(self.final_norm2(sequence))
         )
 
-        slide_vector = sequence[0, 0]  # CLS embedding -> (D,)
+        slide_vectors = sequence[:, 0]  # CLS embeddings -> (B, D)
 
         # Per-tile weight = how much the CLS query attends to each tile (drop the
         # CLS->CLS self-weight); renormalise so the tile weights sum to 1.
-        cls_to_tiles = attn_weights[0, 0, 1:]  # (N,)
-        attention = cls_to_tiles / cls_to_tiles.sum().clamp_min(1e-8)
-        return slide_vector, attention
+        cls_to_tiles = attn_weights[:, 0, 1:]  # (B, N)
+        attention = cls_to_tiles / cls_to_tiles.sum(dim=1, keepdim=True).clamp_min(
+            1e-8
+        )
+        return slide_vectors, attention
+
+    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
+        pooled, attention = self.forward_batched(bag.unsqueeze(0))
+        return pooled[0], attention[0]
 
 
 __all__ = ["TransformerMIL"]

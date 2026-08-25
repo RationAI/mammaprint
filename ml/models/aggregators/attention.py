@@ -37,17 +37,22 @@ class AttentionMIL(Aggregator[Bag]):
     def out_dim(self) -> int:
         return self.feature_dim
 
-    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
-        bag = self.norm(bag)  # (N, D)
+    def forward_batched(self, bags: Tensor) -> tuple[Tensor, Tensor]:
+        """Pool ``(B, N, D)`` bags to ``(B, D)`` and return ``(B, N)`` weights."""
+        bags = self.norm(bags)  # (B, N, D)
 
-        gate = torch.tanh(self.attention_v(bag)) * torch.sigmoid(
-            self.attention_u(bag)
-        )  # (N, attention_dim)
-        scores = self.attention_weights(gate).squeeze(-1)  # (N,)
-        attention = torch.softmax(scores, dim=0)  # (N,)
+        gate = torch.tanh(self.attention_v(bags)) * torch.sigmoid(
+            self.attention_u(bags)
+        )  # (B, N, attention_dim)
+        scores = self.attention_weights(gate).squeeze(-1)  # (B, N)
+        attention = torch.softmax(scores, dim=1)  # (B, N)
 
-        pooled = (attention.unsqueeze(-1) * bag).sum(dim=0)  # (D,)
+        pooled = (attention.unsqueeze(-1) * bags).sum(dim=1)  # (B, D)
         return pooled, attention
+
+    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
+        pooled, attention = self.forward_batched(bag.unsqueeze(0))
+        return pooled[0], attention[0]
 
 
 __all__ = ["AttentionMIL"]
