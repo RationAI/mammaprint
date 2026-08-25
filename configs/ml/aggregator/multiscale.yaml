@@ -1,0 +1,9 @@
+# Transformer within each fixed pyramid, gated attention across pyramid vectors.
+_target_: ml.models.aggregators.MultiScaleMIL
+feature_dim: ${feature_dim}
+level_ratios: ${pyramid.level_ratios}
+num_heads: 8
+num_layers: 2
+mlp_ratio: 4.0
+dropout: 0.1
+attention_dim: 512

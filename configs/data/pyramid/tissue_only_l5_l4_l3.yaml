@@ -1,0 +1,7 @@
+# @package _global_
+# Compose existing embedding cards; this file introduces no artifact copies/URIs.
+defaults:
+  - /data/embedded/tissue_only/l3@dataset.levels.3
+  - /data/embedded/tissue_only/l4@dataset.levels.4
+  - /data/embedded/tissue_only/l5@dataset.levels.5
+  - _self_

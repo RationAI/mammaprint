@@ -2,7 +2,7 @@
 
 import logging
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
@@ -55,19 +55,20 @@ class PyramidLayout:
         levels: Mapping[int, LevelSpec] | Mapping[str, LevelSpec],
         *,
         anchor_level: int,
-        level_order: tuple[int, ...],
+        level_order: Sequence[int],
         tile_extent: int,
     ) -> "PyramidLayout":
         """Validate level cards and derive integer coarse-to-fine scale ratios."""
+        normalized_order = tuple(int(level) for level in level_order)
         if tile_extent <= 0:
             raise ValueError(f"tile_extent must be positive; got {tile_extent}.")
-        if not level_order or level_order[0] != anchor_level:
+        if not normalized_order or normalized_order[0] != anchor_level:
             raise ValueError("level_order must start with anchor_level.")
-        if len(set(level_order)) != len(level_order):
+        if len(set(normalized_order)) != len(normalized_order):
             raise ValueError("level_order must not contain duplicate levels.")
 
         cards = {int(level): card for level, card in levels.items()}
-        missing = [level for level in level_order if level not in cards]
+        missing = [level for level in normalized_order if level not in cards]
         if missing:
             raise ValueError(f"Missing level cards for levels {missing}.")
 
@@ -76,7 +77,7 @@ class PyramidLayout:
             raise ValueError(f"Level {anchor_level} mpp must be positive.")
 
         ratios: list[int] = []
-        for level in level_order:
+        for level in normalized_order:
             card = cards[level]
             card_extent = int(card["tile_extent"])
             if card_extent != tile_extent:
@@ -98,7 +99,7 @@ class PyramidLayout:
                 )
             ratios.append(ratio)
 
-        return cls(anchor_level, level_order, tuple(ratios), tile_extent)
+        return cls(anchor_level, normalized_order, tuple(ratios), tile_extent)
 
     @property
     def token_count(self) -> int:
@@ -140,7 +141,7 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
         levels: Mapping[str | int, LevelSpec],
         data_mapping: str | Path,
         anchor_level: int,
-        level_order: tuple[int, ...],
+        level_order: Sequence[int],
         tile_extent: int,
         label_mode: str = "type",
     ) -> None:
