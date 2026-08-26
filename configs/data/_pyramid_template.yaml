@@ -19,6 +19,8 @@ datamodule:
     data_mapping: ${dataset.data_mapping}
     anchor_level: ${pyramid.anchor_level}
     level_order: ${pyramid.level_order}
+    # The modular aggregator reads pyramid.level_ratios directly; the dataset
+    # derives and validates the same ratios from these level cards and their mpp.
     tile_extent: ${pyramid.tile_extent}
     label_mode: ${label_mode}
     require_complete: ${pyramid.require_complete}

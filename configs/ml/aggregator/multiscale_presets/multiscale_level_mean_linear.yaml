@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+  - /ml/aggregator: multiscale_modular
+  - /ml/head: linear
+  - _self_
+
+slide_dim: 2560
+ml:
+  aggregator:
+    feature_adapter: null
+    within_level: mean
+    level_fusion: mean
+    slide_pool: mean
+    finalizer: null
+    position_embedding: null
+    level_embedding: null
+  head:
+    in_dim: ${slide_dim}
