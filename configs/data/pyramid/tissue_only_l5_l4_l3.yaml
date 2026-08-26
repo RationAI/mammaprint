@@ -7,6 +7,10 @@ defaults:
   - _self_
 
 pyramid:
+  anchor_level: 5
+  level_order: [5, 4, 3]
+  level_ratios: [1, 2, 4]
+  tile_extent: 224
   require_complete: true
   overlap_policy: non_overlapping
   selection_seed: 0

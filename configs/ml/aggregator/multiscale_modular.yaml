@@ -1,0 +1,20 @@
+# Explicit, validated five-stage multi-scale MIL pipeline. Preset cards override
+# stages and bind their calculated output width to the selected existing head.
+_target_: ml.models.aggregators.ModularMultiScaleMIL
+feature_adapter: null
+within_level: mean
+level_fusion: concat
+slide_pool: mean
+finalizer: null
+feature_dim: ${feature_dim}
+hidden_dim: ${multiscale_hidden_dim}
+level_ratios: ${pyramid.level_ratios}
+projection_dropout: 0.1
+attention_dim: 256
+transformer_num_layers: 1
+transformer_num_heads: 8
+transformer_mlp_ratio: 4.0
+transformer_dropout: 0.1
+position_embedding: null
+level_embedding: null
+feature_export: false
