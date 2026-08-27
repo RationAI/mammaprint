@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - /experiment/ml/multiscale: _common
+  - /ml/aggregator/multiscale_presets: multiscale_transformer
+  - _self_
+
+trainable_parameters: 5283586
+metadata:
+  run_name: Multiscale local Transformer + slide attention — L5/L4/L3
+  description: Shared local Transformer with learned embeddings and gated attention across aligned slide regions.

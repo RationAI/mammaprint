@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - /experiment/ml/multiscale: _common
+  - /ml/aggregator/multiscale_presets: multiscale_mean_linear
+  - _self_
+
+trainable_parameters: 7681
+metadata:
+  run_name: Multiscale mean/concat/mean + linear — L5/L4/L3
+  description: Parameter-free per-level and slide means with concatenated levels and a linear head.

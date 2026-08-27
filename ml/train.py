@@ -16,12 +16,17 @@ Run with, e.g.::
 
 import logging
 import random
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Protocol
 
 import hydra
 from lightning.pytorch import seed_everything
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
 from rationai.mlkit.lightning.loggers import MLFlowLogger
+
+from ml.logging.pyramid_audit import ArtifactLogger, log_pyramid_audit
 
 
 log = logging.getLogger(__name__)
@@ -31,6 +36,51 @@ log = logging.getLogger(__name__)
 OmegaConf.register_new_resolver(
     "random_seed", lambda: random.randint(0, 2**31), use_cache=True, replace=True
 )
+
+
+class _DatasetLoader(Protocol):
+    dataset: object
+
+
+class _AuditDataModule(Protocol):
+    def setup(self, stage: str | None = None) -> None: ...
+
+    def train_dataloader(self) -> _DatasetLoader: ...
+
+    def val_dataloader(self) -> _DatasetLoader: ...
+
+    def test_dataloader(self) -> _DatasetLoader: ...
+
+
+def _log_pyramid_audits(
+    datamodule: _AuditDataModule,
+    logger: ArtifactLogger,
+    mode: str,
+) -> None:
+    """Upload audits for the dataset splits consumed by this Lightning stage."""
+    datamodule.setup(mode)
+    loaders = {
+        "train": datamodule.train_dataloader,
+        "val": datamodule.val_dataloader,
+        "test": datamodule.test_dataloader,
+    }
+    splits = {
+        "fit": ("train", "val"),
+        "validate": ("val",),
+        "test": ("test",),
+        "predict": ("test",),
+    }.get(mode, ())
+
+    with TemporaryDirectory(prefix="mammaprint-pyramid-audit-") as temp_dir:
+        output_root = Path(temp_dir)
+        for split in splits:
+            dataset = loaders[split]().dataset
+            log_pyramid_audit(
+                dataset,
+                logger,
+                output_root / split,
+                artifact_path=f"pyramid_selection/{split}",
+            )
 
 
 @hydra.main(config_path="../configs", config_name="ml", version_base=None)
@@ -43,6 +93,10 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     datamodule = hydra.utils.instantiate(config.datamodule, _recursive_=False)
     module = hydra.utils.instantiate(config.ml)
     trainer = hydra.utils.instantiate(config.trainer, logger=logger)
+
+    # Build only the current stage's splits. Multiscale datasets expose audit
+    # tables; single-scale datasets make this a no-op at the logging boundary.
+    _log_pyramid_audits(datamodule, logger, str(config.mode))
 
     # config.mode selects the Lightning stage (fit/validate/test/predict);
     # config.checkpoint (or null) resumes training / loads weights for eval.
