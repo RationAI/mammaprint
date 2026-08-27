@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - /experiment/ml/multiscale: _common
+  - /ml/aggregator/multiscale_presets: multiscale_projected_mean
+  - _self_
+
+trainable_parameters: 1328129
+metadata:
+  run_name: Multiscale projected mean + linear — L5/L4/L3
+  description: Shared feature projection followed by per-level and slide means, level concatenation, and a linear head.
