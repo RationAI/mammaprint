@@ -75,6 +75,10 @@ class DataModule(pl.LightningDataModule):
         for split in needed:
             self._build(split)
 
+    def get_dataset(self, split: str) -> Dataset[Sample]:
+        """Return a dataset already built by :meth:`setup` for ``split``."""
+        return self._datasets[split]
+
     def _dataloader(self, split: str, shuffle: bool) -> DataLoader[Sample]:
         return DataLoader(
             self._datasets[split],

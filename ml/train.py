@@ -38,18 +38,10 @@ OmegaConf.register_new_resolver(
 )
 
 
-class _DatasetLoader(Protocol):
-    dataset: object
-
-
 class _AuditDataModule(Protocol):
     def setup(self, stage: str | None = None) -> None: ...
 
-    def train_dataloader(self) -> _DatasetLoader: ...
-
-    def val_dataloader(self) -> _DatasetLoader: ...
-
-    def test_dataloader(self) -> _DatasetLoader: ...
+    def get_dataset(self, split: str) -> object: ...
 
 
 def _log_pyramid_audits(
@@ -59,11 +51,6 @@ def _log_pyramid_audits(
 ) -> None:
     """Upload audits for the dataset splits consumed by this Lightning stage."""
     datamodule.setup(mode)
-    loaders = {
-        "train": datamodule.train_dataloader,
-        "val": datamodule.val_dataloader,
-        "test": datamodule.test_dataloader,
-    }
     splits = {
         "fit": ("train", "val"),
         "validate": ("val",),
@@ -74,7 +61,7 @@ def _log_pyramid_audits(
     with TemporaryDirectory(prefix="mammaprint-pyramid-audit-") as temp_dir:
         output_root = Path(temp_dir)
         for split in splits:
-            dataset = loaders[split]().dataset
+            dataset = datamodule.get_dataset(split)
             log_pyramid_audit(
                 dataset,
                 logger,
@@ -96,7 +83,11 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
 
     # Build only the current stage's splits. Multiscale datasets expose audit
     # tables; single-scale datasets make this a no-op at the logging boundary.
-    _log_pyramid_audits(datamodule, logger, str(config.mode))
+    try:
+        _log_pyramid_audits(datamodule, logger, str(config.mode))
+    except Exception:
+        logger.finalize(status="failed")
+        raise
 
     # config.mode selects the Lightning stage (fit/validate/test/predict);
     # config.checkpoint (or null) resumes training / loads weights for eval.
