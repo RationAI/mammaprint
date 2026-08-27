@@ -60,13 +60,9 @@ class SharedLinearAdapter(nn.Module):
             )
         projected_levels = (
             self.dropout(
-                self.activation(
-                    self.projection(norm(pyramids[:, level_slice]))
-                )
+                self.activation(self.projection(norm(pyramids[:, level_slice])))
             )
-            for norm, level_slice in zip(
-                self.level_norms, self.slices, strict=True
-            )
+            for norm, level_slice in zip(self.level_norms, self.slices, strict=True)
         )
         return torch.cat(tuple(projected_levels), dim=1)
 

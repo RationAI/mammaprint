@@ -1,3 +1,5 @@
+"""Regression tests for pyramid-audit logging."""
+
 from __future__ import annotations
 
 import json
@@ -210,8 +212,7 @@ class PyramidAuditLoggerTest(unittest.TestCase):
             )
             summary_json = json.loads(
                 (
-                    output_dir
-                    / "pyramid_selection_summary_by_split_label.json"
+                    output_dir / "pyramid_selection_summary_by_split_label.json"
                 ).read_text()
             )
             self.assertEqual(list(audit_json[0]), AUDIT_COLUMNS)

@@ -213,9 +213,9 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
 
         self.audit_records: tuple[PyramidSelectionAudit, ...] = tuple(audit_records)
 
-        self.slides = slides[
-            slides["name"].isin(self.anchors_by_slide)
-        ].reset_index(drop=True)
+        self.slides = slides[slides["name"].isin(self.anchors_by_slide)].reset_index(
+            drop=True
+        )
         rejected = len(slides) - len(self.slides)
         retained = sum(item.retained for item in self.audit_records)
         candidates = sum(item.candidates for item in self.audit_records)
@@ -231,9 +231,7 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
     def _parquet_path(self, level: int, slide_name: str) -> Path:
         return (self.embeddings_dirs[level] / slide_name).with_suffix(".parquet")
 
-    def _read_coordinate_sets(
-        self, slide_name: str
-    ) -> dict[int, set[Coordinate]]:
+    def _read_coordinate_sets(self, slide_name: str) -> dict[int, set[Coordinate]]:
         result: dict[int, set[Coordinate]] = {}
         for level in self.layout.level_order:
             frame = pd.read_parquet(
@@ -320,9 +318,9 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
         coordinates: Mapping[int, set[Coordinate]],
     ) -> tuple[Coordinate, ...]:
         candidates = sorted(
-                coordinates[self.layout.anchor_level],
-                key=lambda point: (point[1], point[0]),
-            )
+            coordinates[self.layout.anchor_level],
+            key=lambda point: (point[1], point[0]),
+        )
         random.Random(f"{self.selection_seed}:{slide_name}").shuffle(candidates)
         complete: list[Coordinate] = []
         accepted: list[Coordinate] = []

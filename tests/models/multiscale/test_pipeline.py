@@ -143,9 +143,7 @@ class ModularMultiScaleMILPipelineTest(unittest.TestCase):
             feature_export=True,
         )
 
-        exported, attention = model.export_features(
-            PyramidBag(torch.randn(3, 21, 2))
-        )
+        exported, attention = model.export_features(PyramidBag(torch.randn(3, 21, 2)))
 
         self.assertEqual(tuple(exported.shape), (3, 6))
         self.assertIsNone(attention)
@@ -185,8 +183,9 @@ class ModularMultiScaleMILPipelineTest(unittest.TestCase):
             (torch.randn(2, 21, 7), "feature width 8"),
         )
         for bag, message in cases:
-            with self.subTest(message=message), self.assertRaisesRegex(
-                ValueError, message
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(ValueError, message),
             ):
                 model(PyramidBag(bag))
 

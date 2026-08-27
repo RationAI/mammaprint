@@ -105,7 +105,9 @@ class PyramidAuditTest(unittest.TestCase):
                 selection_seed=0,
             )
 
-    def test_audit_records_report_complete_incomplete_overlap_and_zero_retention(self) -> None:
+    def test_audit_records_report_complete_incomplete_overlap_and_zero_retention(
+        self,
+    ) -> None:
         self._write_slide("complete", ((0, 0),))
         self._write_slide("incomplete", ((0, 0),), missing=(3, 6, 6))
         self._write_slide("overlap", ((0, 0), (1, 0)))

@@ -105,9 +105,7 @@ class MammaprintModuleTest(unittest.TestCase):
             feature_export=True,
         )
 
-        exported, _ = aggregator.export_features(
-            PyramidBag(torch.randn(3, 21, 2))
-        )
+        exported, _ = aggregator.export_features(PyramidBag(torch.randn(3, 21, 2)))
 
         self.assertEqual(tuple(exported.shape), (6,))
         with self.assertRaisesRegex(ValueError, "explicit export-only"):

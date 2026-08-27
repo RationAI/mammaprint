@@ -29,14 +29,26 @@ class ParameterFreeWithinLevelTest(unittest.TestCase):
 
         expected = torch.tensor([[[1.0, 9.0], [4.0, 5.0], [7.5, 7.5]]])
         torch.testing.assert_close(pooled, expected)
-        self.assertEqual(sum(parameter.numel() for parameter in MeanWithinLevel((1, 2, 4)).parameters()), 0)
+        self.assertEqual(
+            sum(
+                parameter.numel()
+                for parameter in MeanWithinLevel((1, 2, 4)).parameters()
+            ),
+            0,
+        )
 
     def test_max_pools_each_level_by_hand(self) -> None:
         pooled = MaxWithinLevel(level_ratios=(1, 2, 4))(self.pyramids)
 
         expected = torch.tensor([[[1.0, 9.0], [7.0, 8.0], [15.0, 15.0]]])
         torch.testing.assert_close(pooled, expected)
-        self.assertEqual(sum(parameter.numel() for parameter in MaxWithinLevel((1, 2, 4)).parameters()), 0)
+        self.assertEqual(
+            sum(
+                parameter.numel()
+                for parameter in MaxWithinLevel((1, 2, 4)).parameters()
+            ),
+            0,
+        )
 
 
 class LearnedWithinLevelTest(unittest.TestCase):
@@ -113,7 +125,9 @@ class LearnedWithinLevelTest(unittest.TestCase):
         )
 
         for module in modules:
-            self.assertFalse(any(isinstance(child, nn.Embedding) for child in module.modules()))
+            self.assertFalse(
+                any(isinstance(child, nn.Embedding) for child in module.modules())
+            )
             self.assertFalse(hasattr(module, "position_embeddings"))
 
 
