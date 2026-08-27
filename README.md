@@ -15,21 +15,17 @@ uv sync
 
 Use scripts/preprocessing scripts.
 
-### Lazy multiscale pyramids
+### Modular multiscale MIL
 
-The multiscale experiment reuses the existing level-5, level-4, and level-3
-Virchow2 embedding artifacts. It keeps only complete aligned pyramids containing
-1 coarse, 4 intermediate, and 16 fine tiles; no tiling or embedding job is run.
-
-```bash
-uv run -m ml.train +experiment=ml/train_mil_embeddings_multiscale
-```
-
-Tile extent is a validated Hydra hyperparameter rather than a hardcoded value.
-When selecting a pyramid data card whose three level cards were tiled at 256
-pixels, override it together with that card:
+The modular multiscale experiments reuse the existing level-5, level-4, and
+level-3 Virchow2 embedding artifacts. They keep only complete aligned pyramids
+containing 1 coarse, 4 intermediate, and 16 fine tiles; no tiling or embedding
+job is run. Start with the parameter-free mean/concat/mean baseline:
 
 ```bash
-uv run -m ml.train +experiment=ml/train_mil_embeddings_multiscale \
-  data/pyramid=my_256px_pyramid pyramid.tile_extent=256
+uv run python -m ml.train +experiment=ml/multiscale/multiscale_mean_linear
 ```
+
+See the [modular multiscale MIL configuration reference](docs/multiscale-mil-config.md)
+for stage options, compatible combinations, named presets, and data-card
+overrides.
