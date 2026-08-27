@@ -40,6 +40,23 @@ runtime module performs the authoritative `aggregator.out_dim == head.in_dim`
 check before training; `slide_dim` in a preset is a readable, independently
 configured declaration of that same contract.
 
+## Runtime controls outside the five stages
+
+`projection_dropout` defaults to `0.1`. It is applied after the shared
+`D -> H` projection and GELU only when `feature_adapter: shared_linear`; it has
+no runtime effect when the adapter is `null`. As standard PyTorch dropout, it is
+stochastic during training and disabled by `eval()` for validation, testing, and
+prediction. Set it to `0.0` for a no-dropout projection ablation.
+
+`feature_export` defaults to `false`, which is the setting used by every named
+training preset. With this default, the pipeline must remove the variable region
+axis `R`, produce one flat slide vector, and compose with a prediction head. With
+`feature_export: true`, the pipeline is export-only: it may set
+`slide_pool: null` to retain region features, cannot be composed with a head via
+`out_dim`, rejects ordinary `forward()`, and must be called through
+`export_features()`. Export mode remains explicit even when its selected stages
+happen to produce a flat vector.
+
 ## Stage values, shapes, and parameters
 
 Each arrow below describes the representation after the stage. `D'` means `D`
@@ -60,7 +77,7 @@ with no adapter and `H` with `shared_linear`.
 | | `mean` | `(R,3,D') -> (R,D')` | Parameter-free equal-level compression control. |
 | | `gated_sum` | `(R,3,D') -> (R,D')` | Learned normalized scalar weights over three levels; a lossy regularized alternative. |
 | | `joint_transformer` | `(R,21,D') -> (R,D')` | Transformer over all fixed tokens; direct joint-processing comparison. |
-| `slide_pool` | `null` | preserves `R` | Only valid with `feature_export: true` (or a future bag-aware head); normal prediction must remove `R`. |
+| `slide_pool` | `null` | preserves `R` | Only valid with `feature_export: true`; normal prediction must remove `R`. |
 | | `mean` | pool axis 0 | Parameter-free slide-region average; works with flat, token, or level-structured representations. |
 | | `max` | pool axis 0 | Parameter-free slide-region max; works with flat, token, or level-structured representations. |
 | | `gated_attention` | `(R,W) -> (W,)` | Learned scalar selection among variable-count regions; only accepts flat pyramid vectors. |

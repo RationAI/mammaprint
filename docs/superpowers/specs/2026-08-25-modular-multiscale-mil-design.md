@@ -232,7 +232,7 @@ This stage reduces the variable number of pyramids `R`.
 
 | Value | Operation | Structured input support |
 |---|---|---|
-| `null` | Preserve `R` | Any; only feature-export or a future bag-aware head |
+| `null` | Preserve `R` | Any; only explicit feature-export mode |
 | `mean` | Equal average across pyramids | Flat, level-structured, or token-structured |
 | `max` | Elementwise maximum across pyramids | Flat, level-structured, or token-structured |
 | `gated_attention` | Learned scalar weight per pyramid and weighted sum | Flat `PyramidVectors` only |
@@ -274,8 +274,8 @@ The model constructor enforces these rules:
 3. `slide_pool=gated_attention` requires a flat `PyramidVectors` input.
 4. `slide_pool=mean|max` may preserve fixed token or level axes.
 5. A normal Linear/MLP prediction run must remove `R` and end in `SlideVector`.
-6. `slide_pool=null` is valid only for explicit feature-export mode or a future
-   bag-aware head. It is rejected for ordinary training/evaluation.
+6. `slide_pool=null` is valid only for explicit feature-export mode. It is
+   rejected for ordinary training/evaluation.
 7. `finalizer=flatten` is valid only after `R` has been removed.
 8. The configured head `in_dim` must equal the calculated pipeline `out_dim`.
 
