@@ -1,3 +1,5 @@
+"""Regression tests for typed pyramid/model incompatibilities."""
+
 import subprocess
 import sys
 import unittest

@@ -112,9 +112,7 @@ class TransformerMIL(Aggregator[Bag]):
         # Per-tile weight = how much the CLS query attends to each tile (drop the
         # CLS->CLS self-weight); renormalise so the tile weights sum to 1.
         cls_to_tiles = attn_weights[:, 0, 1:]  # (B, N)
-        attention = cls_to_tiles / cls_to_tiles.sum(dim=1, keepdim=True).clamp_min(
-            1e-8
-        )
+        attention = cls_to_tiles / cls_to_tiles.sum(dim=1, keepdim=True).clamp_min(1e-8)
         return slide_vectors, attention
 
     def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:

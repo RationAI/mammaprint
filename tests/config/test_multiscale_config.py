@@ -102,9 +102,7 @@ class MultiscaleConfigTest(unittest.TestCase):
     def test_named_presets_compose_and_match_their_head_widths(self) -> None:
         for preset, expected in self.PRESETS.items():
             with self.subTest(preset=preset):
-                with initialize_config_dir(
-                    version_base=None, config_dir=str(CONFIGS)
-                ):
+                with initialize_config_dir(version_base=None, config_dir=str(CONFIGS)):
                     config = compose(
                         config_name=f"ml/aggregator/multiscale_presets/{preset}",
                         overrides=PRESET_OVERRIDES,
@@ -146,9 +144,7 @@ class MultiscaleConfigTest(unittest.TestCase):
         )
         for key, override, expected in cases:
             with self.subTest(key=key):
-                with initialize_config_dir(
-                    version_base=None, config_dir=str(CONFIGS)
-                ):
+                with initialize_config_dir(version_base=None, config_dir=str(CONFIGS)):
                     config = compose(
                         config_name="ml/aggregator/multiscale_presets/multiscale_mean_linear",
                         overrides=[

@@ -44,8 +44,10 @@ class TypedModulePathsTest(unittest.TestCase):
         assert attention is not None
         self.assertEqual(tuple(attention.shape), (2,))
 
-    def test_static_types_reject_flat_aggregator_for_typed_pyramid_encoder(self) -> None:
-        fixture = Path(__file__).parents[1] / "typing" / "invalid_pyramid_pair.py"
+    def test_static_types_reject_flat_aggregator_for_typed_pyramid_encoder(
+        self,
+    ) -> None:
+        fixture = Path(__file__).parents[1] / "type_checks" / "invalid_pyramid_pair.py"
         result = subprocess.run(
             [".venv/bin/mypy", str(fixture)],
             check=False,

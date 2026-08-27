@@ -1,3 +1,5 @@
+"""Static type-check fixture that must be rejected by mypy."""
+
 import torch
 
 from ml.models.aggregators import MeanPool

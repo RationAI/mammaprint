@@ -25,7 +25,9 @@ class FeatureAdapterTest(unittest.TestCase):
             dropout=0.0,
         )
 
-        norms = [module for module in adapter.modules() if isinstance(module, nn.LayerNorm)]
+        norms = [
+            module for module in adapter.modules() if isinstance(module, nn.LayerNorm)
+        ]
         projections = [
             module for module in adapter.modules() if isinstance(module, nn.Linear)
         ]
@@ -57,7 +59,9 @@ class FeatureAdapterTest(unittest.TestCase):
             (slice(0, 1), slice(1, 5), slice(5, 21)),
             strict=True,
         ):
-            expected_parts.append(torch.nn.functional.gelu(norm(pyramids[:, level_slice])))
+            expected_parts.append(
+                torch.nn.functional.gelu(norm(pyramids[:, level_slice]))
+            )
 
         adapted = adapter(pyramids)
 

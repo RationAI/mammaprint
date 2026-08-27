@@ -116,16 +116,16 @@ class MultiScalePipelineSpec:
         states.append(current)
 
         if current.kind in ("pyramid_tokens", "level_vectors", "pyramid_vectors"):
-            accepted_finalizers: tuple[object, ...] = (None,) if self.feature_export else ()
+            accepted_finalizers: tuple[object, ...] = (
+                (None,) if self.feature_export else ()
+            )
         elif current.kind in ("token_slide", "level_slide"):
             accepted_finalizers = (
                 (None, "flatten") if self.feature_export else ("flatten",)
             )
         else:
             accepted_finalizers = (None, "flatten")
-        self._validate_name(
-            "finalizer", self.finalizer, accepted_finalizers, current
-        )
+        self._validate_name("finalizer", self.finalizer, accepted_finalizers, current)
 
         if self.finalizer == "flatten":
             if current.kind == "token_slide":

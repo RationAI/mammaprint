@@ -212,8 +212,7 @@ class ModularMultiScaleMIL(Aggregator[PyramidBag]):
     def _validate_bag(self, bag: Tensor) -> None:
         if bag.ndim != 3:
             raise ValueError(
-                "ModularMultiScaleMIL expects a rank 3 (R, K, D) bag; "
-                f"got {bag.ndim}."
+                f"ModularMultiScaleMIL expects a rank 3 (R, K, D) bag; got {bag.ndim}."
             )
         regions, tokens, features = bag.shape
         if regions == 0:
@@ -242,9 +241,7 @@ class ModularMultiScaleMIL(Aggregator[PyramidBag]):
         }
         if transformer_selected:
             invalid = {
-                name: value
-                for name, value in selections.items()
-                if value != "learned"
+                name: value for name, value in selections.items() if value != "learned"
             }
             if invalid:
                 raise ValueError(

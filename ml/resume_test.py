@@ -1,5 +1,6 @@
-"""Re-run the test-set inference for a run whose post-fit test step died, and append
-the results to that **same MLflow run**.
+"""Re-run failed post-fit test inference and append it to the same MLflow run.
+
+The results are appended to that **same MLflow run**.
 
 Background: ``ml/train.py`` does ``fit`` then, if ``test_after_fit``, ``test`` on the
 best checkpoint. When a slide download fails during that test step, the run ends up
@@ -33,7 +34,6 @@ Usage (inside such a pod):
 
 import argparse
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -64,11 +64,16 @@ def _client(tracking_uri: str | None) -> MlflowClient:
 
 
 def resolve_run_id(
-    mlflow_client: MlflowClient, run_id: str | None, run_name: str | None, experiment: str
+    mlflow_client: MlflowClient,
+    run_id: str | None,
+    run_name: str | None,
+    experiment: str,
 ) -> str:
     """Return the run id, looking it up by run name in `experiment` if needed."""
     if run_id:
         return run_id
+    if not run_name:
+        raise SystemExit("Pass either a run id or run name.")
     exp = mlflow_client.get_experiment_by_name(experiment)
     if exp is None:
         raise SystemExit(f"MLflow experiment {experiment!r} not found.")
@@ -88,7 +93,9 @@ def resolve_run_id(
     return runs[0].info.run_id
 
 
-def original_overrides(mlflow_client: MlflowClient, run_id: str, dst: Path) -> list[str]:
+def original_overrides(
+    mlflow_client: MlflowClient, run_id: str, dst: Path
+) -> list[str]:
     """Read the run's original Hydra CLI overrides, minus the stage/checkpoint ones.
 
     ``autolog._log_config`` saves ``hydra.yaml`` via ``OmegaConf.save(HydraConfig.get())``.
@@ -165,7 +172,10 @@ def backup_console_log(
 def build_command(overrides: list[str], checkpoint: str, run_id: str) -> list[str]:
     """The `ml.train` test-mode command that appends results to the existing run."""
     return [
-        "uv", "run", "-m", "ml.train",
+        "uv",
+        "run",
+        "-m",
+        "ml.train",
         *overrides,
         "mode=test",
         f"checkpoint={checkpoint}",
@@ -223,7 +233,9 @@ def main() -> int:
         tmp = Path(tmp_str)
         if args.override:
             overrides = args.override
-            print("Using overrides passed on the command line (skipping logged config).")
+            print(
+                "Using overrides passed on the command line (skipping logged config)."
+            )
         else:
             overrides = original_overrides(mlflow_client, run_id, tmp / "cfg")
         checkpoint = download_checkpoint(mlflow_client, run_id, tmp / "ckpt")
