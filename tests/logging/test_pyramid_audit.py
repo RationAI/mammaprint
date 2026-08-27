@@ -4,12 +4,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from unittest.mock import patch
 
 import pandas as pd
+from omegaconf import OmegaConf
 
 from ml.logging.pyramid_audit import log_pyramid_audit
 from ml.train import _log_pyramid_audits
+from ml.train import main as train_main
 
 
 AUDIT_COLUMNS = [
@@ -117,6 +119,7 @@ class FakeAuditDataset:
 class FakeLogger:
     def __init__(self) -> None:
         self.artifact_calls: list[tuple[str, str | None]] = []
+        self.finalize_calls: list[str] = []
 
     def log_artifacts(
         self,
@@ -125,25 +128,42 @@ class FakeLogger:
     ) -> None:
         self.artifact_calls.append((local_dir, artifact_path))
 
+    def finalize(self, status: str = "success") -> None:
+        self.finalize_calls.append(status)
+
+
+class EmptyAuditDataset(FakeAuditDataset):
+    def __len__(self) -> int:
+        return 0
+
 
 class FakeDataModule:
-    def __init__(self) -> None:
+    def __init__(self, datasets: dict[str, object] | None = None) -> None:
         self.setup_stages: list[str | None] = []
-        self.datasets = {
+        self.dataset_calls: list[str] = []
+        self.loader_calls: list[str] = []
+        self.datasets = datasets or {
             split: FakeAuditDataset() for split in ("train", "val", "test")
         }
 
     def setup(self, stage: str | None = None) -> None:
         self.setup_stages.append(stage)
 
-    def train_dataloader(self) -> SimpleNamespace:
-        return SimpleNamespace(dataset=self.datasets["train"])
+    def get_dataset(self, split: str) -> object:
+        self.dataset_calls.append(split)
+        return self.datasets[split]
 
-    def val_dataloader(self) -> SimpleNamespace:
-        return SimpleNamespace(dataset=self.datasets["val"])
+    def train_dataloader(self) -> None:
+        self.loader_calls.append("train")
+        raise AssertionError("audit logging must not construct a train loader")
 
-    def test_dataloader(self) -> SimpleNamespace:
-        return SimpleNamespace(dataset=self.datasets["test"])
+    def val_dataloader(self) -> None:
+        self.loader_calls.append("val")
+        raise AssertionError("audit logging must not construct a validation loader")
+
+    def test_dataloader(self) -> None:
+        self.loader_calls.append("test")
+        raise AssertionError("audit logging must not construct a test loader")
 
 
 class PyramidAuditLoggerTest(unittest.TestCase):
@@ -224,6 +244,8 @@ class PyramidAuditLoggerTest(unittest.TestCase):
         _log_pyramid_audits(datamodule, logger, "fit")
 
         self.assertEqual(datamodule.setup_stages, ["fit"])
+        self.assertEqual(datamodule.dataset_calls, ["train", "val"])
+        self.assertEqual(datamodule.loader_calls, [])
         self.assertEqual(
             [artifact_path for _, artifact_path in logger.artifact_calls],
             ["pyramid_selection/train", "pyramid_selection/val"],
@@ -231,6 +253,92 @@ class PyramidAuditLoggerTest(unittest.TestCase):
         self.assertTrue(
             all(not Path(local_dir).exists() for local_dir, _ in logger.artifact_calls)
         )
+
+    def test_single_scale_setup_does_not_construct_loaders_or_log(self) -> None:
+        datamodule = FakeDataModule(
+            {split: object() for split in ("train", "val", "test")}
+        )
+        logger = FakeLogger()
+
+        _log_pyramid_audits(datamodule, logger, "fit")
+
+        self.assertEqual(datamodule.setup_stages, ["fit"])
+        self.assertEqual(datamodule.dataset_calls, ["train", "val"])
+        self.assertEqual(datamodule.loader_calls, [])
+        self.assertEqual(logger.artifact_calls, [])
+
+    def test_zero_length_audited_train_dataset_still_logs_without_a_loader(
+        self,
+    ) -> None:
+        datamodule = FakeDataModule(
+            {
+                "train": EmptyAuditDataset(),
+                "val": object(),
+                "test": object(),
+            }
+        )
+        logger = FakeLogger()
+
+        _log_pyramid_audits(datamodule, logger, "fit")
+
+        self.assertEqual(datamodule.loader_calls, [])
+        self.assertEqual(
+            [artifact_path for _, artifact_path in logger.artifact_calls],
+            ["pyramid_selection/train"],
+        )
+
+    def test_non_fit_modes_audit_only_their_stage_split(self) -> None:
+        cases = {
+            "validate": "val",
+            "test": "test",
+            "predict": "test",
+        }
+        for mode, split in cases.items():
+            with self.subTest(mode=mode):
+                datamodule = FakeDataModule()
+                logger = FakeLogger()
+
+                _log_pyramid_audits(datamodule, logger, mode)
+
+                self.assertEqual(datamodule.setup_stages, [mode])
+                self.assertEqual(datamodule.dataset_calls, [split])
+                self.assertEqual(datamodule.loader_calls, [])
+                self.assertEqual(
+                    [path for _, path in logger.artifact_calls],
+                    [f"pyramid_selection/{split}"],
+                )
+
+    def test_main_finalizes_failed_run_and_reraises_audit_error(self) -> None:
+        config = OmegaConf.create(
+            {
+                "seed": 1729,
+                "datamodule": {},
+                "ml": {},
+                "trainer": {},
+                "mode": "fit",
+                "checkpoint": None,
+                "test_after_fit": False,
+            }
+        )
+        datamodule = FakeDataModule()
+        logger = FakeLogger()
+        audit_error = RuntimeError("audit upload failed")
+        trainer = object()
+        undecorated_main = train_main.__wrapped__.__wrapped__
+
+        with (
+            patch(
+                "ml.train.hydra.utils.instantiate",
+                side_effect=[datamodule, object(), trainer],
+            ),
+            patch("ml.train.seed_everything"),
+            patch("ml.train._log_pyramid_audits", side_effect=audit_error),
+            self.assertRaises(RuntimeError) as raised,
+        ):
+            undecorated_main(config, logger)
+
+        self.assertIs(raised.exception, audit_error)
+        self.assertEqual(logger.finalize_calls, ["failed"])
 
 
 if __name__ == "__main__":
