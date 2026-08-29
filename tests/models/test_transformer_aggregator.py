@@ -61,9 +61,11 @@ class TransformerMILTest(unittest.TestCase):
         model = TransformerMIL(
             feature_dim=8,
             num_heads=2,
-            num_layers=2,
             dropout=0.0,
         )
+        self.assertIsNotNone(model.blocks)
+        assert model.blocks is not None
+        self.assertEqual(len(model.blocks.layers), 1)
         legacy_state = {
             name: value.detach().clone() for name, value in model.state_dict().items()
         }
@@ -72,7 +74,6 @@ class TransformerMILTest(unittest.TestCase):
         restored = TransformerMIL(
             feature_dim=8,
             num_heads=2,
-            num_layers=2,
             dropout=0.0,
         )
         incompatible = restored.load_state_dict(legacy_state, strict=True)
@@ -83,7 +84,6 @@ class TransformerMILTest(unittest.TestCase):
         model = TransformerMIL(
             feature_dim=8,
             num_heads=2,
-            num_layers=2,
             dropout=0.0,
         )
         renamed_state = dict(model.state_dict())
