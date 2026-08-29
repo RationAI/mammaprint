@@ -348,8 +348,8 @@ Expected: tests and checks exit 0 before commit.
 - Modify: `ml/data/datamodule.py`
 - Modify: `ml/models/module.py`
 - Modify/create: `tests/models/test_module.py`
-- Modify: `tests/typing/invalid_pyramid_pair.py`
-- Create: `tests/typing/test_invalid_pyramid_pair.py`
+- Modify: `tests/type_checks/invalid_pyramid_pair.py`
+- Create: `tests/type_checks/test_invalid_pyramid_pair.py`
 
 - [ ] Add a failing runtime test that a pyramid sample passes through identity
   encoder, modular aggregator, and existing LinearHead. Assert `predict_step`
@@ -387,12 +387,12 @@ flat-head requirement.
 
 ```bash
 MPLCONFIGDIR=/tmp/mammaprint-mpl uv run python -m unittest \
-  tests.models.test_module tests.typing.test_invalid_pyramid_pair
+  tests.models.test_module tests.type_checks.test_invalid_pyramid_pair
 uv run mypy ml/typing.py ml/data/datamodule.py ml/models/module.py
 uv run ruff check ml/typing.py ml/data/datamodule.py ml/models/module.py \
-  tests/models/test_module.py tests/typing
+  tests/models/test_module.py tests/type_checks
 git add ml/typing.py ml/data/datamodule.py ml/models/module.py \
-  tests/models/test_module.py tests/typing
+  tests/models/test_module.py tests/type_checks
 git commit -m "refactor: preserve multiscale types through prediction"
 ```
 
@@ -488,7 +488,7 @@ Expected: every preset composes/instantiates; invalid overrides fail as asserted
 - Create: `ml/logging/pyramid_audit.py`
 - Modify: `train.py`
 - Create: `tests/config/test_multiscale_experiments.py`
-- Create: `tests/logging/test_pyramid_audit.py`
+- Create: `tests/logging_tests/test_pyramid_audit.py`
 
 - [ ] Add failing tests composing all ten experiments with the existing L5/L4/L3
   cards. Assert common splits, loss, optimizer, scheduler, metrics,
@@ -507,12 +507,12 @@ Expected: every preset composes/instantiates; invalid overrides fail as asserted
 
 ```bash
 MPLCONFIGDIR=/tmp/mammaprint-mpl uv run python -m unittest \
-  tests.config.test_multiscale_experiments tests.logging.test_pyramid_audit
+  tests.config.test_multiscale_experiments tests.logging_tests.test_pyramid_audit
 uv run mypy ml/logging/pyramid_audit.py train.py
 uv run ruff check ml/logging/pyramid_audit.py train.py \
-  tests/config/test_multiscale_experiments.py tests/logging/test_pyramid_audit.py
+  tests/config/test_multiscale_experiments.py tests/logging_tests/test_pyramid_audit.py
 git add configs/experiment/ml/multiscale ml/logging/pyramid_audit.py train.py \
-  tests/config/test_multiscale_experiments.py tests/logging/test_pyramid_audit.py
+  tests/config/test_multiscale_experiments.py tests/logging_tests/test_pyramid_audit.py
 git commit -m "feat: make multiscale experiments auditable"
 ```
 

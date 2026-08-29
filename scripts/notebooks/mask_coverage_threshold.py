@@ -187,9 +187,7 @@ def class_bias_table(thresholds: pd.DataFrame) -> pd.DataFrame:
         columns="group",
         values="kept_percent",
     ).reset_index()
-    pivot["absolute_keep_rate_gap_pp"] = (
-        pivot["luminal_A"] - pivot["luminal_B"]
-    ).abs()
+    pivot["absolute_keep_rate_gap_pp"] = (pivot["luminal_A"] - pivot["luminal_B"]).abs()
     return pivot
 
 
@@ -260,7 +258,20 @@ def main() -> None:
     print("\nCancer probability summary:")
     print(
         values.describe(
-            percentiles=[0.001, 0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 0.999]
+            percentiles=[
+                0.001,
+                0.01,
+                0.02,
+                0.05,
+                0.10,
+                0.25,
+                0.50,
+                0.75,
+                0.90,
+                0.95,
+                0.99,
+                0.999,
+            ]
         ).to_string()
     )
 
@@ -299,7 +310,9 @@ def main() -> None:
         with mlflow.start_run(run_name=args.run_name) as run:
             mlflow.log_param("source_dataset_uri", args.dataset_uri)
             mlflow.log_param("score_column", args.column)
-            mlflow.log_param("candidate_thresholds", ",".join(map(str, args.thresholds)))
+            mlflow.log_param(
+                "candidate_thresholds", ",".join(map(str, args.thresholds))
+            )
             mlflow.log_metric("tile_count", len(values))
             mlflow.log_metric("cancer_probability_mean", float(values.mean()))
             mlflow.log_metric("cancer_probability_median", float(values.median()))
