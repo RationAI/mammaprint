@@ -7,5 +7,5 @@ dataset:
     data_mapping: ${project_path}/data_mapping.csv
   mlflow_uris:
     tissue_masks: mlflow-artifacts:/3/1d67612f123e46f6a3c6183257106512/artifacts/tissue_masks
-    epithelium_masks: null
+    epithelium_masks: mlflow-artifacts:/3/7692760921564a069e2552f92bb5092a/artifacts/epithelium_masks
     cancer_masks: mlflow-artifacts:/2/70b1c915966d43e3b5be46668075bd93/artifacts/heatmaps
