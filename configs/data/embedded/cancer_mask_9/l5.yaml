@@ -1,0 +1,14 @@
+# @package dataset.levels.5
+# Level-5 embeddings selected with a cancer-probability threshold of 0.9.
+# `uris.all` is the finished whole-dataset Virchow2 artifact. Materialise the
+# split artifacts with scripts/preprocessing/split_dataset.py before training.
+defaults:
+  - /data/levels/l5@_here_
+  - _self_
+
+name: l5_cancer_mask_9_embed
+uris:
+  all: "mlflow-artifacts:/3/3bdfcabbdf884380b3ece1e0f37bf3b7/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/146e36cdab604071a47e25a2d2720b36/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/b4305a97ff34482b8210b31108c99f31/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/d89478ba8003457080794fe147b4f6f0/artifacts/embeddings_test"

@@ -1,0 +1,17 @@
+# @package dataset.levels.4
+# Level-4 EMBEDDINGS card (tissue masks) — precomputed Virchow2 features.
+# Physical facts come from /data/levels/l4; only name + URIs live here.
+# `uris.all` is the whole (un-split) embeddings artifact written by the
+# embeddings step. Per-split URIs are produced from it by:
+#   python scripts/preprocessing/split_dataset.py --kind embedded \
+#     --uri <the `all` URI below> --name l4_tissue_embed
+defaults:
+  - /data/levels/l4@_here_
+  - _self_
+
+name: l4_tissue_embed
+uris:
+  all: "mlflow-artifacts:/3/ecfc0ecdba5b44d9becc5c9df1103a16/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/1f67a719b2414301a22144c8a6ca926b/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/9be7148759d946e68c64f2a0a498c3ab/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/981c02d861cf4d00b4cd42d5458bd7b3/artifacts/embeddings_test"

@@ -1,0 +1,2 @@
+# Multiclass / binary-as-2-class classification. Expects raw logits.
+_target_: torch.nn.CrossEntropyLoss

@@ -1,0 +1,11 @@
+# @package ml.metrics
+# Classification F1 on the joint head's column 0. BinaryLogitMetric thresholds
+# logits at zero and leaves the already-binary targets unchanged.
+joint_f1:
+  _target_: ml.metrics.ColumnMetric
+  column: 0
+  metric:
+    _target_: ml.metrics.BinaryLogitMetric
+    decision_threshold: 0.0
+    metric:
+      _target_: torchmetrics.classification.BinaryF1Score
