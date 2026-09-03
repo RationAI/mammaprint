@@ -344,11 +344,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         if config.dataset.mlflow_uris.tissue_masks is None
         else download_artifacts(config.dataset.mlflow_uris.tissue_masks)
     )
-    epithelium_masks_path = (
-        None
-        if config.dataset.mlflow_uris.epithelium_masks is None
-        else download_artifacts(config.dataset.mlflow_uris.epithelium_masks)
-    )
+    # Epithelium masks are generated into persistent project storage, so use them in
+    # place just like the QC masks rather than trying to download an MLflow artifact.
+    epithelium_masks_path = config.dataset.paths.get("epithelium_masks") or None
     cancer_masks_uri = config.dataset.mlflow_uris.get("cancer_masks")
     cancer_masks_path = (
         None if cancer_masks_uri is None else download_artifacts(cancer_masks_uri)
@@ -504,7 +502,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     else:
         print(
             "[INFO] Skipping epithelium overlap: "
-            "dataset.mlflow_uris.epithelium_masks is not set"
+            "dataset.paths.epithelium_masks is not set"
         )
         tiles = tiles.with_column("epithelium_overlap", lit(float("nan")))
 
