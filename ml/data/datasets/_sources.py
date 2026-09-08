@@ -12,13 +12,22 @@ per-split URI already points at a pure artifact, so no split filter is needed.
 """
 
 import logging
+import tempfile
 import time
 from collections.abc import Mapping
 from pathlib import Path
 
 import pandas as pd
-from mlflow.artifacts import download_artifacts as _download_artifacts
+from mlflow.artifacts import (
+    download_artifacts as _download_artifacts,
+)
+from mlflow.artifacts import (
+    list_artifacts as _list_artifacts,
+)
+from mlflow.entities import FileInfo
 from mlflow.exceptions import MlflowException
+from mlflow.tracking.artifact_utils import _get_root_uri_and_artifact_path
+from mlflow.utils.uri import append_to_uri_path
 
 from ml.data.datasets.labels import LabelMode, get_target_columns, process_slides
 
@@ -29,26 +38,93 @@ MLFLOW_DOWNLOAD_MAX_RETRIES = 3
 MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 1.0
 
 
+def _artifact_files(root_uri: str, artifact_path: str) -> list[FileInfo]:
+    """Return every file below an artifact directory using metadata only."""
+    files: list[FileInfo] = []
+    pending = [artifact_path]
+    while pending:
+        current_path = pending.pop()
+        current_uri = append_to_uri_path(root_uri, current_path)
+        for item in _list_artifacts(artifact_uri=current_uri):
+            if item.is_dir:
+                pending.append(item.path)
+            else:
+                files.append(item)
+    return files
+
+
+def _is_complete_download(file_info: FileInfo, destination: Path) -> bool:
+    local_path = destination / file_info.path
+    if not local_path.is_file():
+        return False
+    return (
+        file_info.file_size is None or local_path.stat().st_size == file_info.file_size
+    )
+
+
+def _download_incomplete_artifacts(
+    root_uri: str,
+    artifact_path: str,
+    destination: Path,
+) -> Path:
+    remote_files = _artifact_files(root_uri, artifact_path)
+    if not remote_files:
+        # The URI may point to a single file rather than a directory.
+        uri = append_to_uri_path(root_uri, artifact_path)
+        return Path(_download_artifacts(artifact_uri=uri, dst_path=str(destination)))
+
+    incomplete = [
+        file_info
+        for file_info in remote_files
+        if not _is_complete_download(file_info, destination)
+    ]
+    logger.info(
+        "Retrying %d incomplete MLflow artifact(s); keeping %d already downloaded.",
+        len(incomplete),
+        len(remote_files) - len(incomplete),
+    )
+    for file_info in incomplete:
+        file_uri = append_to_uri_path(root_uri, file_info.path)
+        _download_artifacts(artifact_uri=file_uri, dst_path=str(destination))
+
+    return destination / artifact_path
+
+
 def download_artifacts_with_retries(
     artifact_uri: str,
     *,
     max_retries: int = MLFLOW_DOWNLOAD_MAX_RETRIES,
     initial_backoff_seconds: float = MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
 ) -> Path:
-    """Download an MLflow artifact, retrying transient download failures.
+    """Download an MLflow artifact, resuming transient download failures.
 
     MLflow raises one aggregate :class:`MlflowException` when any file in a
-    directory fails to download. Retrying the directory lets a short-lived
-    storage or network failure recover instead of aborting dataset setup.
+    directory fails. The initial parallel download uses a stable temporary
+    destination; retries preserve complete files and fetch only missing or
+    size-mismatched files.
     """
     if max_retries < 0:
         raise ValueError("max_retries must be non-negative.")
     if initial_backoff_seconds < 0:
         raise ValueError("initial_backoff_seconds must be non-negative.")
 
+    root_uri, artifact_path = _get_root_uri_and_artifact_path(artifact_uri)
+    destination = Path(tempfile.mkdtemp(prefix="mammaprint-mlflow-artifacts-"))
+
     for retry in range(max_retries + 1):
         try:
-            return Path(_download_artifacts(artifact_uri=artifact_uri))
+            if retry == 0:
+                return Path(
+                    _download_artifacts(
+                        artifact_uri=artifact_uri,
+                        dst_path=str(destination),
+                    )
+                )
+            return _download_incomplete_artifacts(
+                root_uri,
+                artifact_path,
+                destination,
+            )
         except MlflowException:
             if retry == max_retries:
                 raise
