@@ -12,16 +12,59 @@ per-split URI already points at a pure artifact, so no split filter is needed.
 """
 
 import logging
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
 import pandas as pd
-from mlflow.artifacts import download_artifacts
+from mlflow.artifacts import download_artifacts as _download_artifacts
+from mlflow.exceptions import MlflowException
 
 from ml.data.datasets.labels import LabelMode, get_target_columns, process_slides
 
 
 logger = logging.getLogger(__name__)
+
+MLFLOW_DOWNLOAD_MAX_RETRIES = 3
+MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 1.0
+
+
+def download_artifacts_with_retries(
+    artifact_uri: str,
+    *,
+    max_retries: int = MLFLOW_DOWNLOAD_MAX_RETRIES,
+    initial_backoff_seconds: float = MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
+) -> Path:
+    """Download an MLflow artifact, retrying transient download failures.
+
+    MLflow raises one aggregate :class:`MlflowException` when any file in a
+    directory fails to download. Retrying the directory lets a short-lived
+    storage or network failure recover instead of aborting dataset setup.
+    """
+    if max_retries < 0:
+        raise ValueError("max_retries must be non-negative.")
+    if initial_backoff_seconds < 0:
+        raise ValueError("initial_backoff_seconds must be non-negative.")
+
+    for retry in range(max_retries + 1):
+        try:
+            return Path(_download_artifacts(artifact_uri=artifact_uri))
+        except MlflowException:
+            if retry == max_retries:
+                raise
+
+            delay = initial_backoff_seconds * 2**retry
+            logger.warning(
+                "MLflow artifact download failed for %s; retrying in %.1f seconds "
+                "(%d/%d).",
+                artifact_uri,
+                delay,
+                retry + 1,
+                max_retries,
+            )
+            time.sleep(delay)
+
+    raise AssertionError("unreachable")
 
 
 def load_labeled_slides(
@@ -56,8 +99,7 @@ def load_labeled_slides(
 def download_level_sources(sources: Mapping[int, str]) -> dict[int, Path]:
     """Download each pyramid level's artifact and return ``level -> local dir``."""
     return {
-        level: Path(download_artifacts(artifact_uri=uri))
-        for level, uri in sources.items()
+        level: download_artifacts_with_retries(uri) for level, uri in sources.items()
     }
 
 
@@ -85,6 +127,7 @@ def split_uri(card: Mapping[str, object], key: str, split: str, level: int) -> s
 
 __all__ = [
     "available_slides",
+    "download_artifacts_with_retries",
     "download_level_sources",
     "load_labeled_slides",
     "split_uri",
