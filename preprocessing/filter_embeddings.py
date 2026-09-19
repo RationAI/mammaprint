@@ -8,19 +8,29 @@ import logging
 import os
 import shutil
 import tempfile
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import mlflow
 import numpy as np
 import pandas as pd
 from mlflow.artifacts import download_artifacts
+from mlflow.exceptions import MlflowException
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 DEFAULT_DATA_MAPPING = "/mnt/projects/mammaprint/data_mapping.csv"
 DEFAULT_EXPERIMENT = "MammaPrint"
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
 SPLITS = ("train", "val", "test")
+STRATEGY_LOGICS = ("epithelium_only", "or", "and")
+FILTER_STATE_FILENAME = "filter_state.json"
 REQUIRED_SCORE_COLUMNS = (
     "slide_id",
     "x",
@@ -37,20 +47,37 @@ class Strategy:
     logic: str
 
 
+class FilterState(TypedDict):
+    schema_version: int
+    level: int
+    tiling_uri: str
+    embeddings_uri: str
+    strategies: list[str]
+    counts: dict[str, dict[str, int]]
+    scored_tiles: int
+    source_embedding_tiles: int
+    epithelium_threshold: float
+    cancer_threshold: float
+
+
 def _threshold_token(value: float) -> str:
     return f"{value:g}".replace(".", "")
 
 
 def _strategies(
-    epithelium_threshold: float, cancer_threshold: float
+    epithelium_threshold: float,
+    cancer_threshold: float,
+    selected_logics: tuple[str, ...] = STRATEGY_LOGICS,
 ) -> tuple[Strategy, ...]:
     epithelium = _threshold_token(epithelium_threshold)
     cancer = _threshold_token(cancer_threshold)
-    return (
+    definitions = (
         Strategy(f"epithel_{epithelium}", "epithelium_only"),
         Strategy(f"epithel_or_cancer_{epithelium}_{cancer}", "or"),
         Strategy(f"epithel_and_cancer_{epithelium}_{cancer}", "and"),
     )
+    selected = set(selected_logics)
+    return tuple(strategy for strategy in definitions if strategy.logic in selected)
 
 
 def _selection_masks(
@@ -150,7 +177,7 @@ def _prepare_output_dirs(
             {split: root / strategy.slug / f"embeddings_{split}" for split in SPLITS}
         )
         for directory in directories.values():
-            directory.mkdir(parents=True)
+            directory.mkdir(parents=True, exist_ok=True)
         output_dirs[strategy.logic] = directories
     return output_dirs
 
@@ -228,7 +255,8 @@ def filter_embeddings(
         masks = _selection_masks(merged, epithelium_threshold, cancer_threshold)
         split = split_map[stem]
 
-        for logic, selected in masks.items():
+        for logic in output_dirs:
+            selected = masks[logic]
             output = merged.loc[selected, list(REQUIRED_EMBEDDING_COLUMNS)]
             output_path = output_dirs[logic]["all"] / embeddings_path.name
             output.to_parquet(output_path, index=False, engine="pyarrow")
@@ -245,6 +273,30 @@ def filter_embeddings(
     return counts, source_embedding_tiles
 
 
+def _log_artifacts_with_retries(
+    local_dir: Path,
+    artifact_path: str,
+    logger: logging.Logger,
+    max_retries: int,
+) -> None:
+    for attempt in range(max_retries + 1):
+        try:
+            mlflow.log_artifacts(str(local_dir), artifact_path=artifact_path)
+            return
+        except MlflowException:
+            if attempt == max_retries:
+                raise
+            delay = 2**attempt
+            logger.warning(
+                "Uploading %s failed; retrying in %d second(s) (%d/%d)",
+                artifact_path,
+                delay,
+                attempt + 1,
+                max_retries,
+            )
+            time.sleep(delay)
+
+
 def _log_outputs(
     *,
     level: int,
@@ -259,6 +311,7 @@ def _log_outputs(
     cancer_threshold: float,
     console_log: Path,
     logger: logging.Logger,
+    upload_max_retries: int,
 ) -> None:
     for strategy in strategies:
         dataset_name = f"l{level}_{strategy.slug}_embed"
@@ -299,12 +352,20 @@ def _log_outputs(
             mlflow.log_metrics(
                 {key: float(value) for key, value in counts[strategy.logic].items()}
             )
-            for split_name, directory in output_dirs[strategy.logic].items():
+            # Upload the training inputs first. If the optional combined artifact later
+            # fails, the split datasets are already usable and can be resumed separately.
+            for split_name in (*SPLITS, "all"):
+                directory = output_dirs[strategy.logic][split_name]
                 artifact_path = (
                     "embeddings" if split_name == "all" else f"embeddings_{split_name}"
                 )
                 logger.info("Logging %s to %s", dataset_name, artifact_path)
-                mlflow.log_artifacts(str(directory), artifact_path=artifact_path)
+                _log_artifacts_with_retries(
+                    directory,
+                    artifact_path,
+                    logger,
+                    max_retries=upload_max_retries,
+                )
             mlflow.log_dict(manifest, "filter_manifest.json")
             for handler in logger.handlers:
                 handler.flush()
@@ -327,6 +388,120 @@ def _log_outputs(
             mlflow.log_artifact(str(console_log))
 
 
+@contextmanager
+def _working_root(
+    *, level: int, work_dir: Path, output_dir: Path | None
+) -> Iterator[Path]:
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        yield output_dir
+        return
+
+    with tempfile.TemporaryDirectory(
+        prefix=f"filter-embeddings-l{level}-", dir=work_dir
+    ) as tmp:
+        yield Path(tmp)
+
+
+def _state_payload(
+    *,
+    level: int,
+    tiling_uri: str,
+    embeddings_uri: str,
+    strategies: tuple[Strategy, ...],
+    counts: dict[str, dict[str, int]],
+    scored_tiles: int,
+    source_embedding_tiles: int,
+    epithelium_threshold: float,
+    cancer_threshold: float,
+) -> FilterState:
+    return {
+        "schema_version": 1,
+        "level": level,
+        "tiling_uri": tiling_uri,
+        "embeddings_uri": embeddings_uri,
+        "strategies": [strategy.logic for strategy in strategies],
+        "counts": counts,
+        "scored_tiles": scored_tiles,
+        "source_embedding_tiles": source_embedding_tiles,
+        "epithelium_threshold": epithelium_threshold,
+        "cancer_threshold": cancer_threshold,
+    }
+
+
+def _load_filter_state(
+    state_path: Path,
+    *,
+    level: int,
+    tiling_uri: str,
+    embeddings_uri: str,
+    strategies: tuple[Strategy, ...],
+    epithelium_threshold: float,
+    cancer_threshold: float,
+) -> FilterState:
+    if not state_path.is_file():
+        raise FileNotFoundError(
+            f"Cannot use --upload-only because {state_path} does not exist"
+        )
+    state = cast("FilterState", json.loads(state_path.read_text()))
+    expected = {
+        "level": level,
+        "tiling_uri": tiling_uri,
+        "embeddings_uri": embeddings_uri,
+        "epithelium_threshold": epithelium_threshold,
+        "cancer_threshold": cancer_threshold,
+    }
+    mismatches = {
+        key: (state.get(key), expected_value)
+        for key, expected_value in expected.items()
+        if state.get(key) != expected_value
+    }
+    if mismatches:
+        raise ValueError(f"Saved filter state does not match this command: {mismatches}")
+    requested_strategies = {strategy.logic for strategy in strategies}
+    saved_strategies = set(state.get("strategies", []))
+    missing_strategies = sorted(requested_strategies - saved_strategies)
+    if missing_strategies:
+        raise ValueError(
+            f"Saved filter state does not contain requested strategies: {missing_strategies}"
+        )
+    return state
+
+
+def _validate_output_dirs(output_dirs: dict[str, dict[str, Path]]) -> None:
+    for logic, directories in output_dirs.items():
+        all_files = {
+            path.name: path for path in directories["all"].glob("*.parquet")
+        }
+        if not all_files:
+            raise ValueError(f"No filtered Parquet files found for strategy {logic}")
+
+        split_names: set[str] = set()
+        for split in SPLITS:
+            for split_path in directories[split].glob("*.parquet"):
+                if split_path.name in split_names:
+                    raise ValueError(
+                        f"{split_path.name} appears in more than one split for {logic}"
+                    )
+                source_path = all_files.get(split_path.name)
+                if source_path is None:
+                    raise ValueError(
+                        f"{split_path.name} appears in {split} but not in all for {logic}"
+                    )
+                if split_path.stat().st_size != source_path.stat().st_size:
+                    raise ValueError(
+                        f"Size mismatch for {logic}/{split}/{split_path.name}"
+                    )
+                split_names.add(split_path.name)
+
+        missing_split_files = sorted(set(all_files) - split_names)
+        if missing_split_files:
+            raise ValueError(
+                f"Filtered files have no split assignment for {logic}: "
+                f"{missing_split_files[:10]}"
+            )
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -343,8 +518,28 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--epithelium-threshold", type=float, default=0.25)
     parser.add_argument("--cancer-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--strategies",
+        nargs="+",
+        choices=STRATEGY_LOGICS,
+        default=list(STRATEGY_LOGICS),
+        help="Strategies to materialise; defaults to all three.",
+    )
     parser.add_argument("--data-mapping", default=DEFAULT_DATA_MAPPING)
     parser.add_argument("--work-dir", default="/mnt/projects/mammaprint")
+    parser.add_argument(
+        "--output-dir",
+        help=(
+            "Persistent working directory. Filtered files and filter_state.json are kept "
+            "here so a failed upload can be retried with --upload-only."
+        ),
+    )
+    parser.add_argument(
+        "--upload-only",
+        action="store_true",
+        help="Upload an existing --output-dir without filtering again.",
+    )
+    parser.add_argument("--upload-max-retries", type=int, default=3)
     parser.add_argument(
         "--tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI)
     )
@@ -354,14 +549,36 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    if args.upload_max_retries < 0:
+        raise ValueError("--upload-max-retries must be non-negative")
+    if args.upload_only and args.output_dir is None:
+        raise ValueError("--upload-only requires --output-dir")
+    persistent_output = Path(args.output_dir) if args.output_dir else None
+    if (
+        persistent_output is not None
+        and persistent_output.is_dir()
+        and any(persistent_output.iterdir())
+        and not args.upload_only
+    ):
+        raise FileExistsError(
+            f"Persistent output directory is not empty: {persistent_output}. "
+            "Use --upload-only to reuse completed filtering or choose a new directory."
+        )
+
     mlflow.set_tracking_uri(args.tracking_uri)
     mlflow.set_experiment(args.experiment_name)
-    strategies = _strategies(args.epithelium_threshold, args.cancer_threshold)
+    selected_logics = tuple(dict.fromkeys(args.strategies))
+    strategies = _strategies(
+        args.epithelium_threshold,
+        args.cancer_threshold,
+        selected_logics,
+    )
 
-    with tempfile.TemporaryDirectory(
-        prefix=f"filter-embeddings-l{args.level}-", dir=args.work_dir
-    ) as tmp:
-        root = Path(tmp)
+    with _working_root(
+        level=args.level,
+        work_dir=Path(args.work_dir),
+        output_dir=persistent_output,
+    ) as root:
         console_log = root / "console.log"
         logging.basicConfig(
             level=logging.INFO,
@@ -370,51 +587,83 @@ def main() -> None:
             force=True,
         )
         logger = logging.getLogger(__name__)
-        logger.info("Downloading scored tiling artifact: %s", args.tiling_uri)
-        tiling_download_dir = root / "source-tiling"
-        tiling_download_dir.mkdir()
-        tiling_dir = Path(
-            download_artifacts(args.tiling_uri, dst_path=str(tiling_download_dir))
-        )
+        output_dirs = _prepare_output_dirs(root / "outputs", strategies)
+        state_path = root / FILTER_STATE_FILENAME
 
-        mounted_embeddings = (
-            Path(args.embeddings_path) if args.embeddings_path is not None else None
-        )
-        if mounted_embeddings is not None and mounted_embeddings.is_dir():
-            embeddings_dir = mounted_embeddings
-            logger.info("Using mounted tissue embeddings: %s", embeddings_dir)
+        if args.upload_only:
+            state = _load_filter_state(
+                state_path,
+                level=args.level,
+                tiling_uri=args.tiling_uri,
+                embeddings_uri=args.embeddings_uri,
+                strategies=strategies,
+                epithelium_threshold=args.epithelium_threshold,
+                cancer_threshold=args.cancer_threshold,
+            )
+            counts = state["counts"]
+            scored_tiles = int(state["scored_tiles"])
+            source_embedding_tiles = int(state["source_embedding_tiles"])
+            logger.info("Reusing filtered output recorded in %s", state_path)
         else:
-            if mounted_embeddings is not None:
-                logger.warning(
-                    "Mounted embedding directory %s is unavailable; downloading %s",
-                    mounted_embeddings,
-                    args.embeddings_uri,
-                )
-            else:
-                logger.info(
-                    "Downloading tissue embedding artifact: %s", args.embeddings_uri
-                )
-            embeddings_download_dir = root / "source-embeddings"
-            embeddings_download_dir.mkdir()
-            embeddings_dir = Path(
-                download_artifacts(
-                    args.embeddings_uri,
-                    dst_path=str(embeddings_download_dir),
-                )
+            logger.info("Downloading scored tiling artifact: %s", args.tiling_uri)
+            tiling_download_dir = root / "source-tiling"
+            tiling_download_dir.mkdir(exist_ok=True)
+            tiling_dir = Path(
+                download_artifacts(args.tiling_uri, dst_path=str(tiling_download_dir))
             )
 
-        scores_by_stem, scored_tiles = _load_scores(tiling_dir, args.level)
-        split_map = _load_split_map(Path(args.data_mapping))
-        output_dirs = _prepare_output_dirs(root / "outputs", strategies)
-        counts, source_embedding_tiles = filter_embeddings(
-            scores_by_stem=scores_by_stem,
-            embeddings_dir=embeddings_dir,
-            output_dirs=output_dirs,
-            split_map=split_map,
-            epithelium_threshold=args.epithelium_threshold,
-            cancer_threshold=args.cancer_threshold,
-            logger=logger,
-        )
+            mounted_embeddings = (
+                Path(args.embeddings_path) if args.embeddings_path is not None else None
+            )
+            if mounted_embeddings is not None and mounted_embeddings.is_dir():
+                embeddings_dir = mounted_embeddings
+                logger.info("Using mounted tissue embeddings: %s", embeddings_dir)
+            else:
+                if mounted_embeddings is not None:
+                    logger.warning(
+                        "Mounted embedding directory %s is unavailable; downloading %s",
+                        mounted_embeddings,
+                        args.embeddings_uri,
+                    )
+                else:
+                    logger.info(
+                        "Downloading tissue embedding artifact: %s", args.embeddings_uri
+                    )
+                embeddings_download_dir = root / "source-embeddings"
+                embeddings_download_dir.mkdir(exist_ok=True)
+                embeddings_dir = Path(
+                    download_artifacts(
+                        args.embeddings_uri,
+                        dst_path=str(embeddings_download_dir),
+                    )
+                )
+
+            scores_by_stem, scored_tiles = _load_scores(tiling_dir, args.level)
+            split_map = _load_split_map(Path(args.data_mapping))
+            counts, source_embedding_tiles = filter_embeddings(
+                scores_by_stem=scores_by_stem,
+                embeddings_dir=embeddings_dir,
+                output_dirs=output_dirs,
+                split_map=split_map,
+                epithelium_threshold=args.epithelium_threshold,
+                cancer_threshold=args.cancer_threshold,
+                logger=logger,
+            )
+            state = _state_payload(
+                level=args.level,
+                tiling_uri=args.tiling_uri,
+                embeddings_uri=args.embeddings_uri,
+                strategies=strategies,
+                counts=counts,
+                scored_tiles=scored_tiles,
+                source_embedding_tiles=source_embedding_tiles,
+                epithelium_threshold=args.epithelium_threshold,
+                cancer_threshold=args.cancer_threshold,
+            )
+            state_path.write_text(json.dumps(state, indent=2))
+            logger.info("Saved resumable filter state to %s", state_path)
+
+        _validate_output_dirs(output_dirs)
         logger.info("Selection summary:\n%s", json.dumps(counts, indent=2))
         _log_outputs(
             level=args.level,
@@ -429,6 +678,7 @@ def main() -> None:
             cancer_threshold=args.cancer_threshold,
             console_log=console_log,
             logger=logger,
+            upload_max_retries=args.upload_max_retries,
         )
 
 

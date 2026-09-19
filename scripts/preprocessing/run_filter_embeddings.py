@@ -20,6 +20,7 @@ TISSUE_EMBEDDING_PATHS = {
     level: f"/mnt/projects/mammaprint/embeddings/l{level}_tissue_embed"
     for level in TISSUE_EMBEDDING_URIS
 }
+STRATEGY_CHOICES = ("epithelium_only", "or", "and")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -32,6 +33,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--embeddings-path")
     parser.add_argument("--epithelium-threshold", type=float, default=0.25)
     parser.add_argument("--cancer-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--strategies",
+        nargs="+",
+        choices=STRATEGY_CHOICES,
+        default=list(STRATEGY_CHOICES),
+    )
+    parser.add_argument("--output-dir")
+    parser.add_argument("--upload-only", action="store_true")
+    parser.add_argument("--upload-max-retries", type=int, default=3)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -42,23 +52,47 @@ def _token(value: float) -> str:
 
 def main() -> None:
     args = _parse_args()
+    if args.upload_only and not args.output_dir:
+        raise ValueError("--upload-only requires --output-dir")
     embeddings_uri = args.embeddings_uri or TISSUE_EMBEDDING_URIS[args.level]
     embeddings_path = args.embeddings_path or TISSUE_EMBEDDING_PATHS[args.level]
+    strategies = tuple(dict.fromkeys(args.strategies))
+    strategy_token = "-".join(
+        {"epithelium_only": "epi", "or": "or", "and": "and"}[strategy]
+        for strategy in strategies
+    )
     job_name = (
         f"mammaprint-filter-embeddings-l{args.level}-"
-        f"epi{_token(args.epithelium_threshold)}-c{_token(args.cancer_threshold)}"
+        f"{strategy_token}-epi{_token(args.epithelium_threshold)}-"
+        f"c{_token(args.cancer_threshold)}"
     )
-    filter_command = " ".join(
-        [
-            "uv run -m preprocessing.filter_embeddings",
-            f"--level {args.level}",
-            f"--tiling-uri {shlex.quote(args.tiling_uri)}",
-            f"--embeddings-uri {shlex.quote(embeddings_uri)}",
-            f"--embeddings-path {shlex.quote(embeddings_path)}",
-            f"--epithelium-threshold {args.epithelium_threshold:g}",
-            f"--cancer-threshold {args.cancer_threshold:g}",
-        ]
-    )
+    command = [
+        "uv",
+        "run",
+        "-m",
+        "preprocessing.filter_embeddings",
+        "--level",
+        str(args.level),
+        "--tiling-uri",
+        args.tiling_uri,
+        "--embeddings-uri",
+        embeddings_uri,
+        "--embeddings-path",
+        embeddings_path,
+        "--epithelium-threshold",
+        f"{args.epithelium_threshold:g}",
+        "--cancer-threshold",
+        f"{args.cancer_threshold:g}",
+        "--strategies",
+        *strategies,
+        "--upload-max-retries",
+        str(args.upload_max_retries),
+    ]
+    if args.output_dir:
+        command.extend(["--output-dir", args.output_dir])
+    if args.upload_only:
+        command.append("--upload-only")
+    filter_command = shlex.join(command)
 
     if args.dry_run:
         print(f"Job: {job_name}")
