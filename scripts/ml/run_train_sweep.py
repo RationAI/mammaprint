@@ -1,8 +1,18 @@
 import itertools
 import os
 import time
+from collections import deque
+from collections.abc import Mapping
+from heapq import heapify, heappop, heappush
+from typing import TYPE_CHECKING, Any
 
 from kube_jobs import storage, submit_job
+
+
+if TYPE_CHECKING or __package__:
+    from scripts.ml.list_pending_gpu_jobs import pending_gpu_counts
+else:
+    from list_pending_gpu_jobs import pending_gpu_counts
 
 
 # Each objective points to the matching training experiment. Edit these values,
@@ -20,19 +30,65 @@ DATASETS = {
     "eor5": "epithel_or_cancer_5",
     "ean5": "epithel_and_cancer_5",
 }
-LEVELS = (
-    # 2,
-          3, 4, 5)
+LEVELS = (2, 3, 4, 5)
 AGGREGATORS = ("mean", "max", "attention", "transformer")
 HEADS = ("mlp", "linear")
 SEEDS = tuple(range(20))
-GPUS = [
+GPUS = (
+    "A40",
+    "H100",
     "mig-2g.20gb",
-    # "H100",
-    # "A40",
+    "mig-1g.10gb",
+)
+BASIC_RESOURCES = {"cpu": 8, "memory": "16Gi"}
+
+# GPU rules limit which entries from GPUS a matching job may use. Jobs without
+# a matching rule may use the complete pool. All assignments share one set of
+# projected waiting counts, including assignments restricted to one GPU type.
+GPU_RULES: list[dict[str, Any]] = [
+    {
+        "match": {
+            "level": (2, 3),
+            "aggregator": ("transformer", "spatial_transformer"),
+        },
+        "only": ("H100",),
+    },
+    {
+        "match": {
+            "level": 4,
+            "aggregator": ("transformer", "spatial_transformer"),
+        },
+        "exclude_gpus": ("mig-1g.10gb",),
+    },
+]
+
+# Override host resources independently of GPU placement. Rules are applied in
+# order, so later matches override only the fields they specify.
+RESOURCE_RULES: list[dict[str, Any]] = [
+    {
+        "match": {
+            "level": (2, 3),
+            "aggregator": ("mean", "max"),
+        },
+        "resources": {"memory": "20Gi"},
+    },
+    {
+        "match": {
+            "level": (2, 3),
+            "aggregator": "attention",
+        },
+        "resources": {"memory": "40Gi"},
+    },
+    {
+        "match": {
+            "level": (2, 3),
+            "aggregator": ("transformer", "spatial_transformer"),
+        },
+        "resources": {"memory": "56Gi"},
+    },
 ]
 GIT_REF = "feat/tiling-values"
-SUBMISSION_INTERVAL_SECONDS = 10
+SUBMISSION_INTERVAL_SECONDS = 2  # * 60
 USERNAME = "kissmi"
 IMAGE = "cerit.io/rationai/base:2.0.6"
 POD_MLFLOW_TRACKING_URI = os.getenv(
@@ -44,6 +100,9 @@ MLFLOW_LOOKUP_URI = os.getenv(
 )
 MLFLOW_EXPERIMENT = "MammaPrint"
 JOB_NAME_PREFIX = "mammaprint-sweep-"
+
+SweepJob = tuple[int, str, str, int, str, str, str, str, int]
+ResolvedJob = tuple[SweepJob, dict[str, Any]]
 
 
 def _job_name(
@@ -57,7 +116,7 @@ def _job_name(
     return f"{JOB_NAME_PREFIX}{dataset_key}-l{level}-{head}-{aggregator}-{objective}-s{seed}"
 
 
-def _sweep_jobs() -> list[tuple[int, str, str, int, str, str, str, str, int]]:
+def _sweep_jobs() -> list[SweepJob]:
     combinations = itertools.product(
         SEEDS,
         DATASETS.items(),
@@ -89,16 +148,100 @@ def _sweep_jobs() -> list[tuple[int, str, str, int, str, str, str, str, int]]:
     ]
 
 
-def _gpu_for_job(job_index: int) -> str:
-    configurations_per_seed = (
-        len(DATASETS)
-        * len(LEVELS)
-        * len(EXPERIMENTS)
-        * len(AGGREGATORS)
-        * len(HEADS)
-    )
-    seed_index, configuration_index = divmod(job_index, configurations_per_seed)
-    return GPUS[(configuration_index + seed_index) % len(GPUS)]
+def _matches(actual: object, expected: object) -> bool:
+    if isinstance(expected, (list, tuple, set, frozenset)):
+        return actual in expected
+    return actual == expected
+
+
+def _job_matches(job: dict[str, object], conditions: dict[str, object]) -> bool:
+    return all(_matches(job.get(key), value) for key, value in conditions.items())
+
+
+def _eligible_gpus(job: dict[str, object]) -> tuple[str, ...]:
+    eligible = list(GPUS)
+    for rule in GPU_RULES:
+        if not _job_matches(job, rule.get("match", {})):
+            continue
+        if "only" in rule:
+            allowed = set(rule["only"])
+            eligible = [gpu for gpu in eligible if gpu in allowed]
+        excluded = set(rule.get("exclude_gpus", ()))
+        eligible = [gpu for gpu in eligible if gpu not in excluded]
+
+    if not eligible:
+        raise ValueError(f"No configured GPU can run job {job!r}.")
+    return tuple(eligible)
+
+
+def _assign_gpu(
+    job: dict[str, object], projected_waiting_counts: dict[str, int]
+) -> str:
+    """Choose the least-loaded eligible GPU, using GPUS order for ties."""
+    eligible = _eligible_gpus(job)
+    gpu = min(eligible, key=lambda candidate: projected_waiting_counts[candidate])
+    projected_waiting_counts[gpu] += 1
+    return gpu
+
+
+def _resources_for_job(
+    projected_waiting_counts: dict[str, int],
+    dataset_key: str,
+    dataset_config: str,
+    level: int,
+    objective: str,
+    experiment: str,
+    aggregator: str,
+    head: str,
+    seed: int,
+) -> dict[str, Any]:
+    job = {
+        "dataset_key": dataset_key,
+        "dataset_config": dataset_config,
+        "level": level,
+        "objective": objective,
+        "experiment": experiment,
+        "aggregator": aggregator,
+        "head": head,
+        "seed": seed,
+    }
+    resources: dict[str, Any] = dict(BASIC_RESOURCES)
+
+    for rule in RESOURCE_RULES:
+        matches = _job_matches(job, rule.get("match", {}))
+        excluded = "exclude" in rule and _job_matches(job, rule["exclude"])
+        if matches and not excluded:
+            resources.update(rule["resources"])
+
+    resources["gpu"] = _assign_gpu(job, projected_waiting_counts)
+    return resources
+
+
+def _balanced_job_order(
+    resolved_jobs: list[ResolvedJob], waiting_counts: Mapping[str, int]
+) -> list[ResolvedJob]:
+    """Interleave GPU queues by their projected waiting-job counts."""
+    queues: dict[str, deque[ResolvedJob]] = {}
+    first_job_index: dict[str, int] = {}
+    for list_index, resolved_job in enumerate(resolved_jobs):
+        gpu = resolved_job[1]["gpu"]
+        if not isinstance(gpu, str):
+            raise TypeError(f"Resolved GPU must be a string, got {gpu!r}.")
+        queues.setdefault(gpu, deque()).append(resolved_job)
+        first_job_index.setdefault(gpu, list_index)
+
+    gpu_heap = [
+        (waiting_counts.get(gpu, 0), first_job_index[gpu], gpu) for gpu in queues
+    ]
+    heapify(gpu_heap)
+
+    ordered_jobs = []
+    while gpu_heap:
+        projected_count, tie_breaker, gpu = heappop(gpu_heap)
+        ordered_jobs.append(queues[gpu].popleft())
+        if queues[gpu]:
+            heappush(gpu_heap, (projected_count + 1, tie_breaker, gpu))
+    return ordered_jobs
 
 
 def _existing_mlflow_run_names(expected_names: set[str]) -> set[str]:
@@ -164,18 +307,41 @@ def main() -> None:
         f"Sweep contains {len(jobs)} jobs: {len(existing_names)} already submitted, "
         f"{len(pending_jobs)} pending."
     )
+    waiting_counts = pending_gpu_counts(USERNAME)
+    projected_waiting_counts = {gpu: waiting_counts[gpu] for gpu in GPUS}
+    print(f"GPU waiting counts: {projected_waiting_counts}")
 
-    for pending_index, (
-        job_index,
-        dataset_key,
-        dataset_config,
-        level,
-        objective,
-        experiment,
-        aggregator,
-        head,
-        seed,
-    ) in enumerate(pending_jobs):
+    resolved_jobs = [
+        (
+            job,
+            _resources_for_job(
+                projected_waiting_counts,
+                job[1],
+                job[2],
+                job[3],
+                job[4],
+                job[5],
+                job[6],
+                job[7],
+                job[8],
+            ),
+        )
+        for job in pending_jobs
+    ]
+    scheduled_jobs = _balanced_job_order(resolved_jobs, waiting_counts)
+
+    for pending_index, (job, resources) in enumerate(scheduled_jobs):
+        (
+            _,
+            dataset_key,
+            dataset_config,
+            level,
+            objective,
+            experiment,
+            aggregator,
+            head,
+            seed,
+        ) = job
         if pending_index > 0:
             print(
                 f"Waiting {SUBMISSION_INTERVAL_SECONDS / 60} minutes before submitting the next job."
@@ -183,15 +349,17 @@ def main() -> None:
             time.sleep(SUBMISSION_INTERVAL_SECONDS)
 
         name = _job_name(dataset_key, level, head, aggregator, objective, seed)
-        gpu = _gpu_for_job(job_index)
-        print(f"Submitting {name} to {gpu} ({pending_index + 1}/{len(pending_jobs)}).")
+        print(
+            f"Submitting {name} with {resources} "
+            f"({pending_index + 1}/{len(pending_jobs)})."
+        )
         submit_job(
             job_name=name,
             username=USERNAME,
             image=IMAGE,
-            cpu=10,
-            memory="36Gi",
-            gpu=gpu,
+            cpu=resources["cpu"],
+            memory=resources["memory"],
+            gpu=resources["gpu"],
             public=False,
             script=[
                 "git clone https://github.com/rationAI/mammaprint workdir",
