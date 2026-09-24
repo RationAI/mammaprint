@@ -1,0 +1,28 @@
+# @package _global_
+# Coordinate-aware single-scale data shape: identical to _template but the DataModule
+# runs over SpatialScaleDataset, which appends each tile's level-0 (x, y) as the last
+# two bag columns ((N, D + 2)). Pair with the spatial_transformer aggregator, which
+# slices those columns off. Select one artifact card at launch, e.g.
+# data/embedded=demo_l3_embed.
+dataset:
+  levels: ???            # filled by the selected data/embedded/* card
+  data_mapping: ${project_path}/data_mapping.csv
+
+datamodule:
+  _target_: ml.data.DataModule
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  train: &dataset
+    _target_: ml.data.SpatialScaleDataset
+    split: train
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    label_mode: ${label_mode}
+  val:
+    <<: *dataset
+    split: val
+  test:
+    <<: *dataset
+    split: test

@@ -6,7 +6,7 @@ dataset:
   mlflow_uris:
     tissue_masks: ???
 
-max_concurrent: 4
+max_concurrent: 100
 timeout: 3000
 model_name: episeg-1
 

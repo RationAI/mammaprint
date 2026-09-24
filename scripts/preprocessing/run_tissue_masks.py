@@ -10,10 +10,11 @@ submit_job(
     gpu=None,
     public=False,
     script=[
-        "git clone https://gitlab.ics.muni.cz/rationai/digital-pathology/pathology/mammaprint workdir",
+        "git clone https://github.com/rationAI/mammaprint workdir",
         "cd workdir",
-        "uv sync",
-        "uv run -m preprocessing.tissue_masks",
+        "export MLFLOW_TRACKING_URI=http://mlflow-s3.rationai-mlflow",
+        "uv sync --frozen",
+        "uv run python -m preprocessing.tissue_masks",
     ],
     storage=[storage.secure.DATA, storage.secure.PROJECTS],
 )

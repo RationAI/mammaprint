@@ -1,0 +1,5 @@
+# @package _global_
+# DEMO single-scale embeddings source: level-3 embedding card + embeddings template.
+defaults:
+  - /data/_template
+  - /data/tiled/demo_l3_embed

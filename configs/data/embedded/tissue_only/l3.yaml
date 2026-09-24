@@ -1,0 +1,11 @@
+# @package dataset.levels.3
+defaults:
+  - /data/levels/l3@_here_
+  - _self_
+
+name: l3_tissue_embed
+uris:
+  all: "mlflow-artifacts:/3/c513c87eac3d4792ba9757a2d7300eb6/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/7bda595fa2b24f618d2476468c564368/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/d74838d175b342569af851b7a36f31e9/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/f785f95353f545539b4166e716db9d20/artifacts/embeddings_test"

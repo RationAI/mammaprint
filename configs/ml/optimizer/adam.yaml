@@ -1,0 +1,5 @@
+# Bound to model parameters in configure_optimizers (hence _partial_).
+_target_: torch.optim.Adam
+_partial_: true
+lr: 1e-3
+weight_decay: 1e-3

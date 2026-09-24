@@ -1,0 +1,13 @@
+_target_: ml.models.MammaprintModule
+
+# Swappable pieces — populated by the experiment's defaults list
+# (ml/encoder, ml/aggregator, ml/head, ml/loss, ml/optimizer, ml/lr_scheduler,
+#  ml/output_activation, ml/metrics).
+encoder: ???
+aggregator: ???
+head: ???
+output_activation: null
+loss: null
+optimizer: null
+lr_scheduler: null
+metrics: null

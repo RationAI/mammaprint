@@ -1,0 +1,9 @@
+# Two-layer MLP head: a non-linear readout of the aggregated slide vector.
+# Deeper alternative to head=linear; useful for linear probing on frozen
+# embeddings where the head carries all task capacity. out_dim is 1 for
+# binary classification (with BCE) or the regression scalar.
+_target_: ml.models.heads.MLPHead
+in_dim: ${feature_dim}
+out_dim: 1
+hidden_dim: 256
+dropout: 0.5

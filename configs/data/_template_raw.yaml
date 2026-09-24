@@ -1,0 +1,26 @@
+# @package _global_
+dataset:
+  levels: ???
+  data_mapping: ${project_path}/data_mapping.csv
+  max_tiles: 256
+
+datamodule:
+  _target_: ml.data.DataModule
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  train: &dataset
+    _target_: ml.data.RawTileSlideDataset
+    split: train
+    levels: ${dataset.levels}
+    data_mapping: ${dataset.data_mapping}
+    label_mode: ${label_mode}
+    max_tiles: ${dataset.max_tiles}
+    seed: ${seed}
+  val:
+    <<: *dataset
+    split: val
+  test:
+    <<: *dataset
+    split: test

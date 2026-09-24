@@ -1,0 +1,17 @@
+# @package dataset.levels.5
+# Level-5 RAW-TILE card (tissue masks). Physical facts come from
+# /data/levels/l5; only the variant name + artifact URIs live here.
+# `raw_uris.all` is the whole (un-split) tiled artifact read by the embeddings
+# step. Per-split URIs are produced from it by:
+#   python scripts/preprocessing/split_dataset.py --kind tiled \
+#     --uri <the `all` URI below> --name l5_tissue
+defaults:
+  - /data/levels/l5@_here_
+  - _self_
+
+name: l5_tissue
+raw_uris:
+  all: "mlflow-artifacts:/3/f939531a6ff849cb8b97b34d030f8725/artifacts/mou_5_224_tissue"
+  train: "mlflow-artifacts:/3/<run_id>/artifacts/l5_tissue_train"
+  val: "mlflow-artifacts:/3/<run_id>/artifacts/l5_tissue_val"
+  test: "mlflow-artifacts:/3/<run_id>/artifacts/l5_tissue_test"

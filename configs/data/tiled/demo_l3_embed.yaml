@@ -1,0 +1,14 @@
+# @package dataset.levels.3
+# DEMO level-3 EMBEDDINGS card (precomputed Virchow2 features, mpp 1.94).
+# Per-split uris produced by:
+#   python scripts/preprocessing/split_dataset.py --kind embedded \
+#     --uri mlflow-artifacts:/3/16e8f2a772ec48d2a21dc8cf704f0e10/artifacts/embeddings \
+#     --name l3_embed
+name: demo_l3_embed
+level: 3
+mpp: 1.94
+tile_extent: 224
+uris:
+  train: "mlflow-artifacts:/3/6f1e6c8f3bd048eebc5addd1c3a9e36c/artifacts/l3_embed_train"
+  val: "mlflow-artifacts:/3/5b589be048504c169cdb6e81d585f520/artifacts/l3_embed_val"
+  test: "mlflow-artifacts:/3/4735b43e2fd342bea6961cf4321460bf/artifacts/l3_embed_test"

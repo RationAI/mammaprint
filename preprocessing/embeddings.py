@@ -131,7 +131,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
                 embeddings_path,
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - continue with the remaining slides
             print(f"Error processing slide {slide_name}: {e}")
 
     logger.log_artifacts(str(dest), artifact_path="embeddings")

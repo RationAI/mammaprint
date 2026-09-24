@@ -1,0 +1,19 @@
+# @package _global_
+# Level-5 embeddings (tissue masks, Virchow2 features) over the WHOLE tiled
+# dataset. Embed once, then split with
+# scripts/preprocessing/split_dataset.py --kind embedded.
+#
+# Run:
+#   uv run -m preprocessing.embeddings \
+#     +experiment=preprocessing/embeddings/tissue_only/l5
+#
+# The whole (un-split) tiled artifact URI lives in the matching raw-tile card's
+# `raw_uris.all`; embeddings.py reads it via `dataset.path` below.
+defaults:
+  - /data/tiled/tissue_only/l5
+  - /preprocessing/tile_encoder: virchow2
+  - _self_
+
+dataset:
+  name: l5_tissue_embed
+  path: ${dataset.levels.5.raw_uris.all}

@@ -1,0 +1,9 @@
+# @package ml.metrics
+joint_specificity:
+  _target_: ml.metrics.ColumnMetric
+  column: 0
+  metric:
+    _target_: ml.metrics.BinaryLogitMetric
+    decision_threshold: 0.0
+    metric:
+      _target_: torchmetrics.classification.BinarySpecificity

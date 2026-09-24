@@ -1,0 +1,59 @@
+# @package _global_
+# Spatially-aware transformer MIL on precomputed level-3 embeddings, REGRESSION of
+# the MammaPrint index: identity encoder (frozen embeddings) -> SpatialTransformerMIL
+# (TransMIL self-attention + 2D sinusoidal PE from each tile's (x, y)) -> linear head
+# (out_dim=1). Regression twin of train_mil_embeddings_spatial_transformer
+# (label_mode=index, MSE).
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: identity
+  - /ml/aggregator@ml.aggregator: spatial_transformer
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: mse
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - mae
+      - mse
+      - pearson
+      - spearman
+      - r2
+      - thresholded_f1
+      - thresholded_precision
+      - thresholded_recall
+      - thresholded_specificity
+  - /trainer: default
+  - /data: _spatial_template
+  - optional /data/embedded: null
+  - _self_
+
+label_mode: index
+feature_dim: 2560  # Virchow2 embedding size (divisible by num_heads=8 and by 4)
+
+# Tile footprint facts for the PE grid-normalisation, pulled from the level-3 card.
+# extent = tile_extent * mpp (level-0 px). Change the level index if you swap cards.
+spatial:
+  mpp: ${dataset.levels.3.mpp}
+  tile_extent: ${dataset.levels.3.tile_extent}
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Spatial transformer MIL — MammaPrint index regression (level-3 Virchow2 embeddings)
+  description: |
+    Multiple-instance-learning regression of the continuous MammaPrint index over
+    frozen per-slide level-3 Virchow2 tile embeddings. TransMIL-style CLS-token
+    self-attention with a 2D sinusoidal positional encoding built from each tile's
+    physical (x, y) coordinate, + linear head.
+  hyperparameters:
+    encoder: ${ml.encoder._target_}
+    aggregator: ${ml.aggregator._target_}
+    num_heads: ${ml.aggregator.num_heads}
+    num_layers: ${ml.aggregator.num_layers}
+    pe_scale: ${ml.aggregator.pe_scale}
+    pe_span: ${ml.aggregator.pe_span}
+    head: ${ml.head._target_}
+    loss: ${ml.loss._target_}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}

@@ -1,0 +1,13 @@
+# @package _global_
+# Full-cohort level-5 scan with every available mask attached. Tissue/QC use the established
+# production gates; epithelium and cancer are scored without filtering so downstream variants can
+# be derived from exactly the same tile population.
+defaults:
+  - /data/levels/l5@_global_
+  - /experiment/preprocessing/tiling/_thresholds
+  - _self_
+
+data_name: mou_5_224_all_masks_threshold_scan
+epithelium_threshold: null
+cancer_threshold: null
+diagnostics: true

@@ -1,0 +1,11 @@
+# @package _global_
+# Level-1 tiling (tissue masks). mpp/tile_extent/stride come from
+# /data/levels/l1; coverage thresholds from /experiment/preprocessing/tiling/_thresholds.
+# Only the output data_name is variant-specific.
+# To re-derive thresholds for this level/variant, add overrides below _self_.
+defaults:
+  - /data/levels/l1@_global_
+  - /experiment/preprocessing/tiling/_thresholds
+  - _self_
+
+data_name: mou_1_224_tissue

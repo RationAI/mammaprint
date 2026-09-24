@@ -1,0 +1,4 @@
+# @package ml.metrics
+thresholded_precision:
+  _target_: ml.metrics.thresholded_precision
+  threshold: 0.0
