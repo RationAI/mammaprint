@@ -331,6 +331,9 @@ def main() -> None:
     scheduled_jobs = _balanced_job_order(resolved_jobs, waiting_counts)
 
     for pending_index, (job, resources) in enumerate(scheduled_jobs):
+        if resources["gpu"] == "H100":
+            continue
+
         (
             _,
             dataset_key,
