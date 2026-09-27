@@ -1,6 +1,6 @@
+import argparse
 import itertools
 import os
-import time
 from collections import deque
 from collections.abc import Mapping
 from heapq import heapify, heappop, heappush
@@ -88,7 +88,6 @@ RESOURCE_RULES: list[dict[str, Any]] = [
     },
 ]
 GIT_REF = "feat/tiling-values"
-SUBMISSION_INTERVAL_SECONDS = 2  # * 60
 USERNAME = "kissmi"
 IMAGE = "cerit.io/rationai/base:2.0.6"
 POD_MLFLOW_TRACKING_URI = os.getenv(
@@ -244,6 +243,18 @@ def _balanced_job_order(
     return ordered_jobs
 
 
+def _jobs_to_submit(
+    scheduled_jobs: list[ResolvedJob], max_jobs: int | None
+) -> list[ResolvedJob]:
+    """Return the scheduled non-H100 jobs, capped when requested."""
+    eligible = [
+        resolved_job
+        for resolved_job in scheduled_jobs
+        if resolved_job[1]["gpu"] != "H100"
+    ]
+    return eligible if max_jobs is None else eligible[:max_jobs]
+
+
 def _existing_mlflow_run_names(expected_names: set[str]) -> set[str]:
     """Fetch sweep runs that already exist, including failed/running runs."""
     from mlflow import MlflowClient
@@ -288,6 +299,16 @@ def _existing_kubernetes_job_names(expected_names: set[str]) -> set[str]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--max-jobs",
+        type=int,
+        help="Submit at most this many non-H100 jobs from the automatic sweep order.",
+    )
+    args = parser.parse_args()
+    if args.max_jobs is not None and args.max_jobs <= 0:
+        parser.error("--max-jobs must be a positive integer")
+
     jobs = _sweep_jobs()
     expected_names = {
         _job_name(dataset_key, level, head, aggregator, objective, seed)
@@ -329,11 +350,13 @@ def main() -> None:
         for job in pending_jobs
     ]
     scheduled_jobs = _balanced_job_order(resolved_jobs, waiting_counts)
+    jobs_to_submit = _jobs_to_submit(scheduled_jobs, args.max_jobs)
+    print(
+        f"Submitting {len(jobs_to_submit)} of {len(pending_jobs)} pending jobs"
+        + (f" (limit {args.max_jobs})." if args.max_jobs is not None else ".")
+    )
 
-    for pending_index, (job, resources) in enumerate(scheduled_jobs):
-        if resources["gpu"] == "H100":
-            continue
-
+    for pending_index, (job, resources) in enumerate(jobs_to_submit):
         (
             _,
             dataset_key,
@@ -345,16 +368,10 @@ def main() -> None:
             head,
             seed,
         ) = job
-        if pending_index > 0:
-            print(
-                f"Waiting {SUBMISSION_INTERVAL_SECONDS / 60} minutes before submitting the next job."
-            )
-            time.sleep(SUBMISSION_INTERVAL_SECONDS)
-
         name = _job_name(dataset_key, level, head, aggregator, objective, seed)
         print(
             f"Submitting {name} with {resources} "
-            f"({pending_index + 1}/{len(pending_jobs)})."
+            f"({pending_index + 1}/{len(jobs_to_submit)})."
         )
         submit_job(
             job_name=name,
