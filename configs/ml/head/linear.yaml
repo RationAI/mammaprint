@@ -1,0 +1,6 @@
+# Single-output head: one logit for binary classification (with BCE) or the
+# regression scalar. out_dim is 1 in both cases.
+_target_: ml.models.heads.LinearHead
+in_dim: ${feature_dim}
+out_dim: 1
+dropout: 0.5

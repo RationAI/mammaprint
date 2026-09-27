@@ -1,0 +1,3 @@
+# Precomputed-embeddings path: features pass through unchanged.
+_target_: ml.models.encoders.IdentityEncoder
+out_dim: ${feature_dim}

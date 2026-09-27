@@ -1,0 +1,13 @@
+# @package dataset.levels.3
+# Level-3 Virchow2 embeddings retained when epithelium overlap is greater than 0.25
+# OR cancer probability is greater than 0.5.
+defaults:
+  - /data/levels/l3@_here_
+  - _self_
+
+name: l3_epithel_or_cancer_025_05_embed
+uris:
+  all: "mlflow-artifacts:/3/482b36130caf4415859155be11857ecb/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/482b36130caf4415859155be11857ecb/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/482b36130caf4415859155be11857ecb/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/482b36130caf4415859155be11857ecb/artifacts/embeddings_test"

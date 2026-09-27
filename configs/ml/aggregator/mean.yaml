@@ -1,0 +1,2 @@
+_target_: ml.models.aggregators.MeanPool
+feature_dim: ${feature_dim}
