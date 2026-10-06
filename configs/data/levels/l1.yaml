@@ -1,0 +1,4 @@
+level: 1
+mpp: 0.485
+tile_extent: 224
+stride: 112

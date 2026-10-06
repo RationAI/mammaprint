@@ -1,0 +1,7 @@
+# @package ml.metrics
+# Regression MSE on the joint head's column 1 (index scalar vs MammaPrint index).
+joint_mse:
+  _target_: ml.metrics.ColumnMetric
+  column: 1
+  metric:
+    _target_: torchmetrics.MeanSquaredError

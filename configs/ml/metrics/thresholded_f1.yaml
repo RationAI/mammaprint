@@ -1,0 +1,5 @@
+# @package ml.metrics
+# Classification F1 from a regression output: index >= 0 -> class 1 (a luminal).
+thresholded_f1:
+  _target_: ml.metrics.thresholded_f1
+  threshold: 0.0

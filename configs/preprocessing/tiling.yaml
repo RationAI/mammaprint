@@ -5,6 +5,17 @@ tile_extent: ???
 stride: ???
 data_name: ???
 
+# Tile-filtering thresholds on the *_overlap scores (higher = cleaner). A tile is kept only when
+# its overlap exceeds the threshold. See scripts/notebooks/mask_coverage_threshold.ipynb.
+tissue_threshold: ???
+blur_threshold: ???
+folding_threshold: ???
+residual_threshold: ???
+epithelium_threshold: ???
+cancer_threshold: ???
+
+diagnostics: false
+
 metadata:
   run_name: Mammaprint Tiling ${dataset.name}
   description: |
@@ -13,10 +24,17 @@ metadata:
     * reads slide metadata and builds a grid of tiles with the given stride
     * assigns tissue/epithelium/QC mask paths and computes overlap scores
     * keeps tiles with tissue in the centered 50% ROI
-    * computes full-tile overlaps for epithelium, blur, folding, and residual masks
+    * computes full-tile overlaps for epithelium, cancer, blur, folding, and residual masks
+    * optionally filters tiles by the per-mask coverage thresholds
     * saves slide and tile datasets via MLflow
   hyperparams:
     mpp: ${mpp}
     tile_extent: ${tile_extent}
     stride: ${stride}
     data_name: ${data_name}
+    tissue_threshold: ${tissue_threshold}
+    blur_threshold: ${blur_threshold}
+    folding_threshold: ${folding_threshold}
+    residual_threshold: ${residual_threshold}
+    epithelium_threshold: ${epithelium_threshold}
+    cancer_threshold: ${cancer_threshold}

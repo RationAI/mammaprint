@@ -1,0 +1,46 @@
+# @package _global_
+# TransMIL-style transformer MIL on precomputed level-3 embeddings, CLASSIFICATION
+# of luminal type: identity encoder (frozen embeddings) -> transformer aggregation
+# (CLS-token self-attention over the tile bag) -> linear head (out_dim=1).
+# Transformer twin of train_mil_embeddings_att (label_mode=type, BCE).
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: identity
+  - /ml/aggregator@ml.aggregator: transformer
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: bce
+  - /ml/optimizer@ml.optimizer: adam
+  - /ml/lr_scheduler@ml.lr_scheduler: reduce_lr_on_plateau
+  - /ml/metrics:
+      - binary_accuracy
+      - binary_auroc
+      - binary_f1
+      - binary_precision
+      - binary_recall
+      - binary_specificity
+  - /trainer: default
+  - /data: _template
+  - optional /data/embedded: null
+  - _self_
+
+label_mode: type
+feature_dim: 2560  # Virchow2 embedding size (divisible by num_heads=8)
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: Transformer MIL — luminal classification (level-3 Virchow2 embeddings)
+  description: |
+    Multiple-instance-learning classification of luminal type (A/B) over frozen
+    per-slide level-3 Virchow2 tile embeddings. TransMIL-style CLS-token
+    self-attention aggregation + linear head.
+  hyperparameters:
+    encoder: ${ml.encoder._target_}
+    aggregator: ${ml.aggregator._target_}
+    num_heads: ${ml.aggregator.num_heads}
+    num_layers: ${ml.aggregator.num_layers}
+    head: ${ml.head._target_}
+    loss: ${ml.loss._target_}
+    lr: ${ml.optimizer.lr}
+    batch_size: ${datamodule.batch_size}
+    max_epochs: ${trainer.max_epochs}
