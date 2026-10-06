@@ -1,6 +1,9 @@
+"""Refill GPU waiting queues every five minutes until the sweep is submitted."""
+
 import argparse
 import itertools
 import os
+import time
 from collections import deque
 from collections.abc import Mapping
 from heapq import heapify, heappop, heappush
@@ -40,6 +43,8 @@ GPUS = (
     "mig-2g.20gb",
     "mig-1g.10gb",
 )
+POLL_INTERVAL_SECONDS = 5 * 60
+WAITING_JOB_TARGETS = {gpu: 1 if gpu == "H100" else 2 for gpu in GPUS}
 BASIC_RESOURCES = {"cpu": 8, "memory": "16Gi"}
 
 # GPU rules limit which entries from GPUS a matching job may use. Jobs without
@@ -174,10 +179,20 @@ def _eligible_gpus(job: dict[str, object]) -> tuple[str, ...]:
 
 
 def _assign_gpu(
-    job: dict[str, object], projected_waiting_counts: dict[str, int]
-) -> str:
-    """Choose the least-loaded eligible GPU, using GPUS order for ties."""
+    job: dict[str, object],
+    projected_waiting_counts: dict[str, int],
+    waiting_targets: Mapping[str, int] | None = None,
+) -> str | None:
+    """Choose an eligible GPU with room in its queue; use GPUS order for ties."""
     eligible = _eligible_gpus(job)
+    if waiting_targets is not None:
+        eligible = tuple(
+            gpu
+            for gpu in eligible
+            if projected_waiting_counts[gpu] < waiting_targets[gpu]
+        )
+    if not eligible:
+        return None
     gpu = min(eligible, key=lambda candidate: projected_waiting_counts[candidate])
     projected_waiting_counts[gpu] += 1
     return gpu
@@ -193,7 +208,9 @@ def _resources_for_job(
     aggregator: str,
     head: str,
     seed: int,
-) -> dict[str, Any]:
+    *,
+    waiting_targets: Mapping[str, int] | None = None,
+) -> dict[str, Any] | None:
     job = {
         "dataset_key": dataset_key,
         "dataset_config": dataset_config,
@@ -212,7 +229,10 @@ def _resources_for_job(
         if matches and not excluded:
             resources.update(rule["resources"])
 
-    resources["gpu"] = _assign_gpu(job, projected_waiting_counts)
+    gpu = _assign_gpu(job, projected_waiting_counts, waiting_targets)
+    if gpu is None:
+        return None
+    resources["gpu"] = gpu
     return resources
 
 
@@ -244,15 +264,31 @@ def _balanced_job_order(
 
 
 def _jobs_to_submit(
-    scheduled_jobs: list[ResolvedJob], max_jobs: int | None
-) -> list[ResolvedJob]:
-    """Return the scheduled non-H100 jobs, capped when requested."""
-    eligible = [
-        resolved_job
-        for resolved_job in scheduled_jobs
-        if resolved_job[1]["gpu"] != "H100"
-    ]
-    return eligible if max_jobs is None else eligible[:max_jobs]
+    pending_jobs: list[SweepJob],
+    waiting_counts: Mapping[str, int],
+    max_jobs: int | None,
+) -> tuple[list[ResolvedJob], int]:
+    """Fill only vacant waiting slots, assigning jobs afresh on every poll."""
+    projected_counts = {gpu: waiting_counts.get(gpu, 0) for gpu in GPUS}
+    resolved_jobs: list[ResolvedJob] = []
+    deferred_count = 0
+    for job in pending_jobs:
+        try:
+            resources = _resources_for_job(
+                projected_counts,
+                *job[1:],
+                waiting_targets=WAITING_JOB_TARGETS,
+            )
+        except ValueError as error:
+            if not str(error).startswith("No configured GPU can run job "):
+                raise
+            deferred_count += 1
+            continue
+        if resources is not None:
+            resolved_jobs.append((job, resources))
+            if max_jobs is not None and len(resolved_jobs) >= max_jobs:
+                break
+    return _balanced_job_order(resolved_jobs, waiting_counts), deferred_count
 
 
 def _existing_mlflow_run_names(expected_names: set[str]) -> set[str]:
@@ -298,110 +334,141 @@ def _existing_kubernetes_job_names(expected_names: set[str]) -> set[str]:
     return existing
 
 
+def _submit_sweep_job(job: SweepJob, resources: dict[str, Any]) -> None:
+    (
+        _,
+        dataset_key,
+        dataset_config,
+        level,
+        objective,
+        experiment,
+        aggregator,
+        head,
+        seed,
+    ) = job
+    name = _job_name(dataset_key, level, head, aggregator, objective, seed)
+    print(f"Submitting {name} with {resources}.")
+    submit_job(
+        job_name=name,
+        username=USERNAME,
+        image=IMAGE,
+        cpu=resources["cpu"],
+        memory=resources["memory"],
+        gpu=resources["gpu"],
+        public=False,
+        script=[
+            "git clone https://github.com/rationAI/mammaprint workdir",
+            "cd workdir",
+            f"git checkout {GIT_REF}",
+            f"export MLFLOW_TRACKING_URI={POD_MLFLOW_TRACKING_URI}",
+            # "export HF_TOKEN=",
+            "uv sync --frozen",
+            f"""
+            uv run -m ml.train +experiment={experiment} \
+            data/embedded={dataset_config}/l{level} \
+            ml/aggregator={aggregator} \
+            ml/head={head} \
+            seed={seed} \
+            metadata.run_name={name} \
+            +logger.tags.data_variant={dataset_config} \
+            +logger.tags.level=level_{level} \
+            +logger.tags.sweep_seed=seed_{seed} \
+            """,
+        ],
+        storage=[storage.secure.DATA, storage.secure.PROJECTS],
+    )
+    # kube_jobs catches creation errors internally, so a normal return alone
+    # does not mean the job was created.
+    if name not in _existing_kubernetes_job_names({name}):
+        raise RuntimeError(f"Kubernetes did not confirm submission of {name}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--max-jobs",
         type=int,
-        help="Submit at most this many non-H100 jobs from the automatic sweep order.",
+        help="Submit at most this many jobs in total, then exit.",
+    )
+    parser.add_argument(
+        "--poll-interval-seconds",
+        type=int,
+        default=POLL_INTERVAL_SECONDS,
+        help="Seconds between queue refills (default: 300).",
     )
     args = parser.parse_args()
     if args.max_jobs is not None and args.max_jobs <= 0:
         parser.error("--max-jobs must be a positive integer")
+    if args.poll_interval_seconds <= 0:
+        parser.error("--poll-interval-seconds must be a positive integer")
 
     jobs = _sweep_jobs()
     expected_names = {
         _job_name(dataset_key, level, head, aggregator, objective, seed)
         for _, dataset_key, _, level, objective, _, aggregator, head, seed in jobs
     }
-    kubernetes_names = _existing_kubernetes_job_names(expected_names)
-    mlflow_names = _existing_mlflow_run_names(expected_names)
-    existing_names = mlflow_names | kubernetes_names
-    pending_jobs = [
-        job
-        for job in jobs
-        if _job_name(job[1], job[3], job[7], job[6], job[4], job[8])
-        not in existing_names
-    ]
+    submitted_names: set[str] = set()
+    print(f"GPU waiting targets: {WAITING_JOB_TARGETS}")
+    try:
+        while True:
+            try:
+                kubernetes_names = _existing_kubernetes_job_names(expected_names)
+                mlflow_names = _existing_mlflow_run_names(expected_names)
+                existing_names = mlflow_names | kubernetes_names | submitted_names
+                pending_jobs = [
+                    job
+                    for job in jobs
+                    if _job_name(job[1], job[3], job[7], job[6], job[4], job[8])
+                    not in existing_names
+                ]
+                print(
+                    f"Sweep contains {len(jobs)} jobs: "
+                    f"{len(existing_names)} already submitted, "
+                    f"{len(pending_jobs)} left to submit."
+                )
+                if not pending_jobs:
+                    print("All sweep jobs have been submitted.")
+                    return
 
-    print(
-        f"Sweep contains {len(jobs)} jobs: {len(existing_names)} already submitted, "
-        f"{len(pending_jobs)} pending."
-    )
-    waiting_counts = pending_gpu_counts(USERNAME)
-    projected_waiting_counts = {gpu: waiting_counts[gpu] for gpu in GPUS}
-    print(f"GPU waiting counts: {projected_waiting_counts}")
+                waiting_counts = pending_gpu_counts(USERNAME)
+                print(
+                    "GPU waiting counts: "
+                    f"{ {gpu: waiting_counts.get(gpu, 0) for gpu in GPUS} }"
+                )
+                remaining_limit = (
+                    None
+                    if args.max_jobs is None
+                    else args.max_jobs - len(submitted_names)
+                )
+                jobs_to_submit, deferred_count = _jobs_to_submit(
+                    pending_jobs, waiting_counts, remaining_limit
+                )
+                print(f"Submitting {len(jobs_to_submit)} job(s) to refill the queues.")
+                if deferred_count:
+                    print(
+                        f"Deferred {deferred_count} job(s) with no eligible "
+                        "configured GPU."
+                    )
+                    if deferred_count == len(pending_jobs):
+                        print("No remaining jobs can use the configured GPU pool.")
+                        return
 
-    resolved_jobs = [
-        (
-            job,
-            _resources_for_job(
-                projected_waiting_counts,
-                job[1],
-                job[2],
-                job[3],
-                job[4],
-                job[5],
-                job[6],
-                job[7],
-                job[8],
-            ),
-        )
-        for job in pending_jobs
-    ]
-    scheduled_jobs = _balanced_job_order(resolved_jobs, waiting_counts)
-    jobs_to_submit = _jobs_to_submit(scheduled_jobs, args.max_jobs)
-    print(
-        f"Submitting {len(jobs_to_submit)} of {len(pending_jobs)} pending jobs"
-        + (f" (limit {args.max_jobs})." if args.max_jobs is not None else ".")
-    )
+                for job, resources in jobs_to_submit:
+                    _submit_sweep_job(job, resources)
+                    submitted_names.add(
+                        _job_name(job[1], job[3], job[7], job[6], job[4], job[8])
+                    )
+                if args.max_jobs is not None and len(submitted_names) >= args.max_jobs:
+                    print(f"Reached the submission limit ({args.max_jobs}).")
+                    return
+            except Exception as error:
+                # Refresh cluster state before retrying an uncertain submission.
+                print(f"Queue refill failed: {error}. Will retry after the interval.")
 
-    for pending_index, (job, resources) in enumerate(jobs_to_submit):
-        (
-            _,
-            dataset_key,
-            dataset_config,
-            level,
-            objective,
-            experiment,
-            aggregator,
-            head,
-            seed,
-        ) = job
-        name = _job_name(dataset_key, level, head, aggregator, objective, seed)
-        print(
-            f"Submitting {name} with {resources} "
-            f"({pending_index + 1}/{len(jobs_to_submit)})."
-        )
-        submit_job(
-            job_name=name,
-            username=USERNAME,
-            image=IMAGE,
-            cpu=resources["cpu"],
-            memory=resources["memory"],
-            gpu=resources["gpu"],
-            public=False,
-            script=[
-                "git clone https://github.com/rationAI/mammaprint workdir",
-                "cd workdir",
-                f"git checkout {GIT_REF}",
-                f"export MLFLOW_TRACKING_URI={POD_MLFLOW_TRACKING_URI}",
-                # "export HF_TOKEN=",
-                "uv sync --frozen",
-                f"""
-                uv run -m ml.train +experiment={experiment} \
-                data/embedded={dataset_config}/l{level} \
-                ml/aggregator={aggregator} \
-                ml/head={head} \
-                seed={seed} \
-                metadata.run_name={name} \
-                +logger.tags.data_variant={dataset_config} \
-                +logger.tags.level=level_{level} \
-                +logger.tags.sweep_seed=seed_{seed} \
-                """,
-            ],
-            storage=[storage.secure.DATA, storage.secure.PROJECTS],
-        )
+            print(f"Sleeping for {args.poll_interval_seconds} seconds.", flush=True)
+            time.sleep(args.poll_interval_seconds)
+    except KeyboardInterrupt:
+        print("\nSweep queue refiller stopped.")
 
 
 if __name__ == "__main__":
