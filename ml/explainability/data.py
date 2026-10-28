@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -148,15 +149,19 @@ def streaming_mean_embedding(
     dataset: SingleScaleDataset,
     *,
     expected_feature_dim: int | None = None,
+    batch_size: int = 1024,
 ) -> tuple[Tensor, int, tuple[dict[str, str], ...]]:
-    """Compute a tile mean while isolating corrupt baseline slides.
+    """Compute the training tile mean from bounded Parquet batches.
 
     A corrupt training parquet must not abort explanations for the rest of the
     cohort. Failures are returned for the manifest; the job fails only if no valid
-    baseline tiles remain.
+    baseline tiles remain. Commit each slide's sum only after its last batch has
+    passed validation, so a corrupt later batch cannot contribute a partial bag.
     """
     if expected_feature_dim is not None and expected_feature_dim < 1:
         raise ValueError("expected_feature_dim must be positive when provided.")
+    if batch_size < 1:
+        raise ValueError("baseline batch_size must be positive.")
     total: Tensor | None = (
         torch.zeros(expected_feature_dim, dtype=torch.float64)
         if expected_feature_dim is not None
@@ -165,23 +170,22 @@ def streaming_mean_embedding(
     count = 0
     feature_dim = expected_feature_dim
     failures: list[dict[str, str]] = []
-    for index, row in dataset.slides.iterrows():
+    for _, row in dataset.slides.iterrows():
         slide_id = str(row["name"])
+        parquet_path = (dataset.embeddings_dir / slide_id).with_suffix(".parquet")
         try:
-            slide = read_embedding_slide(dataset, int(index))
-            bag = slide.embeddings
+            slide_sum, slide_count = _sum_embedding_batches(
+                parquet_path,
+                feature_dim=feature_dim,
+                batch_size=batch_size,
+            )
             if feature_dim is None:
-                feature_dim = bag.shape[1]
-                total = torch.zeros(feature_dim, dtype=torch.float64)
-            elif bag.shape[1] != feature_dim:
-                raise ValueError(
-                    f"embedding width {bag.shape[1]} does not match expected "
-                    f"width {feature_dim}"
-                )
+                feature_dim = slide_sum.numel()
+                total = torch.zeros_like(slide_sum)
             assert total is not None
-            total += bag.double().sum(dim=0)
-            count += bag.shape[0]
-        except Exception as error:  # noqa: BLE001 - isolate corrupt slide artifacts
+            total += slide_sum
+            count += slide_count
+        except Exception as error:
             log.warning(
                 "Skipping corrupt baseline slide %s: %s: %s",
                 slide_id,
@@ -199,6 +203,52 @@ def streaming_mean_embedding(
     if total is None or count == 0:
         raise ValueError("Cannot compute an IG baseline from an empty training split.")
     return (total / count).float(), count, tuple(failures)
+
+
+def _sum_embedding_batches(
+    path: Path,
+    *,
+    feature_dim: int | None,
+    batch_size: int,
+) -> tuple[Tensor, int]:
+    # Coordinates are small relative to embeddings. Validate them together so
+    # duplicates across Parquet batch boundaries are still rejected.
+    coordinates = pd.read_parquet(path, columns=["x", "y"])
+    _validate_coordinates(coordinates, path)
+    del coordinates
+
+    total: Tensor | None = None
+    count = 0
+    with pq.ParquetFile(path) as parquet:
+        if "embedding" not in parquet.schema_arrow.names:
+            raise ValueError(f"{path}: missing column 'embedding'.")
+        for batch in parquet.iter_batches(
+            batch_size=batch_size, columns=["embedding"], use_threads=False
+        ):
+            frame = batch.to_pandas()
+            bag = torch.from_numpy(np.stack(frame["embedding"].to_numpy())).float()
+            if bag.ndim != 2 or bag.shape[1] < 1:
+                raise ValueError(
+                    f"{path}: embeddings must form a non-empty (N, D) matrix."
+                )
+            if feature_dim is None:
+                feature_dim = bag.shape[1]
+            if bag.shape[1] != feature_dim:
+                raise ValueError(
+                    f"{path}: embedding width {bag.shape[1]} does not match "
+                    f"expected width {feature_dim}."
+                )
+            if not torch.isfinite(bag).all():
+                raise ValueError(f"{path}: embeddings contain NaN or infinity.")
+            if total is None:
+                total = torch.zeros(feature_dim, dtype=torch.float64)
+            # Keep float64 accumulation bounded to a batch, not a complete slide.
+            total += bag.sum(dim=0, dtype=torch.float64)
+            count += bag.shape[0]
+            del bag, frame, batch
+    if total is None or count == 0:
+        raise ValueError(f"{path}: a MIL bag cannot be empty.")
+    return total, count
 
 
 def read_slide_geometry(
@@ -271,6 +321,10 @@ def _validate_frame(frame: pd.DataFrame, path: Path) -> None:
     missing = required - set(frame.columns)
     if missing:
         raise ValueError(f"{path}: missing columns {sorted(missing)}.")
+    _validate_coordinates(frame, path)
+
+
+def _validate_coordinates(frame: pd.DataFrame, path: Path) -> None:
     if frame.empty:
         raise ValueError(f"{path}: a MIL bag cannot be empty.")
     if frame[["x", "y"]].isna().any().any():

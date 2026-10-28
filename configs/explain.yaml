@@ -19,6 +19,8 @@ explain:
     # exact pooled-space solution and therefore does not depend on this value.
     steps: 32
     baseline_split: train
+    # Bound baseline input memory independently of the number of tiles per slide.
+    baseline_batch_size: 1024
     completeness_tolerance: 0.05
 
   leave_one_out:

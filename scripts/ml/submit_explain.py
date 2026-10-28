@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 USER = "kissmi"
 MLFLOW_URI = "http://mlflow-s3.rationai-mlflow"
-MLFLOW_UI_URI = "https://mlflow.rationai.cloud.trusted.e-infra.cz/"
+MLFLOW_UI_URI = "https://mlflow-s3.rationai.cloud.trusted.e-infra.cz"
 XOPAT_UI_URI = "https://xopat.rationai.cloud.trusted.e-infra.cz/"
 DEFAULT_BRANCH = "feat/explainability"
 IMAGE = "cerit.io/rationai/base:2.0.6"

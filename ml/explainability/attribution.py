@@ -513,9 +513,16 @@ def _attention_leave_one_out_outputs(
     normalized, _, attention = _attention_components(aggregator, bag)
 
     # Double precision greatly reduces cancellation when one tile dominates.
-    normalized64 = normalized.double()
     attention64 = attention.double()
-    pooled64 = (attention64.unsqueeze(1) * normalized64).sum(dim=0)
+    pooled64 = torch.zeros(bag.shape[1], dtype=torch.float64, device=bag.device)
+    for start in range(0, bag.shape[0], batch_size):
+        stop = min(start + batch_size, bag.shape[0])
+        pooled64.add_(
+            (
+                attention64[start:stop, None]
+                * normalized[start:stop].to(dtype=torch.float64)
+            ).sum(dim=0)
+        )
     denominator = 1.0 - attention64
     instability_threshold = max(
         torch.finfo(torch.float64).eps,
@@ -525,7 +532,7 @@ def _attention_leave_one_out_outputs(
     for start in range(0, bag.shape[0], batch_size):
         stop = min(start + batch_size, bag.shape[0])
         chunk_attention = attention64[start:stop]
-        chunk_normalized = normalized64[start:stop]
+        chunk_normalized = normalized[start:stop].to(dtype=torch.float64)
         chunk_denominator = denominator[start:stop]
         pooled_without64 = (
             pooled64.unsqueeze(0) - chunk_attention.unsqueeze(1) * chunk_normalized

@@ -159,6 +159,7 @@ def run_cohort(
     baseline_cpu, baseline_tile_count, baseline_failures = streaming_mean_embedding(
         baseline_dataset,
         expected_feature_dim=int(config.feature_dim),
+        batch_size=int(explain_config.ig.get("baseline_batch_size", 1024)),
     )
     baseline = baseline_cpu.to(torch_device)
 
@@ -194,6 +195,7 @@ def run_cohort(
             continue
         source_fields = _source_label_fields(row, label_mode)
         started = time.monotonic()
+        slide = None
         try:
             slide = read_embedding_slide(dataset, int(index))
             if slide.embeddings.shape[1] != feature_dim:
@@ -234,6 +236,8 @@ def run_cohort(
                 }
             )
         finally:
+            # Drop the previous CPU bag before loading the next slide.
+            slide = None
             if torch_device.type == "cuda":
                 torch.cuda.empty_cache()
 
@@ -360,6 +364,7 @@ def run_cohort(
             "kind": "training_split_tile_mean",
             "split": baseline_split,
             "tile_count": baseline_tile_count,
+            "batch_size": int(explain_config.ig.get("baseline_batch_size", 1024)),
             "skipped_slides": list(baseline_failures),
         },
         "level": level,
