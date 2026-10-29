@@ -69,3 +69,9 @@ uv run -m ml.explain_report \
 This adds `report/report.html` to that run and updates its review-link tag. It
 preserves existing artifacts. Add `--no-upload` to render locally first. Future
 explanation jobs produce the same standard report in `explanations/report.html`.
+
+The comparison defaults to tile removal, single-tile output, and attention;
+Integrated Gradients is disabled for new explanation runs and omitted when
+republishing older runs. Historical scores and masks remain in MLflow.
+Tile removal is visible initially in xOpat. The report-only command accepts
+`--methods leave_one_out single attention` to specify the displayed methods.

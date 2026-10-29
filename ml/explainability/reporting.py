@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+DEFAULT_REPORT_METHODS = ("leave_one_out", "single", "attention")
+REPORT_METHODS = ("integrated_gradients", *DEFAULT_REPORT_METHODS)
+
+
 class _MappedMasks(AbstractMasksRetriever):
     """Keep explicit slide IDs when matching our signed OME-TIFF filenames."""
 
@@ -47,9 +51,12 @@ class _MappedMasks(AbstractMasksRetriever):
 class _ReportAssembler(ReportAssembler):
     """Use this deployment's MLflow UI in the standard report's run links."""
 
-    def __init__(self, *, mlflow_ui_uri: str, **kwargs: Any):
+    def __init__(
+        self, *, mlflow_ui_uri: str, included_methods: Collection[str], **kwargs: Any
+    ):
         super().__init__(**kwargs)
         self.mlflow_ui_uri = mlflow_ui_uri.rstrip("/")
+        self.included_methods = set(included_methods)
 
     def setup(self) -> None:
         super().setup()
@@ -59,6 +66,20 @@ class _ReportAssembler(ReportAssembler):
                 # experiment/run suffix and use the UI selected for this job.
                 fragment = metadata["mlflow_web_link"].partition("#")[2]
                 metadata["mlflow_web_link"] = f"{self.mlflow_ui_uri}/#{fragment}"
+        # Keep historical metrics in MLflow, but show only compared methods.
+        for kind in ("global_metrics", "metrics"):
+            for run_id, frame in self.metrics.data[kind].items():
+                self.metrics.data[kind][run_id] = frame.select(
+                    [
+                        name
+                        for name in frame.columns
+                        if (name not in REPORT_METHODS or name in self.included_methods)
+                        and (
+                            not name.startswith("ig_")
+                            or "integrated_gradients" in self.included_methods
+                        )
+                    ]
+                )
 
 
 def write_rationai_report(
@@ -74,6 +95,7 @@ def write_rationai_report(
     mlflow_ui_uri: str,
     artifact_mount: str = "secure_mlflow",
     mask_artifact_paths: Collection[str],
+    included_methods: Collection[str] = DEFAULT_REPORT_METHODS,
 ) -> Path:
     """Render with the upstream assembler; read metadata only, never mask pixels.
 
@@ -91,7 +113,13 @@ def write_rationai_report(
     run_url = f"{mlflow_ui_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{run_id}"
     backgrounds = []
     grouped: dict[str, tuple[Any, list[dict[str, str]]]] = {}
-    methods = dict.fromkeys(manifest["targets"], manifest["methods"])
+    unknown = set(included_methods) - set(REPORT_METHODS)
+    if unknown:
+        raise ValueError(f"Unknown report methods: {sorted(unknown)}")
+    selected = [method for method in included_methods if method in manifest["methods"]]
+    if not selected:
+        raise ValueError("None of the requested report methods exist in this run.")
+    methods = dict.fromkeys(manifest["targets"], selected)
     available = set(mask_artifact_paths)
     for row in slides.to_dict("records"):
         truth = row.get("mammaprint_index")
@@ -128,6 +156,7 @@ def write_rationai_report(
 
     assembler = _ReportAssembler(
         mlflow_ui_uri=mlflow_ui_uri,
+        included_methods=selected,
         title="MammaPrint tile explanations",
         background=_MappedMasks(
             "Original WSI", backgrounds, source="drive", run_url=run_url

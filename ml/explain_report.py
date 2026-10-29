@@ -9,7 +9,11 @@ from pathlib import Path
 
 import mlflow
 
-from ml.explainability.reporting import write_rationai_report
+from ml.explainability.reporting import (
+    DEFAULT_REPORT_METHODS,
+    REPORT_METHODS,
+    write_rationai_report,
+)
 from ml.explainability.viewer import DEFAULT_XOPAT_UI_URI, build_xopat_report_url
 
 
@@ -25,6 +29,13 @@ def main() -> int:
     parser.add_argument("--artifact-path", default="explanations")
     parser.add_argument("--report-artifact-path", default="report")
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--methods",
+        nargs="+",
+        choices=REPORT_METHODS,
+        default=list(DEFAULT_REPORT_METHODS),
+        help="Methods to compare (default: tile removal, single-tile output, attention).",
+    )
     parser.add_argument(
         "--no-upload", action="store_true", help="Render locally for inspection."
     )
@@ -49,7 +60,8 @@ def main() -> int:
     masks = {
         file.path
         for target in manifest["targets"]
-        for method in manifest["methods"]
+        for method in args.methods
+        if method in manifest["methods"]
         for file in client.list_artifacts(
             args.run_id, f"{root}/masks/{method}/{target}"
         )
@@ -67,6 +79,7 @@ def main() -> int:
         mlflow_ui_uri=args.mlflow_ui_uri or args.tracking_uri,
         artifact_mount=args.artifact_mount,
         mask_artifact_paths=masks,
+        included_methods=args.methods,
     )
     print(f"REPORT_FILE={report}")
     if args.no_upload:
@@ -84,6 +97,9 @@ def main() -> int:
     for key, value in {
         "report.artifact": f"{args.report_artifact_path.strip('/')}/report.html",
         "report.template": "RationAI report_template.html",
+        "report.methods": json.dumps(
+            [method for method in args.methods if method in manifest["methods"]]
+        ),
         "report.status": "ready",
         "pathologist_review_url": url,
     }.items():

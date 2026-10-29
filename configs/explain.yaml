@@ -14,7 +14,7 @@ explain:
   counterfactual_batch_size: 1024
 
   ig:
-    enabled: true
+    enabled: false
     # Numerical integration points for mean/attention. Max + linear/MLP uses an
     # exact pooled-space solution and therefore does not depend on this value.
     steps: 32

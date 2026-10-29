@@ -174,6 +174,19 @@ def explanation_layers(
             "luminal_a_logit": "Luminal A evidence",
             "mammaprint_index": "MammaPrint index",
         }.get(target, target.replace("_", " "))
+        initial_method = next(
+            (
+                method
+                for method in (
+                    "integrated_gradients",
+                    "leave_one_out",
+                    "single",
+                    "attention",
+                )
+                if method in methods
+            ),
+            None,
+        )
         for method in ("integrated_gradients", "leave_one_out", "single"):
             if method not in methods:
                 continue
@@ -188,9 +201,7 @@ def explanation_layers(
             else:
                 directions = ("raises", "lowers")
             mask_root = f"masks/{method}/{target}"
-            initially_visible = (
-                method == "integrated_gradients" and target == first_target
-            )
+            initially_visible = method == initial_method and target == first_target
             layers.extend(
                 (
                     ViewerLayer(
@@ -215,7 +226,7 @@ def explanation_layers(
                         f"masks/attention/{target}/{slide_id}_positive.ome.tif"
                     ),
                     color="#f2c14e",
-                    visible=False,
+                    visible=initial_method == "attention" and target == first_target,
                 )
             )
             attention_added = True
