@@ -42,6 +42,8 @@ explain:
     # Browser-facing viewer used by the RationAI pathologist report workflow.
     # This is intentionally separate from the in-cluster MLflow tracking URI.
     xopat_ui_uri: ${oc.env:XOPAT_UI_URI,https://xopat.rationai.cloud.trusted.e-infra.cz/}
+    # Private S3-backed MLflow mount in the xOpat file browser.
+    artifact_mount: secure_mlflow
     scale_percentile: 99.0
     geojson_fraction: 0.05
     tiff_tile_size: 512

@@ -18,6 +18,7 @@ dependencies = [
     "rationai-masks>=1.1.1",
     "rationai-tiling>=1.1.1",
     "ratiopath>=1.4.2",
+    "report>=1.1.5",
     "rationai-sdk",
     "timm>=1.0.25",
 ]
@@ -34,3 +35,5 @@ rationai-mlkit = { git = "https://github.com/RationAI/mlkit.git" }
 rationai-tiling = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/tiling.git" }
 rationai-sdk = { git = "https://github.com/RationAI/rationai-sdk-python.git" } 
 ratiopath = { git = "https://github.com/RationAI/ratiopath.git" }
+
+report = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/tools/report.git", rev = "f4919e0d925cd0bd13dcab6a1c87216b23e2307a" }

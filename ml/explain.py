@@ -39,7 +39,9 @@ from ml.explainability.checkpoint import (
     stable_config_hash,
     validate_replayed_source_config,
 )
+from ml.explainability.reporting import write_rationai_report
 from ml.explainability.runner import run_cohort, validate_module
+from ml.explainability.viewer import build_xopat_report_url
 from ml.models.module import MammaprintModule
 
 
@@ -355,8 +357,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "job_type": "tile_explainability",
             "mlflow.note.content": (
                 "Pathologist review of signed tile explanations, predictions, "
-                "slide keys, and model-faithfulness checks. Open Artifacts → "
-                "explanations → report.html."
+                "slide keys, and model-faithfulness checks. Open "
+                "the pathologist_review_url tag for the standard RationAI xOpat report."
             ),
             "report.audience": "pathologist",
             "report.kind": "tile_explainability",
@@ -379,10 +381,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             ) as explanation_run,
             StreamCapture(_MlflowConsoleLogger(client, explanation_run.info.run_id)),
         ):
-            review_url = _mlflow_run_url(
+            mlflow_run_url = _mlflow_run_url(
                 args.mlflow_ui_uri,
                 experiment_id,
                 explanation_run.info.run_id,
+            )
+            review_url = build_xopat_report_url(
+                xopat_ui_uri=args.xopat_ui_uri,
+                experiment_id=experiment_id,
+                run_id=explanation_run.info.run_id,
+                artifact_path=str(config.explain.output.artifact_path),
+                artifact_mount=str(config.explain.output.artifact_mount),
             )
             if review_url is not None:
                 mlflow.set_tag("pathologist_review_url", review_url)
@@ -398,7 +407,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "explanation_experiment_id": str(
                         explanation_run.info.experiment_id
                     ),
-                    "mlflow_run_url": review_url,
+                    "mlflow_run_url": mlflow_run_url,
                     "mlflow_ui_uri": args.mlflow_ui_uri,
                     "xopat_ui_uri": args.xopat_ui_uri,
                 }
@@ -446,6 +455,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     result.slide_keys_path,
                     str(config.explain.output.artifact_path),
                 )
+                artifact_root = str(config.explain.output.artifact_path)
+                write_rationai_report(
+                    result.report_path,
+                    slides_path=result.slides_path,
+                    manifest_path=result.manifest_path,
+                    run_id=explanation_run.info.run_id,
+                    experiment_id=str(explanation_run.info.experiment_id),
+                    artifact_root=artifact_root,
+                    slide_key_artifact=slide_key_table,
+                    xopat_ui_uri=args.xopat_ui_uri,
+                    mlflow_ui_uri=args.mlflow_ui_uri,
+                    artifact_mount=str(config.explain.output.artifact_mount),
+                    mask_artifact_paths={
+                        f"{artifact_root}/{path.relative_to(output_dir).as_posix()}"
+                        for path in (output_dir / "masks").rglob("*.tif")
+                    },
+                )
             except Exception:
                 mlflow.set_tag("report.status", "failed")
                 if any(output_dir.iterdir()):
@@ -470,6 +496,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 mlflow.set_tags(
                     {
                         "report.status": "ready",
+                        "report.template": "RationAI report_template.html",
                         "report.artifact": _artifact_path(
                             str(config.explain.output.artifact_path),
                             result.report_path.name,

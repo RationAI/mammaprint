@@ -43,13 +43,12 @@ from ml.explainability.outputs import (
     make_tile_table,
     rasterize_tile_scores,
     write_manifest,
-    write_pathologist_report,
     write_signed_ome_tiffs,
     write_summary_png,
     write_tile_geojson,
     write_tile_table,
 )
-from ml.explainability.viewer import ViewerLayer, build_xopat_review_url
+from ml.explainability.viewer import build_xopat_review_url, explanation_layers
 from ml.models.encoders.identity import IdentityEncoder
 
 
@@ -279,29 +278,8 @@ def run_cohort(
     successful = sum(row["status"] == "ok" for row in state.slide_rows)
     failed = len(state.slide_rows) - successful
     cohort_metrics = _cohort_metrics(slides_frame, slide_keys_frame)
-    report_path = write_pathologist_report(
-        output_dir / "report.html",
-        slides=state.slide_rows,
-        summary_paths={
-            row["slide_id"]: output_dir / "summaries" / f"{row['slide_id']}.png"
-            for row in state.slide_rows
-            if (output_dir / "summaries" / f"{row['slide_id']}.png").is_file()
-        },
-        viewer_urls={
-            row["slide_id"]: str(row["viewer_url"])
-            for row in state.slide_rows
-            if row.get("viewer_url")
-        },
-        title="MammaPrint tile-explainability review",
-        metadata={
-            "Split": split,
-            "Aggregator": type(module.aggregator).__name__,
-            "Head": type(module.head).__name__,
-            "Source training run": provenance.get("source_run_id"),
-            "Explanation run": provenance.get("explanation_run_id"),
-        },
-        warnings=_report_warnings(state.slide_rows, cohort_metrics),
-    )
+    # The standard RationAI report is assembled after publishing the MLflow table.
+    report_path = output_dir / "report.html"
     enabled_methods = _enabled_methods(explain_config, module)
     manifest = {
         **provenance,
@@ -351,13 +329,15 @@ def run_cohort(
         "pathologist_preview": {
             "path": report_path.name,
             "mlflow_run_url": provenance.get("mlflow_run_url"),
+            "artifact_mount": str(explain_config.output.artifact_mount),
+            "template": "report_template.html",
             "xopat_ui_uri": str(
                 provenance.get("xopat_ui_uri") or explain_config.output.xopat_ui_uri
             ),
             "interactive_layers": (
-                "MLflow-hosted OME-TIFF masks are linked into xOpat using the "
-                "RationAI report mount convention. A slide without a viewer-accessible "
-                "WSI remains available through its static summary and raw tables."
+                "RationAI report_template.html with xOpat slide links and signed "
+                "OME-TIFF layers. Slides without rendered overlays remain in the "
+                "raw tables but are excluded from the viewer gallery."
             ),
         },
         "baseline": {
@@ -777,6 +757,7 @@ def _render_outputs(
                 slide=slide,
                 provenance=provenance,
                 artifact_root=str(config.output.artifact_path),
+                artifact_mount=str(config.output.artifact_mount),
                 xopat_ui_uri=str(
                     provenance.get("xopat_ui_uri") or config.output.xopat_ui_uri
                 ),
@@ -831,6 +812,7 @@ def _attach_viewer_url(
     provenance: dict[str, Any],
     artifact_root: str,
     xopat_ui_uri: str,
+    artifact_mount: str,
 ) -> None:
     """Attach an xOpat deep-link without making viewer access inference-critical."""
     experiment_id = provenance.get("explanation_experiment_id")
@@ -851,7 +833,8 @@ def _attach_viewer_url(
             artifact_root=artifact_root,
             slide_id=str(row.get("record_num") or slide.slide_id),
             slide_path=str(slide.slide_path),
-            layers=_viewer_layers(slide),
+            layers=explanation_layers(slide.slide_id, slide.scores),
+            artifact_mount=artifact_mount,
         )
     except (TypeError, ValueError) as error:
         log.warning(
@@ -864,70 +847,6 @@ def _attach_viewer_url(
 
     row["viewer_status"] = "ok"
     row["viewer_error"] = None
-
-
-def _viewer_layers(slide: RenderSlide) -> list[ViewerLayer]:
-    """Describe every generated TIFF using clinically honest layer names."""
-    layers: list[ViewerLayer] = []
-    first_target = next(iter(slide.scores), None)
-    attention_added = False
-    colors = {
-        "integrated_gradients": ("#d73027", "#4575b4"),
-        "leave_one_out": ("#ef476f", "#118ab2"),
-        "single": ("#f28e2b", "#9467bd"),
-    }
-    for target, methods in slide.scores.items():
-        target_label = _friendly_target_name(target)
-        for method in ("integrated_gradients", "leave_one_out", "single"):
-            if method not in methods:
-                continue
-            positive_color, negative_color = colors[method]
-            method_label = {
-                "integrated_gradients": "Integrated gradients",
-                "leave_one_out": "Tile removal",
-                "single": "Single-tile output",
-            }[method]
-            if method == "single":
-                directions = ("positive", "negative")
-            else:
-                directions = ("raises", "lowers")
-            mask_root = f"masks/{method}/{target}"
-            initially_visible = (
-                method == "integrated_gradients" and target == first_target
-            )
-            layers.extend(
-                (
-                    ViewerLayer(
-                        name=f"{method_label} — {directions[0]} {target_label}",
-                        artifact_path=(
-                            f"{mask_root}/{slide.slide_id}_positive.ome.tif"
-                        ),
-                        color=positive_color,
-                        visible=initially_visible,
-                    ),
-                    ViewerLayer(
-                        name=f"{method_label} — {directions[1]} {target_label}",
-                        artifact_path=(
-                            f"{mask_root}/{slide.slide_id}_negative.ome.tif"
-                        ),
-                        color=negative_color,
-                        visible=initially_visible,
-                    ),
-                )
-            )
-        if "attention" in methods and not attention_added:
-            layers.append(
-                ViewerLayer(
-                    name="Attention weight (diagnostic, not target-specific)",
-                    artifact_path=(
-                        f"masks/attention/{target}/{slide.slide_id}_positive.ome.tif"
-                    ),
-                    color="#f2c14e",
-                    visible=False,
-                )
-            )
-            attention_added = True
-    return layers
 
 
 def _friendly_target_name(target: str) -> str:
@@ -1228,33 +1147,6 @@ def _cohort_metrics(
             suffix = str(column).removeprefix("faithfulness_srg/")
             metrics[f"mean_faithfulness_srg/{suffix}"] = float(finite.mean())
     return metrics
-
-
-def _report_warnings(
-    slide_rows: list[dict[str, Any]],
-    metrics: dict[str, float],
-) -> list[str]:
-    warnings: list[str] = []
-    ig_warnings = int(metrics.get("ig_completeness_warning_count", 0))
-    if ig_warnings:
-        warnings.append(
-            f"Integrated-gradients completeness exceeded the configured tolerance "
-            f"for {ig_warnings} slide-target result(s); inspect Model diagnostics."
-        )
-    failed = sum(row.get("status") != "ok" for row in slide_rows)
-    unavailable = sum(row.get("summary_status") != "ok" for row in slide_rows)
-    if failed:
-        warnings.append(
-            f"{failed} slide(s) failed attribution; their error status is retained in "
-            "the report and tables."
-        )
-    if unavailable:
-        warnings.append(
-            f"{unavailable} slide(s) have no static preview, usually because the WSI "
-            "was unavailable; raw tile attribution remains available when inference "
-            "succeeded."
-        )
-    return warnings
 
 
 def _optional_python_value(value: Any) -> Any | None:

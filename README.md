@@ -50,3 +50,22 @@ The selected split and baseline split are still downloaded in full. Their disk
 usage is separate from RAM usage. Inference still holds one complete slide bag;
 these changes reduce temporary allocations, not the model's input size. The
 submission command accepts a single checkpoint and never enumerates sweep runs.
+
+
+The review uses RationAI Reporting's unmodified `report_template.html`, with
+per-slide predictions and signed masks opened in xOpat v2. Open the URL printed
+as `PATHOLOGIST_REVIEW_URL` (also saved as a run tag). The S3-backed private
+artifact mount defaults to `secure_mlflow`; use
+`--override explain.output.artifact_mount=...` for another deployment.
+
+For an already completed explanation run, publish this report using only saved
+metadata and mask paths, without another GPU job:
+
+```bash
+uv run -m ml.explain_report \
+  --run-id 9e348bc9ad384171bdabeaba12a05bd0
+```
+
+This adds `report/report.html` to that run and updates its review-link tag. It
+preserves existing artifacts. Add `--no-upload` to render locally first. Future
+explanation jobs produce the same standard report in `explanations/report.html`.
