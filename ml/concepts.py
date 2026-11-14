@@ -45,9 +45,9 @@ def run(config: DictConfig) -> Path:
             "output_dir must be empty; previous results are not overwritten."
         )
     if config.local_source_config:
-        verify_training_revision(config.training_sha)
         source_config = OmegaConf.load(config.local_source_config)
         OmegaConf.to_container(source_config, resolve=True, throw_on_missing=True)
+        verify_training_revision(config.training_sha, config=source_config)
         checkpoint = Path(config.local_checkpoint) if config.local_checkpoint else None
         source = SourceRun(
             str(config.source_run_id),

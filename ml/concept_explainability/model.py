@@ -1,5 +1,6 @@
 """Read-only source-run recovery and native frozen-model inference."""
 
+import ast
 import hashlib
 import re
 import subprocess
@@ -38,24 +39,143 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_training_revision(training_sha: str | None) -> None:
-    """Require a known revision with identical inference/data implementation.
+# Reviewed transport implementations: original direct download and resumable
+# download. These are AST fingerprints of ONLY the imports/functions below, not
+# training revisions. New transfer behavior requires a fresh compatibility review.
+_REVIEWED_TRANSPORT = {
+    "f9c2a0338570509d5636548e8cc654fbc29f18266531fa80d023d7f0fc010ecb",
+    "7869826394396fa6b23669152c83136713a6e05c1e6e45eb00e049231e4c73a4",
+}
+_TRANSPORT_FUNCTIONS = {
+    "download_artifacts_with_retries",
+    "_artifact_files",
+    "_is_complete_download",
+    "_download_incomplete_artifacts",
+}
+_TRANSPORT_IMPORTS = {
+    "time",
+    "tempfile",
+    "mlflow.artifacts",
+    "mlflow.entities",
+    "mlflow.exceptions",
+    "mlflow.tracking.artifact_utils",
+    "mlflow.utils.uri",
+}
 
-    Fetch missing historical Git objects explicitly before invoking this tool;
-    this check never downloads code or guesses from a mutable branch name.
-    """
+
+def _git(*arguments: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *arguments], cwd=REPOSITORY, check=True, capture_output=True
+    )
+
+
+def _require_training_commit(training_sha: str | None) -> None:
     if training_sha is None or re.fullmatch(r"[0-9a-fA-F]{40}", training_sha) is None:
         raise ValueError("An exact 40-character training Git revision is required.")
-    try:
-        subprocess.run(
-            ["git", "cat-file", "-e", f"{training_sha}^{{commit}}"],
-            cwd=REPOSITORY,
-            check=True,
-            capture_output=True,
+    _git("cat-file", "-e", f"{training_sha}^{{commit}}")
+
+
+def _precomputed_path(config: DictConfig) -> bool:
+    """Limit the compatibility exception to the original flat embedding graph."""
+    targets = {
+        "ml": {"ml.models.MammaprintModule", "ml.models.module.MammaprintModule"},
+        "ml.encoder": {
+            "ml.models.encoders.IdentityEncoder",
+            "ml.models.encoders.identity.IdentityEncoder",
+        },
+        "ml.aggregator": {
+            f"ml.models.aggregators.{name}"
+            for name in ("MeanPool", "MaxPool", "AttentionMIL", "TransformerMIL")
+        }
+        | {
+            f"ml.models.aggregators.{module}.{name}"
+            for module, name in (
+                ("mean", "MeanPool"),
+                ("max", "MaxPool"),
+                ("attention", "AttentionMIL"),
+                ("transformer", "TransformerMIL"),
+            )
+        },
+        "ml.head": {
+            "ml.models.heads.LinearHead",
+            "ml.models.heads.linear.LinearHead",
+            "ml.models.heads.MLPHead",
+            "ml.models.heads.mlp.MLPHead",
+        },
+        "datamodule": {"ml.data.DataModule", "ml.data.datamodule.DataModule"},
+    }
+    for key, allowed in targets.items():
+        if OmegaConf.select(config, key + "._target_") not in allowed:
+            return False
+    activation = OmegaConf.select(config, "ml.output_activation")
+    if activation is not None and (
+        not isinstance(activation, DictConfig)
+        or activation.get("_target_") != "torch.nn.Identity"
+    ):
+        return False
+    for split in ("train", "val", "test"):
+        dataset = OmegaConf.select(config, f"datamodule.{split}")
+        if (
+            not isinstance(dataset, DictConfig)
+            or dataset.get("_target_")
+            not in {
+                "ml.data.SingleScaleDataset",
+                "ml.data.datasets.single_scale.SingleScaleDataset",
+            }
+            or dataset.get("split") != split
+            or not isinstance(dataset.get("levels"), DictConfig)
+            or len(dataset.levels) != 1
+        ):
+            return False
+    return True
+
+
+def _scientific_source(source: str) -> str:
+    """Compare every non-transport AST node, permitting only reviewed transfers.
+
+    This includes label filtering, URI selection, slide intersection, their
+    imports/constants and all module-level statements. Comparing function bodies
+    alone would miss a changed dependency or a later name rebinding.
+    """
+    transport = []
+    scientific = []
+    for node in ast.parse(source).body:
+        is_transport = (
+            (isinstance(node, ast.FunctionDef) and node.name in _TRANSPORT_FUNCTIONS)
+            or (isinstance(node, ast.ImportFrom) and node.module in _TRANSPORT_IMPORTS)
+            or (
+                isinstance(node, ast.Import)
+                and all(alias.name in _TRANSPORT_IMPORTS for alias in node.names)
+            )
         )
-        subprocess.run(
-            [
-                "git",
+        (transport if is_transport else scientific).append(node)
+    transfer_ast = ast.dump(
+        ast.Module(body=transport, type_ignores=[]), include_attributes=False
+    )
+    if hashlib.sha256(transfer_ast.encode()).hexdigest() not in _REVIEWED_TRANSPORT:
+        raise ValueError("Unreviewed artifact transfer implementation.")
+    return ast.dump(
+        ast.Module(body=scientific, type_ignores=[]), include_attributes=False
+    )
+
+
+def verify_training_revision(
+    training_sha: str | None, *, config: DictConfig | None = None
+) -> None:
+    """Require exact sources or a reviewed precomputed-path compatibility check.
+
+    Without config, retain the conservative whole-model/data comparison. With a
+    resolved config, permit only reviewed artifact-transfer changes for the
+    supported flat precomputed embedding graph. All other model/data/typing
+    sources and scientific source helpers must match, including data modules
+    eagerly imported by the package even when their datasets are not selected.
+    Missing historical objects must be fetched explicitly; this never downloads
+    code or guesses a revision from a mutable branch name.
+    """
+    try:
+        _require_training_commit(training_sha)
+        try:
+            _git(
                 "diff",
                 "--exit-code",
                 training_sha,
@@ -63,12 +183,36 @@ def verify_training_revision(training_sha: str | None) -> None:
                 "ml/models",
                 "ml/data",
                 "ml/typing.py",
-            ],
-            cwd=REPOSITORY,
-            check=True,
-            capture_output=True,
+            )
+            return
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode != 1 or config is None or not _precomputed_path(config):
+                raise
+        _git(
+            "diff",
+            "--exit-code",
+            training_sha,
+            "--",
+            "ml/models",
+            "ml/typing.py",
+            "ml/data",
+            ":(exclude)ml/data/datasets/_sources.py",
         )
-    except subprocess.CalledProcessError as exc:
+        path = "ml/data/datasets/_sources.py"
+        historical = _git("show", f"{training_sha}:{path}").stdout.decode()
+        if _scientific_source(historical) != _scientific_source(
+            (REPOSITORY / path).read_text()
+        ):
+            raise ValueError("Scientific data helpers differ from training.")
+    except (subprocess.CalledProcessError, OSError, SyntaxError, ValueError) as exc:
+        # Invalid/missing provenance remains a caller error as before.
+        if (
+            training_sha is None
+            or re.fullmatch(r"[0-9a-fA-F]{40}", training_sha) is None
+        ):
+            raise ValueError(
+                "An exact 40-character training Git revision is required."
+            ) from exc
         raise RuntimeError(
             f"Training revision {training_sha} is missing locally or inference/data code differs. "
             "Fetch the revision and resolve compatibility before explaining this checkpoint."
@@ -101,7 +245,6 @@ def load_source_run(
             "Explicit training revision conflicts with the source run's Git tag."
         )
     revision = recorded or training_sha
-    verify_training_revision(revision)
     destination = cache_dir / run_id
     destination.mkdir(parents=True, exist_ok=True)
     try:
@@ -116,6 +259,7 @@ def load_source_run(
         raise RuntimeError(
             f"Run {run_id}: cannot read a complete resolved config ({RESOLVED_CONFIG})."
         ) from exc
+    verify_training_revision(revision, config=config)
     checkpoint = None
     checksum = None
     if download_weights:

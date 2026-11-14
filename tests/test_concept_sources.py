@@ -1,11 +1,13 @@
 import ast
 import hashlib
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import torch
 from omegaconf import OmegaConf
@@ -24,6 +26,51 @@ from ml.models.module import MammaprintModule
 
 
 BASE = "e86923d6223a5b88ad9efcc9bd3da9db31fbbfd2"
+
+
+# Original direct-download implementation, before resumable transport helpers.
+HISTORICAL_TRANSPORT = '''import time
+
+from mlflow.artifacts import download_artifacts as _download_artifacts
+
+from mlflow.exceptions import MlflowException
+
+def download_artifacts_with_retries(
+    artifact_uri: str,
+    *,
+    max_retries: int = MLFLOW_DOWNLOAD_MAX_RETRIES,
+    initial_backoff_seconds: float = MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS,
+) -> Path:
+    """Download an MLflow artifact, retrying transient download failures.
+
+    MLflow raises one aggregate :class:`MlflowException` when any file in a
+    directory fails to download. Retrying the directory lets a short-lived
+    storage or network failure recover instead of aborting dataset setup.
+    """
+    if max_retries < 0:
+        raise ValueError("max_retries must be non-negative.")
+    if initial_backoff_seconds < 0:
+        raise ValueError("initial_backoff_seconds must be non-negative.")
+
+    for retry in range(max_retries + 1):
+        try:
+            return Path(_download_artifacts(artifact_uri=artifact_uri))
+        except MlflowException:
+            if retry == max_retries:
+                raise
+
+            delay = initial_backoff_seconds * 2**retry
+            logger.warning(
+                "MLflow artifact download failed for %s; retrying in %.1f seconds "
+                "(%d/%d).",
+                artifact_uri,
+                delay,
+                retry + 1,
+                max_retries,
+            )
+            time.sleep(delay)
+
+    raise AssertionError("unreachable")'''
 
 
 def tiny_config(out_dim=1):
@@ -48,6 +95,206 @@ def tiny_config(out_dim=1):
             },
         }
     )
+
+
+def embedding_config():
+    config = tiny_config()
+    config.datamodule = {
+        "_target_": "ml.data.DataModule",
+        **{
+            split: {
+                "_target_": "ml.data.SingleScaleDataset",
+                "split": split,
+                "label_mode": "type",
+                "data_mapping": "/unused/labels.csv",
+                "levels": {3: {"uris": {split: f"/unused/{split}"}}},
+            }
+            for split in ("train", "val", "test")
+        },
+    }
+    return config
+
+
+class RevisionCompatibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        repository = Path(__file__).resolve().parents[1]
+        for relative in ("ml/models", "ml/data"):
+            shutil.copytree(repository / relative, self.root / relative)
+        shutil.copyfile(repository / "ml/typing.py", self.root / "ml/typing.py")
+        self.sources = self.root / "ml/data/datasets/_sources.py"
+        current = self.sources.read_text()
+        tree = ast.parse(current)
+        transport_functions = {
+            "download_artifacts_with_retries",
+            "_artifact_files",
+            "_is_complete_download",
+            "_download_incomplete_artifacts",
+        }
+        transport_modules = {
+            "time",
+            "tempfile",
+            "mlflow.artifacts",
+            "mlflow.entities",
+            "mlflow.exceptions",
+            "mlflow.tracking.artifact_utils",
+            "mlflow.utils.uri",
+        }
+        core = [
+            node
+            for node in tree.body
+            if not (
+                (isinstance(node, ast.FunctionDef) and node.name in transport_functions)
+                or (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module in transport_modules
+                )
+                or (
+                    isinstance(node, ast.Import)
+                    and any(alias.name in transport_modules for alias in node.names)
+                )
+            )
+        ]
+        # Keep all scientific functions/imports identical while restoring the real
+        # historical transfer implementation. This works without fetched objects.
+        self.sources.write_text(
+            ast.unparse(ast.Module(body=core, type_ignores=[]))
+            + "\n"
+            + HISTORICAL_TRANSPORT
+            + "\n"
+        )
+        self.git("init", "-q")
+        self.git("add", "ml")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "Historical fixture",
+        )
+        self.revision = self.git("rev-parse", "HEAD").strip()
+        self.sources.write_text(current)
+        self.patch = patch("ml.concept_explainability.model.REPOSITORY", self.root)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def git(self, *args):
+        return subprocess.run(
+            ["git", *args], cwd=self.root, check=True, capture_output=True, text=True
+        ).stdout
+
+    def test_reviewed_transport_drift_accepts_precomputed_config(self):
+        verify_training_revision(self.revision, config=embedding_config())
+
+    def test_transport_drift_without_config_remains_rejected(self):
+        with self.assertRaises(RuntimeError):
+            verify_training_revision(self.revision)
+
+    def test_other_data_source_drift_requires_exact_match(self):
+        raw_tiles = self.root / "ml/data/datasets/raw_tiles.py"
+        raw_tiles.write_text(
+            raw_tiles.read_text() + "\n# Unused raw-tile maintenance.\n"
+        )
+        with self.assertRaises(RuntimeError):
+            verify_training_revision(self.revision, config=embedding_config())
+
+    def test_eager_data_dependency_cannot_override_selected_dataset(self):
+        spatial = self.root / "ml/data/datasets/spatial_scale.py"
+        spatial.write_text(
+            spatial.read_text()
+            + "\nSingleScaleDataset.__getitem__ = "
+            + 'lambda self, idx: ("changed-input", 0, {})\n'
+        )
+        # ml.data eagerly imports spatial_scale even for SingleScaleDataset.
+        # Its module body can therefore change the selected class at import.
+        with self.assertRaises(RuntimeError):
+            verify_training_revision(self.revision, config=embedding_config())
+
+    def test_unknown_revision_remains_rejected(self):
+        with self.assertRaises(RuntimeError):
+            verify_training_revision("0" * 40, config=embedding_config())
+
+    def test_changed_scientific_behavior_is_rejected(self):
+        changes = {
+            "ml/models/aggregators/mean.py": ("bag.mean(dim=0)", "bag.sum(dim=0)"),
+            "ml/data/datasets/labels.py": ("return 1", "return 0"),
+            "ml/data/datasets/single_scale.py": (
+                'slides["name"].isin(present)',
+                '~slides["name"].isin(present)',
+            ),
+            "ml/data/datasets/_sources.py": ("uris.get(split)", 'uris.get("train")'),
+        }
+        for relative, (before, after) in changes.items():
+            with self.subTest(relative=relative):
+                path = self.root / relative
+                original = path.read_text()
+                self.assertIn(before, original)
+                path.write_text(original.replace(before, after))
+                try:
+                    with self.assertRaises(RuntimeError):
+                        verify_training_revision(
+                            self.revision, config=embedding_config()
+                        )
+                finally:
+                    path.write_text(original)
+
+    def test_unreviewed_download_behavior_is_rejected(self):
+        self.sources.write_text(
+            self.sources.read_text().replace(
+                "artifact_uri=artifact_uri,", 'artifact_uri="/different-corpus",'
+            )
+        )
+        with self.assertRaises(RuntimeError):
+            verify_training_revision(self.revision, config=embedding_config())
+
+    def test_unsupported_configured_paths_are_rejected(self):
+        for path, target in (
+            ("ml.encoder", "ml.models.encoders.VGG16Encoder"),
+            ("ml.aggregator", "custom.MeanPool"),
+            ("ml.head", "custom.LinearHead"),
+            ("datamodule.train", "ml.data.RawTileSlideDataset"),
+            ("datamodule.val", "ml.data.SpatialScaleDataset"),
+        ):
+            with self.subTest(path=path):
+                config = embedding_config()
+                OmegaConf.update(config, path + "._target_", target)
+                with self.assertRaises(RuntimeError):
+                    verify_training_revision(self.revision, config=config)
+
+    def test_nonidentity_activation_is_rejected_before_checkpoint_download(self):
+        config = embedding_config()
+        config.ml.output_activation = {"_target_": "torch.nn.Softmax", "dim": -1}
+        with self.assertRaises(RuntimeError):
+            verify_training_revision(self.revision, config=config)
+
+    def test_local_source_cli_checks_configured_compatibility(self):
+        from ml.concepts import run
+
+        source_config = self.root / "resolved.yaml"
+        OmegaConf.save(embedding_config(), source_config)
+        config = OmegaConf.create(
+            {
+                "action": "fit",
+                "split": "train",
+                "log_to_mlflow": False,
+                "output_dir": str(self.root / "output"),
+                "local_source_config": str(source_config),
+                "local_checkpoint": None,
+                "source_run_id": "local-fixture",
+                "training_sha": self.revision,
+            }
+        )
+        # Stop at the data boundary: no embedding/WSI or external work is needed
+        # to prove the real CLI reached its audit with compatible provenance.
+        with (
+            patch("ml.concepts.audit_splits", side_effect=LookupError("audit reached")),
+            self.assertRaisesRegex(LookupError, "audit reached"),
+        ):
+            run(config)
 
 
 class SourceTests(unittest.TestCase):
