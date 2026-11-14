@@ -28,9 +28,21 @@ dev = [
     "mypy>=1.19.1",
 ]
 
+[project.optional-dependencies]
+explainability = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "ray[data]",
+    "scikit-learn",
+    "threadpoolctl",
+    "report-fast",
+]
+
 [tool.uv.sources]
 rationai-masks = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/masks.git" }
 rationai-mlkit = { git = "https://github.com/RationAI/mlkit.git" }
 rationai-tiling = { git = "https://gitlab.ics.muni.cz/rationai/digital-pathology/libraries/tiling.git" }
 rationai-sdk = { git = "https://github.com/RationAI/rationai-sdk-python.git" } 
 ratiopath = { git = "https://github.com/RationAI/ratiopath.git" }
+report-fast = { git = "https://github.com/RationAI/ReportFast", rev = "810c09fed2fc968ffe715d81b56b3b0d2052ec47" }

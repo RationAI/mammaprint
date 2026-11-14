@@ -14,3 +14,9 @@ uv sync
 ### Preprocessing
 
 Use scripts/preprocessing scripts.
+
+## Post-hoc concept explainability
+
+See [the concept workflow](docs/concept-explainability.md) to reuse the lab's
+16-concept IBD method with frozen MammaPrint checkpoints, including the blinded
+pathologist report, validation steps and questions still requiring confirmation.

@@ -1,0 +1,34 @@
+{
+  "nnls_batch": {
+    "source": "factorization.py",
+    "ast_sha256": "91b03ac061423d82cd1f9954070045c1ca765e1cb944cb9a52576922d13d7bb3"
+  },
+  "kmeans_init": {
+    "source": "factorization.py",
+    "ast_sha256": "9ed856102066bc82c16b6038564c0ab9beb0be1d273e6411ebc164f03f055349"
+  },
+  "reseed_dead_components": {
+    "source": "factorization.py",
+    "ast_sha256": "42909a01f9f245bb9d21e344c4464e035bfda35c3f9afca71ea9a487b2923ee6"
+  },
+  "iter_embedding_batches": {
+    "source": "nmf_fit.py",
+    "ast_sha256": "cc6ef4c69c35dcad11879ccdbb0454374b404c92323b3d527fac9eeb4aeef853"
+  },
+  "fit_semi_nmf_online": {
+    "source": "nmf_fit.py",
+    "ast_sha256": "52c713124afb21d9c40e0ea30d96c825eb71c76e05f975875f92cc9afd440902"
+  },
+  "gauge_fix_dictionary": {
+    "source": "nmf_fit.py",
+    "ast_sha256": "89e3c43fd843bca25d53e9f8ce2932ee64997a3d7fe83842ee1df0c75e69475f"
+  },
+  "ConceptAutoencoder": {
+    "source": "concepts.py",
+    "ast_sha256": "0264381dfe3c9ca37d301561543f6755bea5efc18160ef5ddd4b43a598cc371b"
+  },
+  "code_share": {
+    "source": "tree_view.py",
+    "ast_sha256": "76e5f89863b3fc0d15bb5b795be5a9e8ec4ee46956896d0ec4e7f29de5dda572"
+  }
+}

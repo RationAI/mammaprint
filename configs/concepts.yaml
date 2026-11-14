@@ -1,0 +1,31 @@
+# Separate post-hoc workflow; no training defaults or source logger identity.
+action: fit
+source_run_id: ???
+training_sha: null  # Explicit recovered SHA only if the source run lacks its Git tag.
+split: train
+dictionary_dir: null
+output_dir: ???
+device: auto
+log_to_mlflow: true
+experiment_name: MammaPrint concepts
+fixture_mode: false  # <=4096 tiles, visibly labelled, in-process smoke tests only.
+local_source_config: null
+local_checkpoint: null
+step_sds: 0.25
+ray_cpus: 8
+fit:
+  n_components: 16
+  nmf:
+    batch_size: 25600
+    shuffle_buffer_size: 250000
+    random_state: 42
+    epochs: 1
+    nnls_iter: 200
+    gauge_fix: true
+  semi_nmf:
+    forget: 0.95
+    ridge: 1.0e-6
+hydra:
+  output_subdir: null
+  run:
+    dir: .
