@@ -1,10 +1,11 @@
-"""Filter existing tissue-only tile embeddings using scored mask overlaps."""
+"""Filter existing tile embeddings using saved tissue-selection and QC scores."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, TypedDict, cast
 import mlflow
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 from mlflow.artifacts import download_artifacts
 from mlflow.exceptions import MlflowException
 
@@ -29,15 +31,11 @@ DEFAULT_DATA_MAPPING = "/mnt/projects/mammaprint/data_mapping.csv"
 DEFAULT_EXPERIMENT = "MammaPrint"
 DEFAULT_TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
 SPLITS = ("train", "val", "test")
-STRATEGY_LOGICS = ("epithelium_only", "or", "and")
+DEFAULT_STRATEGY_LOGICS = ("epithelium_only", "or", "and")
+STRATEGY_LOGICS = (*DEFAULT_STRATEGY_LOGICS, "qc_only")
+QC_MASKS = ("blur", "folding", "residual")
 FILTER_STATE_FILENAME = "filter_state.json"
-REQUIRED_SCORE_COLUMNS = (
-    "slide_id",
-    "x",
-    "y",
-    "epithelium_overlap",
-    "cancer_overlap",
-)
+REQUIRED_SCORE_COLUMNS = ("slide_id", "x", "y")
 REQUIRED_EMBEDDING_COLUMNS = ("x", "y", "embedding")
 
 
@@ -58,6 +56,50 @@ class FilterState(TypedDict):
     source_embedding_tiles: int
     epithelium_threshold: float
     cancer_threshold: float
+    qc_thresholds: dict[str, float]
+
+
+def _qc_thresholds(**thresholds: float | None) -> dict[str, float]:
+    """Validate optional clean-area cutoffs; omission leaves that QC gate disabled."""
+    unknown = set(thresholds) - set(QC_MASKS)
+    if unknown:
+        raise ValueError(f"Unknown QC masks: {sorted(unknown)}")
+    active = {}
+    for name in QC_MASKS:
+        value = thresholds.get(name)
+        if value is not None:
+            if not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f"{name} threshold must be finite and in [0, 1]")
+            active[name] = value
+    return active
+
+
+def _score_columns(
+    selected_logics: tuple[str, ...], qc_thresholds: dict[str, float]
+) -> tuple[str, ...]:
+    if not selected_logics or set(selected_logics) - set(STRATEGY_LOGICS):
+        raise ValueError(f"Invalid filtering strategies: {selected_logics}")
+    if "qc_only" in selected_logics and not qc_thresholds:
+        raise ValueError("qc_only requires at least one QC threshold")
+    columns = []
+    if set(selected_logics) & {"epithelium_only", "or", "and"}:
+        columns.append("epithelium_overlap")
+    if set(selected_logics) & {"or", "and"}:
+        columns.append("cancer_overlap")
+    columns.extend(f"{name}_overlap" for name in qc_thresholds)
+    return tuple(columns)
+
+
+def _validate_scores(scores: pd.DataFrame, columns: tuple[str, ...]) -> None:
+    missing = sorted(set(columns) - set(scores.columns))
+    if missing:
+        raise ValueError(f"Missing required mask-score columns: {missing}")
+    for column in columns:
+        values = pd.to_numeric(scores[column], errors="coerce").to_numpy(
+            dtype=float, na_value=np.nan
+        )
+        if not (np.isfinite(values) & (values >= 0) & (values <= 1)).all():
+            raise ValueError(f"{column} scores must be non-null, finite and in [0, 1]")
 
 
 def _threshold_token(value: float) -> str:
@@ -67,31 +109,61 @@ def _threshold_token(value: float) -> str:
 def _strategies(
     epithelium_threshold: float,
     cancer_threshold: float,
-    selected_logics: tuple[str, ...] = STRATEGY_LOGICS,
+    selected_logics: tuple[str, ...] = DEFAULT_STRATEGY_LOGICS,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> tuple[Strategy, ...]:
+    qc = _qc_thresholds(**(qc_thresholds or {}))
+    _score_columns(selected_logics, qc)
     epithelium = _threshold_token(epithelium_threshold)
     cancer = _threshold_token(cancer_threshold)
     definitions = (
         Strategy(f"epithel_{epithelium}", "epithelium_only"),
         Strategy(f"epithel_or_cancer_{epithelium}_{cancer}", "or"),
         Strategy(f"epithel_and_cancer_{epithelium}_{cancer}", "and"),
+        Strategy("qc_only", "qc_only"),
     )
     selected = set(selected_logics)
-    return tuple(strategy for strategy in definitions if strategy.logic in selected)
+    suffix = "".join(
+        f"_{name}{str(float(value)).replace('.', '')}" for name, value in qc.items()
+    )
+    return tuple(
+        Strategy(strategy.slug + suffix, strategy.logic)
+        for strategy in definitions
+        if strategy.logic in selected
+    )
 
 
 def _selection_masks(
     scores: pd.DataFrame,
     epithelium_threshold: float,
     cancer_threshold: float,
+    selected_logics: tuple[str, ...] = DEFAULT_STRATEGY_LOGICS,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> dict[str, np.ndarray]:
-    epithelium = scores["epithelium_overlap"].to_numpy() > epithelium_threshold
-    cancer = scores["cancer_overlap"].to_numpy() > cancer_threshold
-    return {
-        "epithelium_only": epithelium,
-        "or": epithelium | cancer,
-        "and": epithelium & cancer,
-    }
+    qc = _qc_thresholds(**(qc_thresholds or {}))
+    _validate_scores(scores, _score_columns(selected_logics, qc))
+    clean = np.ones(len(scores), dtype=bool)
+    for name, threshold in qc.items():
+        clean &= scores[f"{name}_overlap"].to_numpy(dtype=float) > threshold
+    result = {}
+    for logic in selected_logics:
+        selected = clean.copy()
+        if logic != "qc_only":
+            epithelium = (
+                scores["epithelium_overlap"].to_numpy(dtype=float)
+                > epithelium_threshold
+            )
+            if logic == "epithelium_only":
+                selected &= epithelium
+            else:
+                cancer = (
+                    scores["cancer_overlap"].to_numpy(dtype=float) > cancer_threshold
+                )
+                selected &= (
+                    epithelium | cancer if logic == "or" else epithelium & cancer
+                )
+        result[logic] = selected
+    return result
 
 
 def _require_columns(
@@ -123,14 +195,27 @@ def _load_split_map(data_mapping_path: Path) -> dict[str, str]:
 
 
 def _load_scores(
-    tiling_dir: Path, expected_level: int
+    tiling_dir: Path,
+    expected_level: int,
+    selected_logics: tuple[str, ...] = DEFAULT_STRATEGY_LOGICS,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> tuple[dict[str, pd.DataFrame], int]:
     slides_path = tiling_dir / "slides.parquet"
     tiles_path = tiling_dir / "tiles.parquet"
     slides = pd.read_parquet(slides_path, columns=["id", "path", "level"])
-    tiles = pd.read_parquet(tiles_path, columns=list(REQUIRED_SCORE_COLUMNS))
+    score_columns = _score_columns(
+        selected_logics, _qc_thresholds(**(qc_thresholds or {}))
+    )
+    # Read only active mask columns: original cancer-only tiling has null epithelium.
+    required_columns = (*REQUIRED_SCORE_COLUMNS, *score_columns)
+    missing = sorted(set(required_columns) - set(pq.read_schema(tiles_path).names))
+    if missing:
+        raise ValueError(f"{tiles_path} is missing required columns: {missing}")
+    tiles = pd.read_parquet(tiles_path, columns=list(required_columns))
     _require_columns(slides, ("id", "path", "level"), slides_path)
     _require_columns(tiles, REQUIRED_SCORE_COLUMNS, tiles_path)
+    _validate_scores(tiles, score_columns)
+    tiles = tiles[[*REQUIRED_SCORE_COLUMNS, *score_columns]]
 
     actual_levels = sorted(slides["level"].dropna().unique().tolist())
     if actual_levels != [expected_level]:
@@ -151,9 +236,6 @@ def _load_scores(
     unknown_ids = sorted(set(tiles["slide_id"].unique()) - set(id_to_stem))
     if unknown_ids:
         raise ValueError(f"Tiles reference unknown slide IDs: {unknown_ids[:10]}")
-    if tiles[["epithelium_overlap", "cancer_overlap"]].isna().any().any():
-        null_counts = tiles[["epithelium_overlap", "cancer_overlap"]].isna().sum()
-        raise ValueError(f"Mask-score columns contain null values:\n{null_counts}")
 
     empty_scores = tiles.drop(columns="slide_id").iloc[:0].copy()
     by_stem = {stem: empty_scores.copy() for stem in slides["stem"]}
@@ -198,7 +280,10 @@ def filter_embeddings(
     epithelium_threshold: float,
     cancer_threshold: float,
     logger: logging.Logger,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> tuple[dict[str, dict[str, int]], int]:
+    qc = _qc_thresholds(**(qc_thresholds or {}))
+    score_columns = _score_columns(tuple(output_dirs), qc)
     embedding_files = sorted(embeddings_dir.glob("*.parquet"))
     if not embedding_files:
         raise ValueError(f"No per-slide Parquet files found in {embeddings_dir}")
@@ -233,18 +318,24 @@ def filter_embeddings(
         if scores is None:
             # Extra embedding slides are allowed only when the scored tiling set contains no tiles
             # for them. They are preserved as empty bags in every derived dataset.
-            scores = pd.DataFrame(
-                columns=["x", "y", "epithelium_overlap", "cancer_overlap"]
-            )
+            scores = pd.DataFrame(columns=["x", "y", *score_columns])
 
         merged = scores.merge(
             source_embeddings,
             on=["x", "y"],
-            how="left",
+            # QC-only must score every existing tile. A narrower or wrong tiling
+            # must not silently discard source tiles and attribute that loss to QC.
+            how="outer" if "qc_only" in output_dirs else "left",
             validate="one_to_one",
             indicator=True,
         )
-        unmatched = merged["_merge"].ne("both")
+        unscored = merged["_merge"].eq("right_only")
+        if unscored.any():
+            examples = merged.loc[unscored, ["x", "y"]].head().to_dict("records")
+            raise ValueError(
+                f"{int(unscored.sum())} embedded coordinates for {stem} have no QC scores: {examples}"
+            )
+        unmatched = merged["_merge"].eq("left_only")
         if unmatched.any():
             examples = merged.loc[unmatched, ["x", "y"]].head().to_dict("records")
             raise ValueError(
@@ -252,7 +343,9 @@ def filter_embeddings(
             )
         merged = merged.drop(columns="_merge")
         source_embedding_tiles += len(source_embeddings)
-        masks = _selection_masks(merged, epithelium_threshold, cancer_threshold)
+        masks = _selection_masks(
+            merged, epithelium_threshold, cancer_threshold, tuple(output_dirs), qc
+        )
         split = split_map[stem]
 
         for logic in output_dirs:
@@ -312,7 +405,9 @@ def _log_outputs(
     console_log: Path,
     logger: logging.Logger,
     upload_max_retries: int,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> None:
+    qc = _qc_thresholds(**(qc_thresholds or {}))
     for strategy in strategies:
         dataset_name = f"l{level}_{strategy.slug}_embed"
         manifest = {
@@ -322,6 +417,7 @@ def _log_outputs(
             "strategy": strategy.logic,
             "epithelium_threshold": epithelium_threshold,
             "cancer_threshold": cancer_threshold,
+            "qc_thresholds": qc,
             "comparison": ">",
             "source_tiling_uri": tiling_uri,
             "source_embeddings_uri": embeddings_uri,
@@ -338,6 +434,7 @@ def _log_outputs(
                     "strategy": strategy.logic,
                     "epithelium_threshold": epithelium_threshold,
                     "cancer_threshold": cancer_threshold,
+                    **{f"{name}_threshold": value for name, value in qc.items()},
                     "source_tiling_uri": tiling_uri,
                     "source_embeddings_uri": embeddings_uri,
                 }
@@ -414,6 +511,7 @@ def _state_payload(
     source_embedding_tiles: int,
     epithelium_threshold: float,
     cancer_threshold: float,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> FilterState:
     return {
         "schema_version": 1,
@@ -426,6 +524,7 @@ def _state_payload(
         "source_embedding_tiles": source_embedding_tiles,
         "epithelium_threshold": epithelium_threshold,
         "cancer_threshold": cancer_threshold,
+        "qc_thresholds": _qc_thresholds(**(qc_thresholds or {})),
     }
 
 
@@ -438,6 +537,7 @@ def _load_filter_state(
     strategies: tuple[Strategy, ...],
     epithelium_threshold: float,
     cancer_threshold: float,
+    qc_thresholds: dict[str, float] | None = None,
 ) -> FilterState:
     if not state_path.is_file():
         raise FileNotFoundError(
@@ -457,7 +557,13 @@ def _load_filter_state(
         if state.get(key) != expected_value
     }
     if mismatches:
-        raise ValueError(f"Saved filter state does not match this command: {mismatches}")
+        raise ValueError(
+            f"Saved filter state does not match this command: {mismatches}"
+        )
+    qc = _qc_thresholds(**(qc_thresholds or {}))
+    # Legacy states predate QC filtering; they represent no additional QC gates.
+    if state.get("qc_thresholds", {}) != qc:
+        raise ValueError("Saved filter state QC thresholds do not match this command")
     requested_strategies = {strategy.logic for strategy in strategies}
     saved_strategies = set(state.get("strategies", []))
     missing_strategies = sorted(requested_strategies - saved_strategies)
@@ -470,9 +576,7 @@ def _load_filter_state(
 
 def _validate_output_dirs(output_dirs: dict[str, dict[str, Path]]) -> None:
     for logic, directories in output_dirs.items():
-        all_files = {
-            path.name: path for path in directories["all"].glob("*.parquet")
-        }
+        all_files = {path.name: path for path in directories["all"].glob("*.parquet")}
         if not all_files:
             raise ValueError(f"No filtered Parquet files found for strategy {logic}")
 
@@ -505,8 +609,8 @@ def _validate_output_dirs(output_dirs: dict[str, dict[str, Path]]) -> None:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Filter existing tissue-only embeddings into epithelium-only, epithelium OR cancer, "
-            "and epithelium AND cancer datasets."
+            "Filter existing embeddings using saved epithelium/cancer and QC overlaps. "
+            "Use --strategies qc_only to tighten QC on an already selected dataset."
         )
     )
     parser.add_argument("--level", type=int, required=True)
@@ -518,12 +622,19 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--epithelium-threshold", type=float, default=0.25)
     parser.add_argument("--cancer-threshold", type=float, default=0.5)
+    for name in QC_MASKS:
+        parser.add_argument(
+            f"--{name}-threshold",
+            type=float,
+            help=f"Keep tiles with {name}_overlap > cutoff (clean fraction in [0, 1]); "
+            "omitted means no additional gate for this mask.",
+        )
     parser.add_argument(
         "--strategies",
         nargs="+",
         choices=STRATEGY_LOGICS,
-        default=list(STRATEGY_LOGICS),
-        help="Strategies to materialise; defaults to all three.",
+        default=list(DEFAULT_STRATEGY_LOGICS),
+        help="Strategies to materialise; defaults to the three epithelium/cancer strategies.",
     )
     parser.add_argument("--data-mapping", default=DEFAULT_DATA_MAPPING)
     parser.add_argument("--work-dir", default="/mnt/projects/mammaprint")
@@ -541,6 +652,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--upload-max-retries", type=int, default=3)
     parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="Keep results locally without creating MLflow runs; requires --output-dir.",
+    )
+    parser.add_argument(
         "--tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI)
     )
     parser.add_argument("--experiment-name", default=DEFAULT_EXPERIMENT)
@@ -553,6 +669,13 @@ def main() -> None:
         raise ValueError("--upload-max-retries must be non-negative")
     if args.upload_only and args.output_dir is None:
         raise ValueError("--upload-only requires --output-dir")
+    if args.no_upload and (args.output_dir is None or args.upload_only):
+        raise ValueError(
+            "--no-upload requires --output-dir and cannot use --upload-only"
+        )
+    qc = _qc_thresholds(
+        **{name: getattr(args, f"{name}_threshold") for name in QC_MASKS}
+    )
     persistent_output = Path(args.output_dir) if args.output_dir else None
     if (
         persistent_output is not None
@@ -565,14 +688,16 @@ def main() -> None:
             "Use --upload-only to reuse completed filtering or choose a new directory."
         )
 
-    mlflow.set_tracking_uri(args.tracking_uri)
-    mlflow.set_experiment(args.experiment_name)
     selected_logics = tuple(dict.fromkeys(args.strategies))
     strategies = _strategies(
         args.epithelium_threshold,
         args.cancer_threshold,
         selected_logics,
+        qc,
     )
+    mlflow.set_tracking_uri(args.tracking_uri)
+    if not args.no_upload:
+        mlflow.set_experiment(args.experiment_name)
 
     with _working_root(
         level=args.level,
@@ -599,6 +724,7 @@ def main() -> None:
                 strategies=strategies,
                 epithelium_threshold=args.epithelium_threshold,
                 cancer_threshold=args.cancer_threshold,
+                qc_thresholds=qc,
             )
             counts = state["counts"]
             scored_tiles = int(state["scored_tiles"])
@@ -638,7 +764,9 @@ def main() -> None:
                     )
                 )
 
-            scores_by_stem, scored_tiles = _load_scores(tiling_dir, args.level)
+            scores_by_stem, scored_tiles = _load_scores(
+                tiling_dir, args.level, selected_logics, qc
+            )
             split_map = _load_split_map(Path(args.data_mapping))
             counts, source_embedding_tiles = filter_embeddings(
                 scores_by_stem=scores_by_stem,
@@ -648,6 +776,7 @@ def main() -> None:
                 epithelium_threshold=args.epithelium_threshold,
                 cancer_threshold=args.cancer_threshold,
                 logger=logger,
+                qc_thresholds=qc,
             )
             state = _state_payload(
                 level=args.level,
@@ -659,12 +788,16 @@ def main() -> None:
                 source_embedding_tiles=source_embedding_tiles,
                 epithelium_threshold=args.epithelium_threshold,
                 cancer_threshold=args.cancer_threshold,
+                qc_thresholds=qc,
             )
             state_path.write_text(json.dumps(state, indent=2))
             logger.info("Saved resumable filter state to %s", state_path)
 
         _validate_output_dirs(output_dirs)
         logger.info("Selection summary:\n%s", json.dumps(counts, indent=2))
+        if args.no_upload:
+            logger.info("Kept filtered embeddings locally in %s; upload disabled", root)
+            return
         _log_outputs(
             level=args.level,
             tiling_uri=args.tiling_uri,
@@ -679,6 +812,7 @@ def main() -> None:
             console_log=console_log,
             logger=logger,
             upload_max_retries=args.upload_max_retries,
+            qc_thresholds=qc,
         )
 
 
