@@ -202,3 +202,30 @@ from a synthetic fixture does not substitute for those scientific checks.
 
 See the [implementation verification and independent review](superpowers/reviews/2026-11-14-concept-explainability.md)
 for completed checks, corrections and remaining clarification points.
+
+## Bounded local real-asset pilot
+
+For existing VPN-accessible assets without the original cluster mounts, use
+[`run_local_concept_pilot.py`](../scripts/ml/run_local_concept_pilot.py) and the
+[local pilot skill](../.agents/skills/mammaprint-concept-local-pilot/SKILL.md).
+The default command prints a side-effect-free plan. Execution requires explicit
+service URLs, source run and experiment identity, pinned cached source/label/
+checkpoint assets, a private four-bag roster, outside-Git output/cache roots and
+`--execute`. It never instantiates the full remote embedding directory.
+
+The pilot calls the existing K16 fit/evaluate/report functions with two complete
+training bags and two complete validation bags. The dictionary is explicitly a
+training-subset fixture, with patient/case separation unverified. Original
+train/val/test artifact **membership metadata** establish slide disjointness;
+no synthetic test bag is introduced and no test bag is downloaded or scored.
+Labels and geometry come from the pinned persisted tiling table, which does not
+prove the bytes of the training label CSV.
+
+At most two validation MRXS ZIPs are streamed through strict 512 MiB/archive,
+1 GiB combined compressed caps (2/4 GiB expanded), with safe sidecar-preserving
+extraction and OpenSlide/geometry checks. If complete WSIs exceed those bounds,
+numerical smoke evaluation still runs; the manifest explicitly records that the
+WSI report was skipped. All artifacts remain private and local, never logged to
+the source run. A generated local report does not establish remote xOpat access
+or live viewer alignment. The skill contains exact parameterized commands,
+inputs, failure handling, cleanup and safe verifier instructions.
