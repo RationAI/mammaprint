@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from typing import ClassVar
+from unittest.mock import patch
 
 from hydra import compose, initialize_config_dir
 from hydra.errors import InstantiationException
@@ -181,6 +182,37 @@ class MultiscaleConfigTest(unittest.TestCase):
             "Position and level embeddings are only available for Transformer stages",
         ):
             instantiate(invalid_embeddings.ml.aggregator)
+
+    def test_dataset_rejects_layout_overrides_that_disagree_with_model(self) -> None:
+        cases = (
+            "pyramid.level_order=[5,3,4]",
+            "pyramid.level_ratios=[1,4,2]",
+            "ml.aggregator.level_ratios=[1,4,2]",
+            "dataset.levels.4.mpp=1.94",
+        )
+        for override in cases:
+            for split in ("train", "val", "test"):
+                with self.subTest(override=override, split=split):
+                    with initialize_config_dir(
+                        version_base=None, config_dir=str(CONFIGS)
+                    ):
+                        config = compose(
+                            config_name="ml",
+                            overrides=[
+                                "+experiment=ml/multiscale/multiscale_mean_linear",
+                                override,
+                            ],
+                        )
+                    with (
+                        patch(
+                            "ml.data.datasets.pyramid.download_level_sources"
+                        ) as download,
+                        self.assertRaisesRegex(
+                            InstantiationException, "but the model expects level_ratios"
+                        ),
+                    ):
+                        instantiate(config.datamodule[split])
+                    download.assert_not_called()
 
     def test_multiscale_experiment_composes_existing_level_cards(self) -> None:
         with initialize_config_dir(

@@ -110,6 +110,7 @@ class PyramidScaleDatasetTest(unittest.TestCase):
                 anchor_level=5,
                 level_order=(5, 4, 3),
                 tile_extent=2,
+                level_ratios=(1, 2, 4),
                 label_mode="type",
                 require_complete=require_complete,
                 overlap_policy=overlap_policy,

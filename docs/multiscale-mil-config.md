@@ -5,7 +5,10 @@ complete L5/L4/L3 embedding pyramid. The model receives a single slide bag with
 shape `(R, 21, D)`: `R` retained level-5 anchor regions, and `21 = 1 + 4 + 16`
 ordered tokens for L5, L4, and L3. The current pyramid data card fixes
 `level_ratios: [1, 2, 4]`, `anchor_level: 5`, `level_order: [5, 4, 3]`, and
-`tile_extent: 224`. `R` can differ between slides; all other axes are fixed.
+`tile_extent: 224`. `R` can differ between slides; all other axes are fixed. Before downloading
+artifacts, each split derives its ordered ratios from the level cards and
+checks them against `ml.aggregator.level_ratios`. Overrides to level order,
+resolutions, or model ratios must agree; equal token counts alone are insufficient.
 
 The base card is `configs/ml/aggregator/multiscale_modular.yaml`. It makes all
 five stages visible, with `null` meaning identity/preserve rather than an
