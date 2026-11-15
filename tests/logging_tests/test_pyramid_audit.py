@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pandas as pd
 from omegaconf import OmegaConf
+from torch import nn
 
 from ml.logging.pyramid_audit import log_pyramid_audit
 from ml.train import _log_pyramid_audits
@@ -122,6 +123,7 @@ class FakeLogger:
     def __init__(self) -> None:
         self.artifact_calls: list[tuple[str, str | None]] = []
         self.finalize_calls: list[str] = []
+        self.hyperparam_calls: list[dict[str, int]] = []
 
     def log_artifacts(
         self,
@@ -129,6 +131,9 @@ class FakeLogger:
         artifact_path: str | None = None,
     ) -> None:
         self.artifact_calls.append((local_dir, artifact_path))
+
+    def log_hyperparams(self, params: dict[str, int]) -> None:
+        self.hyperparam_calls.append(params)
 
     def finalize(self, status: str = "success") -> None:
         self.finalize_calls.append(status)
@@ -330,7 +335,7 @@ class PyramidAuditLoggerTest(unittest.TestCase):
         with (
             patch(
                 "ml.train.hydra.utils.instantiate",
-                side_effect=[datamodule, object(), trainer],
+                side_effect=[datamodule, nn.Identity(), trainer],
             ),
             patch("ml.train.seed_everything"),
             patch("ml.train._log_pyramid_audits", side_effect=audit_error),

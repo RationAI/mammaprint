@@ -4,7 +4,6 @@ defaults:
   - /ml/aggregator/multiscale_presets: multiscale_level_mean_linear
   - _self_
 
-trainable_parameters: 2561
 metadata:
   run_name: Multiscale level mean + linear — L5/L4/L3
   description: Equal means within levels, across levels, and across slide regions with a linear head.

@@ -180,11 +180,12 @@ class MultiscaleExperimentTest(unittest.TestCase):
                         "slide_dim": expected["slide_dim"],
                         "head": expected["head"],
                         "loss": "torch.nn.BCEWithLogitsLoss",
-                        "trainable_parameters": expected["trainable_parameters"],
                         "training_seed": 1729,
                     },
                 )
 
+                self.assertNotIn("trainable_parameters", config)
+                self.assertNotIn("trainable_parameters", metadata)
                 module = instantiate(config.ml)
                 self.assertEqual(
                     sum(

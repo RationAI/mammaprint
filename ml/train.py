@@ -79,6 +79,17 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
     # DataModule can instantiate them lazily per stage in setup().
     datamodule = hydra.utils.instantiate(config.datamodule, _recursive_=False)
     module = hydra.utils.instantiate(config.ml)
+    # Count the actual model after all overrides and constructor-time freezing.
+    # The autolog decorator logs configured metadata before this model exists.
+    logger.log_hyperparams(
+        {
+            "trainable_parameters": sum(
+                parameter.numel()
+                for parameter in module.parameters()
+                if parameter.requires_grad
+            )
+        }
+    )
     trainer = hydra.utils.instantiate(config.trainer, logger=logger)
 
     # Build only the current stage's splits. Multiscale datasets expose audit

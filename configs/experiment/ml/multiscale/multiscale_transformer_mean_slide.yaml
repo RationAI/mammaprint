@@ -4,7 +4,6 @@ defaults:
   - /ml/aggregator/multiscale_presets: multiscale_transformer_mean_slide
   - _self_
 
-trainable_parameters: 4493313
 metadata:
   run_name: Multiscale local Transformer + mean slide — L5/L4/L3
   description: Shared local Transformer with learned position and level embeddings, followed by mean slide pooling.

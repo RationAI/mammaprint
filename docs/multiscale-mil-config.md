@@ -43,6 +43,11 @@ runtime module performs the authoritative `aggregator.out_dim == head.in_dim`
 check before training; `slide_dim` in a preset is a readable, independently
 configured declaration of that same contract.
 
+Training logs `trainable_parameters` directly from the instantiated model after
+all configuration overrides, counting only parameters with `requires_grad=True`.
+Experiment cards do not declare a fixed count, so changes to attention width,
+head capacity, or constructor-time freezing are reflected in the logged value.
+
 ## Runtime controls outside the five stages
 
 `projection_dropout` defaults to `0.1`. It is applied after the shared

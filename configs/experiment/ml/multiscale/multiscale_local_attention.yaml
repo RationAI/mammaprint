@@ -4,7 +4,6 @@ defaults:
   - /ml/aggregator/multiscale_presets: multiscale_local_attention
   - _self_
 
-trainable_parameters: 2382339
 metadata:
   run_name: Multiscale local + slide attention — L5/L4/L3
   description: Shared projection with gated attention within every level and across aligned slide regions.
