@@ -25,3 +25,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Deployed output-metric adaptation:
+Source revision: 75c22a2a98d3b16a1c298735e2ea385cccfd07fb
+Source files: explainability/model.py (output_metric classifier component),
+explainability/nmf_fit.py (tile_uniform, metric_sample, metric_transform).
+The numerical bodies listed above were independently checked as identical at
+this deployed revision; their original provenance constant is retained for
+legacy plain artifacts. ml/concept_explainability/metric.py reuses the classifier
+outer-product/variance, trace normalization, ridge/eigh and hash-threshold
+sampling algebra. Native adapter: native_mean_linear_binary_classifier_v1.
+Native binary logits are represented as [0,z] before class centering. MeanPool
+has no attention output, so its inapplicable attention term is explicitly omitted
+and recorded; this is not the unchanged UC attention graph. Validation and
+artifact/source binding checks are MammaPrint integration code.
+Deployed dictionary run: be859ae30ca143b78d957493d4f8a8c8
+Deployed gallery run: b30054c6bffb4df8896c8acb75a48959

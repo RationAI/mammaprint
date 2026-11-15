@@ -66,11 +66,61 @@ measure the pilot before choosing cluster memory. Resource overrides, e.g.
 dictionary manifest. They change batch/shuffle behavior and are not silently
 treated as exact reproduction of the original execution settings.
 
-Reuse this dictionary across heads/objectives/seeds only when the exact input
-training corpus matches: same artifact URI, level, mask variant, geometry and
-usable slide roster. Label filtering can change that roster between objectives.
-Fit a separate dictionary for a different corpus; never use the fitted IBD
-dictionary on the breast cohort.
+Plain dictionaries can be reused across heads/objectives/seeds only when the
+exact input training corpus matches: same artifact URI, level, mask variant,
+geometry and usable slide roster. Label filtering can change that roster.
+Metric dictionaries additionally bind the source run, checkpoint bytes, training
+revision and complete resolved config. A model/config mismatch is rejected.
+Fit a separate dictionary for a different corpus; never use an IBD dictionary
+on the breast cohort.
+
+### Deployed output-metric profile
+
+Select `--config-name concepts_deployed` for the deployed fit settings. The
+base `concepts` config remains plain; an absent `fit.metric` means disabled and
+legacy plain dictionary IDs and coefficients are unchanged.
+
+The adapter `native_mean_linear_binary_classifier_v1` supports only
+IdentityEncoder + MeanPool + single LinearHead with `label_mode=type`,
+BCEWithLogitsLoss and Identity output activation. It loads frozen checkpoint
+weights and rejects index/joint, nonlinear heads, max, attention, transformer,
+spatial and non-identity encoder graphs before whole-split dataset access.
+`metric.preflight_metric_source(source: SourceRun)` performs this check and
+returns the frozen CPU module; callers must obtain source weights first.
+
+The classifier component reuses Adam's output-metric algebra from
+RationAI/ulcerative-colitis at `75c22a2a98d3b16a1c298735e2ea385cccfd07fb`
+(`explainability/model.py`, `nmf_fit.py`; MIT notice in `third_party/`). Binary
+logits `[0,z]` are centered across the two classes. Outer products are divided
+by sampled tile-output population variance, trace-normalized to mean eigenvalue
+1, then ridge 0.3 is added before CPU NumPy eigendecomposition. Constant or
+nonfinite outputs fail explicitly. Native MeanPool has no attention score:
+the manifest records requested attention weight 1, `attention_applicable=false`
+and `aggregator_has_no_attention`. This is an explicit classifier-only native
+architecture adaptation of the deployed method.
+
+Train-only sampling uses the upstream pandas hash of `(slide_id,x,y)`, seed 42,
+and threshold `20000 / n_train`; 20,000 is an expected count, not a hard cap.
+Ordered Ray reads keep full training row/key alignment. Sampling preserves the
+original float32 train-mean subtraction/restoration roundoff. The unchanged CPU
+semi-NMF fits with transform T; atoms are mapped with T^-T before raw-space
+gauge fixing. Encoding solves NNLS in T space; decoding returns signed raw
+embeddings `mean + codes @ atoms`. Native predictions and parameters remain
+unchanged. Raw embedding RMSE remains a raw-feature error, and improved native
+model fidelity is not guaranteed by metric fitting.
+
+Metric artifact format 2 includes `transform.npy`, float32 shape/checksum,
+requested/actual sample counts and ordered selected-key digest, adapter/source
+binding, and a versioned dictionary ID covering atoms, mean, T and binding.
+`load_dictionary(directory, *, source=None)` always validates metric artifacts
+and supplies T to the existing autoencoder; passing `source` also enforces model
+binding. Evaluation supplies it before data access. Missing, corrupt, invalid
+or contradictory metric artifacts fail instead of dropping T. Legacy plain
+artifacts retain the original `sha256(H bytes + shift bytes)` identity.
+
+All metric estimation, factorization, NNLS and encoding run on CPU. `device=cuda`
+accelerates native PyTorch explanation inference only. In-process fixture fits
+remain bounded and visibly marked because their shuffle differs from Ray.
 
 ## Explain and create the naming report
 

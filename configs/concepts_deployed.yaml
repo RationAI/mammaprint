@@ -1,0 +1,10 @@
+# Adam's deployed metric settings, adapted explicitly to native mean-linear BCE.
+defaults:
+  - concepts
+  - _self_
+fit:
+  metric:
+    enabled: true
+    ridge: 0.3
+    attention_weight: 1.0  # Recorded as requested; native MeanPool has no attention.
+    n_tiles: 20000  # Expected hash-sample size, not a strict cap.

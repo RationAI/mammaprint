@@ -16,7 +16,22 @@ from ml.concept_explainability.data import (
     iter_slides,
     source_dataset,
 )
-from ml.concept_explainability.model import SourceRun, load_frozen_model, model_outputs
+from ml.concept_explainability.metric import (
+    METRIC_ADAPTER,
+    METRIC_UPSTREAM_SHA,
+    classifier_output_metric,
+    metric_dictionary_id,
+    metric_enabled,
+    preflight_metric_source,
+    sample_metric_rows,
+    source_binding,
+)
+from ml.concept_explainability.model import (
+    SourceRun,
+    file_sha256,
+    load_frozen_model,
+    model_outputs,
+)
 from ml.concept_explainability.upstream import (
     UPSTREAM_SHA,
     ConceptAutoencoder,
@@ -73,12 +88,13 @@ def read_codes(frame: pd.DataFrame, n_components: int) -> np.ndarray:
 class _FixtureDataset:
     """Small in-process fixture runner; production fits use upstream Ray batches."""
 
-    def __init__(self, rows: np.ndarray):
+    def __init__(self, rows: np.ndarray, keys: pd.DataFrame | None = None):
         if len(rows) > 4096:
             raise ValueError(
                 "In-process fixture fitting is limited to 4096 tiles; use Ray for a full fit."
             )
         self.rows = rows
+        self.keys = keys
 
     def select_columns(self, _columns):
         return self
@@ -90,7 +106,11 @@ class _FixtureDataset:
         if local_shuffle_seed is not None:
             np.random.default_rng(local_shuffle_seed).shuffle(indices)
         for start in range(0, len(indices), batch_size):
-            yield {"embedding": self.rows[indices[start : start + batch_size]]}
+            selected = indices[start : start + batch_size]
+            batch = {"embedding": self.rows[selected]}
+            if self.keys is not None:
+                batch.update({column: self.keys[column].to_numpy()[selected] for column in self.keys})
+            yield batch
 
 
 def fit_dictionary(
@@ -101,11 +121,14 @@ def fit_dictionary(
             "Dictionary output directory must be empty; fitted dictionaries are immutable."
         )
     n_components = validate_n_components(config.n_components)
+    enabled = metric_enabled(config)
+    module = preflight_metric_source(source) if enabled else None
     dataset = source_dataset(source, "train")
     identity = corpus_identity(source, dataset)
     total = np.zeros(2560, dtype=np.float64)
     count = 0
     fixture_rows = []
+    fixture_keys = []
     for slide in iter_slides(source, "train", dataset):
         total += slide.embeddings.astype(np.float64).sum(0)
         count += len(slide.embeddings)
@@ -113,6 +136,8 @@ def fit_dictionary(
             if count > 4096:
                 raise ValueError("Fixture fitting is limited to 4096 tiles.")
             fixture_rows.append(slide.embeddings)
+            if enabled:
+                fixture_keys.append(slide.keys[["slide_id", "x", "y"]])
     if count < n_components:
         raise ValueError(
             f"At least {n_components} training tiles are required for the dictionary."
@@ -124,13 +149,41 @@ def fit_dictionary(
         )
     shift = (total / count).astype(np.float32)
     stream = (
-        embedding_dataset(source, "train", dataset)
+        embedding_dataset(source, "train", dataset, include_keys=enabled)
         if use_ray
-        else _FixtureDataset(np.concatenate(fixture_rows))
+        else _FixtureDataset(np.concatenate(fixture_rows), pd.concat(fixture_keys, ignore_index=True) if enabled else None)
     )
-    h = gauge_fix_dictionary(
-        fit_semi_nmf_online(stream, config, shift, np.ones_like(shift))
-    )
+    transform = None
+    metric_metadata = None
+    if enabled:
+        sample, sample_metadata = sample_metric_rows(
+            stream, count, shift, batch_size=config.nmf.batch_size,
+            n_tiles=config.metric.get("n_tiles", 20_000), seed=config.nmf.random_state,
+        )
+        # Preserve upstream float32 subtract/restore roundoff before metric estimation.
+        transform = classifier_output_metric(
+            sample + shift, module.head.linear.weight.detach().cpu().numpy(),
+            module.head.linear.bias.detach().cpu().numpy(), ridge=config.metric.get("ridge", 0.3),
+        )
+        requested_attention = config.metric.get("attention_weight", 1.0)
+        if isinstance(requested_attention, bool) or not np.isfinite(requested_attention) or requested_attention < 0:
+            raise ValueError("metric.attention_weight must be finite and nonnegative.")
+        metric_metadata = {
+            "adapter": METRIC_ADAPTER, "upstream_sha": METRIC_UPSTREAM_SHA,
+            "binding": source_binding(source), "sample": sample_metadata,
+            "ridge": float(config.metric.get("ridge", 0.3)),
+            "attention_weight_requested": float(requested_attention),
+            "attention_applicable": False, "attention_terms": 0,
+            "attention_reason": "aggregator_has_no_attention", "output_terms": 2,
+            "binary_logits": "[0,z], centered across classes",
+        }
+    if enabled:
+        h = fit_semi_nmf_online(stream, config, shift, np.ones_like(shift), transform=transform)
+        h = (h @ np.linalg.inv(transform).T).astype(np.float32)
+    else:
+        h = fit_semi_nmf_online(stream, config, shift, np.ones_like(shift))
+    # Inverse mapping must precede the raw-space gauge fix.
+    h = gauge_fix_dictionary(h)
     if h.shape != (n_components, 2560) or not np.isfinite(h).all():
         raise ValueError("Dictionary fit produced invalid atoms.")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -138,7 +191,16 @@ def fit_dictionary(
     np.save(output_dir / "shift.npy", shift)
     from hashlib import sha256
 
-    dictionary_id = sha256(h.tobytes() + shift.tobytes()).hexdigest()
+    if enabled:
+        np.save(output_dir / "transform.npy", transform)
+        metric_metadata["transform"] = {
+            "file": "transform.npy", "shape": list(transform.shape),
+            "dtype": str(transform.dtype), "sha256": file_sha256(output_dir / "transform.npy"),
+        }
+    dictionary_id = (
+        metric_dictionary_id(h, shift, transform, metric_metadata["binding"])
+        if enabled else sha256(h.tobytes() + shift.tobytes()).hexdigest()
+    )
     save_json(
         output_dir / "manifest.json",
         {
@@ -153,12 +215,13 @@ def fit_dictionary(
             "method": "semi_nmf",
             "center": True,
             "scale_power": 0.0,
-            "metric_enabled": False,
+            "metric_enabled": enabled,
+            **({"format_version": 2, "metric": metric_metadata} if enabled else {}),
             "config": OmegaConf.to_container(config, resolve=True),
             "fixture_only": not use_ray,
         },
     )
-    autoencoder = ConceptAutoencoder(h, shift, False, int(config.nmf.nnls_iter))
+    autoencoder = ConceptAutoencoder(h, shift, False, int(config.nmf.nnls_iter), transform=transform)
     for slide in iter_slides(source, "train", dataset):
         write_codes(
             slide.keys,
@@ -182,7 +245,7 @@ def write_codes(keys: pd.DataFrame, codes: np.ndarray, path: Path) -> None:
     ).to_parquet(path, index=False)
 
 
-def load_dictionary(directory: Path) -> ConceptAutoencoder:
+def load_dictionary(directory: Path, *, source: SourceRun | None = None) -> ConceptAutoencoder:
     from hashlib import sha256
 
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -196,10 +259,46 @@ def load_dictionary(directory: Path) -> ConceptAutoencoder:
         or not np.isfinite(shift).all()
     ):
         raise ValueError("Invalid dictionary dimensions or values.")
-    if sha256(h.tobytes() + shift.tobytes()).hexdigest() != manifest["dictionary_id"]:
+    enabled = manifest.get("metric_enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("Dictionary metric_enabled must be a boolean.")
+    transform = None
+    if enabled:
+        metadata = manifest.get("metric", {})
+        if manifest.get("format_version") != 2 or metadata.get("adapter") != METRIC_ADAPTER:
+            raise ValueError("Unsupported metric dictionary format or adapter.")
+        saved_transform = metadata.get("transform", {})
+        path = directory / "transform.npy"
+        if not path.is_file() or saved_transform.get("file") != "transform.npy":
+            raise ValueError("Metric dictionary transform is missing.")
+        if file_sha256(path) != saved_transform.get("sha256"):
+            raise ValueError("Metric transform checksum does not match its manifest.")
+        try:
+            transform = np.load(path, allow_pickle=False)
+        except (ValueError, OSError) as exc:
+            raise ValueError("Invalid metric transform file.") from exc
+        if (transform.shape != (2560, 2560) or transform.dtype != np.float32
+            or saved_transform.get("shape") != list(transform.shape)
+            or saved_transform.get("dtype") != str(transform.dtype)
+            or not np.isfinite(transform).all()):
+            raise ValueError("Invalid metric transform shape, dtype or values.")
+        sign, logdet = np.linalg.slogdet(transform.astype(np.float64))
+        if sign == 0 or not np.isfinite(logdet):
+            raise ValueError("Metric transform must be invertible.")
+        binding = metadata.get("binding")
+        if not isinstance(binding, dict) or not {"source_run_id", "training_sha", "checkpoint_sha256", "resolved_config_sha256"}.issubset(binding):
+            raise ValueError("Metric dictionary source binding is missing.")
+        expected_id = metric_dictionary_id(h, shift, transform, binding, metadata["adapter"])
+        if source is not None and source_binding(source) != binding:
+            raise ValueError("Metric dictionary source binding does not match this model/config.")
+    else:
+        if manifest.get("format_version", 1) >= 2 and ("metric" in manifest or (directory / "transform.npy").exists()):
+            raise ValueError("Contradictory metric flags or transform artifact.")
+        expected_id = sha256(h.tobytes() + shift.tobytes()).hexdigest()
+    if expected_id != manifest["dictionary_id"]:
         raise ValueError("Dictionary checksum does not match its manifest.")
     return ConceptAutoencoder(
-        h, shift, False, int(manifest["config"]["nmf"]["nnls_iter"])
+        h, shift, False, int(manifest["config"]["nmf"]["nnls_iter"]), transform=transform
     )
 
 
@@ -315,10 +414,10 @@ def evaluate_concepts(
     if output_dir.exists() and any(output_dir.iterdir()):
         raise ValueError("Explanation output directory must be empty.")
     dictionary_manifest = json.loads((dictionary_dir / "manifest.json").read_text())
+    dictionary = load_dictionary(dictionary_dir, source=source)
     identity = corpus_identity(source)
     if identity != dictionary_manifest["corpus"]:
         raise ValueError("Source training corpus does not match the fitted dictionary.")
-    dictionary = load_dictionary(dictionary_dir)
     n_components = dictionary.dictionary.shape[0]
     module = load_frozen_model(source).to(device)
     mode = str(source.config.label_mode)
@@ -473,6 +572,8 @@ def evaluate_concepts(
         output_dir / "manifest.json",
         {
             "dictionary_id": dictionary_manifest["dictionary_id"],
+            "metric_enabled": dictionary_manifest.get("metric_enabled", False),
+            **({"metric": dictionary_manifest["metric"]} if dictionary_manifest.get("metric_enabled") else {}),
             "n_components": n_components,
             "corpus": identity,
             "source_run_id": source.run_id,

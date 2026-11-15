@@ -106,7 +106,7 @@ def iter_slides(
 
 
 def embedding_dataset(
-    source: SourceRun, split: str, dataset: SingleScaleDataset | None = None
+    source: SourceRun, split: str, dataset: SingleScaleDataset | None = None, *, include_keys: bool = False
 ):
     import ray.data
 
@@ -115,7 +115,22 @@ def embedding_dataset(
         str(dataset.embeddings_dir / f"{name}.parquet")
         for name in sorted(dataset.slides["name"])
     ]
-    return ray.data.read_parquet(paths, columns=["embedding"])
+    # Configure ordering before any Ray reads, including the metadata sampling pass.
+    ray.data.DataContext.get_current().execution_options.preserve_order = True
+    if not include_keys:
+        return ray.data.read_parquet(paths, columns=["embedding"])
+    return ray.data.read_parquet(
+        paths, columns=["embedding", "x", "y"], include_paths=True,
+    ).map_batches(_add_slide_identity, batch_format="pandas")
+
+
+def _add_slide_identity(frame: pd.DataFrame) -> pd.DataFrame:
+    """Ray path provenance stays attached to each embedding and its coordinates."""
+    frame = frame.copy()
+    frame["slide_id"] = frame["path"].map(lambda value: Path(value).stem)
+    frame["x"] = frame["x"].astype(np.int64)
+    frame["y"] = frame["y"].astype(np.int64)
+    return frame.drop(columns="path")
 
 
 def audit_splits(source: SourceRun) -> dict[str, Any]:
