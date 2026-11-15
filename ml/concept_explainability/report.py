@@ -16,6 +16,13 @@ import numpy as np
 import pandas as pd
 
 from ml.concept_explainability.data import iter_slides, source_dataset
+from ml.concept_explainability.evaluation import (
+    dictionary_n_components,
+    load_dictionary,
+    read_codes,
+    save_json,
+    validate_n_components,
+)
 from ml.concept_explainability.upstream import code_share
 
 
@@ -28,7 +35,7 @@ function revealResults() {
   revealed = true;
 }
 async function copyAnswers() {
-  const answers = Array.from({length: 16}, (_, concept) => ({
+  const answers = Array.from({length: REPORT_ID.n_components}, (_, concept) => ({
     concept,
     name: document.getElementById('name-'+concept).value,
     unclear_or_mixed: document.getElementById('unclear-'+concept).checked,
@@ -37,8 +44,8 @@ async function copyAnswers() {
     comment: document.getElementById('comment-'+concept).value
   }));
   for (const row of answers) {
-    if (row.same_as !== '' && (!/^\d+$/.test(row.same_as) || +row.same_as > 15 || +row.same_as === row.concept)) {
-      document.getElementById('copy-status').textContent = 'Same as must be another concept from 0 to 15.';
+    if (row.same_as !== '' && (!/^\d+$/.test(row.same_as) || +row.same_as >= REPORT_ID.n_components || +row.same_as === row.concept)) {
+      document.getElementById('copy-status').textContent = `Same as must be another concept from 0 to ${REPORT_ID.n_components - 1}.`;
       return;
     }
   }
@@ -215,7 +222,10 @@ def row_urls(
     from report_fast import XopatSession, heatmap_layer
     from report_fast.mlflow import artifact_data_id
 
+    n_concepts = validate_n_components(n_concepts)
     concept = int(row.iloc[0].concept)
+    if concept < 0 or concept >= n_concepts or not (row.concept == concept).all():
+        raise ValueError("xOpat row concept does not match n_components.")
     session = XopatSession()
     viewports = []
     for tile in row.itertuples():
@@ -253,14 +263,30 @@ def row_urls(
 
 
 def render_naming_html(manifest, selected, images, effects, presence, fidelity):
+    n_components = validate_n_components(manifest.get("n_components", 16))
+    for frame in (selected, effects, presence):
+        if not frame.empty:
+            if "concept" not in frame:
+                raise ValueError("Report rows must declare their concept.")
+            for value in frame.concept:
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, np.integer))
+                    or not 0 <= value < n_components
+                ):
+                    raise ValueError("Report concept is outside declared n_components.")
+    if len(images) != len(selected):
+        raise ValueError("Report images do not match selected tiles.")
+
     def escape(value):
         return html.escape(str(value), quote=True)
 
     report_id = {
         key: manifest.get(key) for key in ("dictionary_id", "source_run_id", "split")
     }
+    report_id["n_components"] = n_components
     rows = []
-    for k in range(16):
+    for k in range(n_components):
         examples = selected[selected.concept == k]
         tiles = "".join(
             f'<a href="{escape(row.xopat_url)}" target="_blank" rel="noopener"><img width="160" src="data:image/jpeg;base64,{images[i]}" alt="Concept {k}"><small>{escape(row.slide_id)} {escape(getattr(row, "footprint", ""))}</small></a>'
@@ -293,7 +319,7 @@ def render_naming_html(manifest, selected, images, effects, presence, fidelity):
 <label>Name <input id="name-{k}"></label>
 <label><input type="checkbox" id="unclear-{k}">Unclear or mixed</label>
 <label>Expected luminal type <select class="expected" id="expected-{k}">{options}</select></label>
-<label>Same as concept <input id="same-{k}" type="number" min="0" max="15"></label>
+<label>Same as concept <input id="same-{k}" type="number" min="0" max="{n_components - 1}"></label>
 <label>Comment <textarea id="comment-{k}"></textarea></label>
 <div class="model-info">{labels}{numbers}{prevalence}</div></section>""")
     fixture = (
@@ -306,9 +332,9 @@ def render_naming_html(manifest, selected, images, effects, presence, fidelity):
         if not fidelity.empty
         else "Fidelity not available."
     )
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>MammaPrint concept naming</title>
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>MammaPrint concept naming: K={n_components}</title>
 <style>body{{font:15px system-ui;margin:24px}}body.blind .model-info{{display:none}}section{{border-top:1px solid #bbb;padding:16px 0}}.tiles{{display:flex;gap:8px;flex-wrap:wrap}}.tiles a{{display:flex;flex-direction:column}}label{{display:inline-block;margin:8px}}textarea{{vertical-align:middle}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px}}.warning{{color:#a00}}#answers{{width:95%;height:240px}}</style></head>
-<body class="blind"><h1>MammaPrint: 16 visual concepts</h1>{fixture}
+<body class="blind"><h1>MammaPrint: {n_components} visual concepts</h1>{fixture}
 <p>Patterns extracted from frozen Virchow2 embeddings. Name them from the images before revealing labels and model effects. Each row uses distinct slides. Click a tile to inspect the slide and concept-presence layer in xOpat (VPN required).</p>
 <p>Expected luminal type is a proposed breast-specific question. A pathologist must confirm its wording. Model index effects are shown separately after reveal.</p>
 <p>Reloading or closing this page loses answers. Copy them regularly. Revealing results freezes expected-type answers. This is procedural blinding, not access control.</p>
@@ -327,8 +353,6 @@ def build_report(
     *,
     publication=None,
 ) -> Path:
-    from ml.concept_explainability.evaluation import save_json
-
     manifest = json.loads((evaluation_dir / "manifest.json").read_text())
     dictionary_manifest = json.loads((dictionary_dir / "manifest.json").read_text())
     if (
@@ -336,6 +360,16 @@ def build_report(
         or manifest["source_run_id"] != source.run_id
     ):
         raise ValueError("Report source run or dictionary identity mismatch.")
+    n_components = dictionary_n_components(dictionary_manifest)
+    load_dictionary(
+        dictionary_dir
+    )  # Validate dimensions and checksum before using its codes.
+    if (
+        validate_n_components(manifest.get("n_components", n_components))
+        != n_components
+    ):
+        raise ValueError("Evaluation n_components does not match the dictionary.")
+    manifest = {**manifest, "n_components": n_components}
     output_dir.mkdir(parents=True, exist_ok=True)
     split = manifest["split"]
     dataset = source_dataset(source, split)
@@ -348,12 +382,12 @@ def build_report(
         output_dir / ".report-codes.npy",
         mode="w+",
         dtype=np.float32,
-        shape=(sum(counts), 16),
+        shape=(sum(counts), n_components),
     )
     keys, offset = [], 0
     for path, count in zip(files, counts, strict=True):
         frame = pd.read_parquet(path)
-        codes[offset : offset + count] = frame[[f"c{k}" for k in range(16)]].to_numpy()
+        codes[offset : offset + count] = read_codes(frame, n_components)
         keys.append(frame[["slide_id", "row_index", "x", "y"]])
         offset += count
     keys = pd.concat(keys, ignore_index=True)
@@ -373,8 +407,8 @@ def build_report(
         pd.testing.assert_frame_equal(
             frame[["slide_id", "row_index", "x", "y"]], slide.keys, check_dtype=False
         )
-        local_shares = code_share(frame[[f"c{k}" for k in range(16)]].to_numpy())
-        for k in range(16):
+        local_shares = code_share(read_codes(frame, n_components))
+        for k in range(n_components):
             write_presence_mask(
                 local_shares[:, k],
                 slide.keys,
@@ -397,6 +431,7 @@ def build_report(
             source.run_id,
             manifest["dictionary_id"],
             publication,
+            n_concepts=n_components,
         )
     labels = (
         pd.read_parquet(evaluation_dir / "slide_outputs.parquet")
@@ -418,7 +453,7 @@ def build_report(
     effects = pd.read_parquet(evaluation_dir / "concept_effects.parquet")
     presence = pd.read_parquet(evaluation_dir / "concept_presence.parquet")
     fidelity = pd.read_parquet(evaluation_dir / "fidelity.parquet")
-    path = output_dir / "naming_k16.html"
+    path = output_dir / f"naming_k{n_components}.html"
     path.write_text(
         render_naming_html(
             manifest,

@@ -1,7 +1,9 @@
+import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import numpy as np
 import pandas as pd
@@ -36,7 +38,8 @@ class ReportTests(unittest.TestCase):
                 patch(
                     "ml.concepts.load_source_run",
                     side_effect=AssertionError("Source must not be accessed"),
-                ),self.assertRaisesRegex(RuntimeError, "MLFLOW_RUN_ID")
+                ),
+                self.assertRaisesRegex(RuntimeError, "MLFLOW_RUN_ID"),
             ):
                 run(config)
 
@@ -150,32 +153,69 @@ class ReportTests(unittest.TestCase):
             config.training_sha = BASE
             config.fixture_mode = True
             config.log_to_mlflow = False
-            config.output_dir = str(root / "dictionary")
             config.fit.nmf.batch_size = 32
             config.fit.nmf.shuffle_buffer_size = 32
-            with patch(
-                "ml.data.datasets.single_scale.download_level_sources",
-                side_effect=local_download,
-            ):
-                run(config)
-                config.action = "explain"
-                config.split = "val"
-                config.dictionary_dir = str(root / "dictionary")
-                config.output_dir = str(root / "report")
-                run(config)
-            report = root / "report" / "naming_k16.html"
-            self.assertTrue(report.is_file())
-            self.assertTrue(
-                (root / "report" / "masks" / "concept_00" / "val0.tiff").exists()
-            )
-            self.assertIn("FIXTURE", report.read_text())
-            self.assertEqual(before, checkpoint.read_bytes())
-            self.assertEqual(
-                pd.read_parquet(
-                    root / "report" / "concept_effects.parquet"
-                ).concept.nunique(),
-                16,
-            )
+            for k in (8, 16, 32):
+                with self.subTest(n_components=k):
+                    dictionary_dir = root / f"dictionary-{k}"
+                    report_dir = root / f"report-{k}"
+                    config.fit.n_components = k
+                    config.action = "fit"
+                    config.split = "train"
+                    config.output_dir = str(dictionary_dir)
+                    with patch(
+                        "ml.data.datasets.single_scale.download_level_sources",
+                        side_effect=local_download,
+                    ):
+                        run(config)
+                        config.action = "explain"
+                        config.split = "val"
+                        config.dictionary_dir = str(dictionary_dir)
+                        config.output_dir = str(report_dir)
+                        run(config)
+                    report = report_dir / f"naming_k{k}.html"
+                    self.assertTrue(report.is_file())
+                    self.assertEqual(
+                        len(list((report_dir / "masks").glob("concept_*"))), k
+                    )
+                    self.assertTrue(
+                        (
+                            report_dir / "masks" / f"concept_{k - 1:02d}" / "val0.tiff"
+                        ).exists()
+                    )
+                    self.assertIn("FIXTURE", report.read_text())
+                    self.assertEqual(before, checkpoint.read_bytes())
+                    self.assertEqual(
+                        pd.read_parquet(
+                            report_dir / "concept_effects.parquet"
+                        ).concept.nunique(),
+                        k,
+                    )
+                    self.assertEqual(
+                        json.loads((report_dir / "report_manifest.json").read_text())[
+                            "n_components"
+                        ],
+                        k,
+                    )
+                    representatives = pd.read_parquet(
+                        report_dir / "representative_tiles.parquet"
+                    )
+                    session = json.loads(
+                        unquote(urlsplit(representatives.xopat_url.iloc[0]).fragment)
+                    )
+                    self.assertEqual(len(session["data"]), 2 * (1 + k))
+                    # Reject an explicit evaluation count mismatch before reading pixels.
+                    manifest_path = report_dir / "manifest.json"
+                    manifest = json.loads(manifest_path.read_text())
+                    manifest["n_components"] = k + 1
+                    manifest_path.write_text(json.dumps(manifest))
+                    from ml.concept_explainability.report import build_report
+
+                    source.run_id = "offline-fixture"
+                    with self.assertRaisesRegex(ValueError, "n_components"):
+                        build_report(
+                            source, dictionary_dir, report_dir, root / "bad-report"
+                        )
 
     def test_eight_examples_use_distinct_slides(self):
         keys = pd.DataFrame(
@@ -203,6 +243,57 @@ class ReportTests(unittest.TestCase):
         )
         selected = select_tiles(codes, keys)
         self.assertTrue((selected.groupby("concept").size() == 2).all())
+
+    def test_html_component_counts_and_input_mismatches(self):
+        selected = pd.DataFrame(
+            {"concept": [0], "slide_id": ["s"], "xopat_url": ["url"]}
+        )
+        for k in (8, 16, 32):
+            with self.subTest(n_components=k):
+                page = render_naming_html(
+                    {"n_components": k},
+                    selected,
+                    ["image"],
+                    pd.DataFrame(),
+                    pd.DataFrame(),
+                    pd.DataFrame(),
+                )
+                self.assertEqual(page.count("<section>"), k)
+                self.assertIn(f"MammaPrint: {k} visual concepts", page)
+                self.assertIn(f'max="{k - 1}"', page)
+                self.assertIn(f'"n_components": {k}', page)
+                script = page.split("<script>")[1].split("</script>")[0]
+                harness = """
+const output={value:'', hidden:true, select(){}}; const status={textContent:''};
+let same='';
+global.document={getElementById(id){if(id==='answers')return output;if(id==='copy-status')return status;if(id==='same-0')return {value:same};if(id.startsWith('same-'))return {value:''};return {value:'A',checked:false};}};
+global.navigator={};
+"""
+                checks = f"""
+(async()=>{{await copyAnswers();if(JSON.parse(output.value).answers.length!=={k})throw Error('wrong count');
+same='{k - 1}';await copyAnswers();if(JSON.parse(output.value).answers[0].same_as!==same)throw Error('valid bound rejected');
+output.value='';same='{k}';await copyAnswers();if(output.value!==''||!status.textContent.includes('0 to {k - 1}'))throw Error('invalid bound accepted');
+}})().catch(e=>{{console.error(e);process.exitCode=1}});
+"""
+                result = subprocess.run(
+                    ["node", "-e", harness + script + checks],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+        for manifest, bad in [
+            ({"n_components": True}, selected),
+            ({"n_components": 8}, selected.assign(concept=8)),
+        ]:
+            with self.assertRaises(ValueError):
+                render_naming_html(
+                    manifest,
+                    bad,
+                    ["image"],
+                    pd.DataFrame(),
+                    pd.DataFrame(),
+                    pd.DataFrame(),
+                )
 
     def test_blind_report_has_no_visible_labels_or_effects(self):
         selected = pd.DataFrame(
@@ -240,7 +331,7 @@ global.document = {
   getElementById(id){if(id==='answers')return output; if(id==='reveal') return {disabled:false}; if(id==='copy-status') return {textContent:''}; if(id.startsWith('same-')) return {value:''}; return other}
 };
 global.navigator = {};
-global.REPORT_ID = {dictionary_id:'dict', source_run_id:'run'};
+global.REPORT_ID = {dictionary_id:'dict', source_run_id:'run', n_components:16};
 """
         assertions = r"""
 revealResults();

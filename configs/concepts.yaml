@@ -14,7 +14,7 @@ local_checkpoint: null
 step_sds: 0.25
 ray_cpus: 8
 fit:
-  n_components: 16
+  n_components: 16  # Positive integer K; 16 preserves the replication default.
   nmf:
     batch_size: 25600
     shuffle_buffer_size: 250000

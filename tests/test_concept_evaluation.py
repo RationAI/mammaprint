@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,8 +14,11 @@ from ml.concept_explainability.evaluation import (
     concept_push,
     displayed_outputs,
     evaluate_bag,
+    evaluate_concepts,
     fit_dictionary,
     load_dictionary,
+    read_codes,
+    write_codes,
 )
 from ml.concept_explainability.model import SourceRun
 from ml.concept_explainability.upstream import ConceptAutoencoder, nnls_batch
@@ -92,6 +96,86 @@ def local_download(sources):
 
 
 class DictionaryTests(unittest.TestCase):
+    def test_invalid_component_counts_fail_before_source_access(self):
+        for k in (True, False, 0, -1, 8.5, 8.0, "8", None):
+            with (
+                self.subTest(n_components=k),
+                tempfile.TemporaryDirectory() as directory,
+                self.assertRaisesRegex(ValueError, "positive integer"),
+            ):
+                fit_dictionary(
+                    None,
+                    OmegaConf.create({"n_components": k}),
+                    Path(directory),
+                    use_ray=False,
+                )
+
+    @patch(
+        "ml.data.datasets.single_scale.download_level_sources",
+        side_effect=local_download,
+    )
+    def test_insufficient_training_or_initialization_rows(self, _download):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = fixture_source(root)
+            settings = OmegaConf.create({"n_components": 33, "nmf": {"batch_size": 64}})
+            with self.assertRaisesRegex(ValueError, "33 training tiles"):
+                fit_dictionary(source, settings, root / "too-many", use_ray=False)
+            settings.n_components = 32
+            settings.nmf.batch_size = 16
+            with self.assertRaisesRegex(ValueError, "initialization.*32"):
+                fit_dictionary(source, settings, root / "small-batch", use_ray=False)
+
+    def test_load_rejects_manifest_atom_shift_and_checksum_mismatches(self):
+        from hashlib import sha256
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            h = np.eye(8, 2560, dtype=np.float32)
+            shift = np.zeros(2560, np.float32)
+            pd.DataFrame(h).to_parquet(root / "h.parquet")
+            np.save(root / "shift.npy", shift)
+            manifest = {
+                "dictionary_id": sha256(h.tobytes() + shift.tobytes()).hexdigest(),
+                "n_components": 8,
+                "config": {"n_components": 8, "nmf": {"nnls_iter": 2}},
+            }
+            cases = [
+                ({**manifest, "n_components": 16}, shift),
+                ({**manifest, "n_components": True}, shift),
+                (
+                    {**manifest, "config": {**manifest["config"], "n_components": 16}},
+                    shift,
+                ),
+                (manifest, shift[:-1]),
+                ({**manifest, "dictionary_id": "wrong"}, shift),
+            ]
+            for broken, mu in cases:
+                with self.subTest(manifest=broken, shift_shape=mu.shape):
+                    (root / "manifest.json").write_text(json.dumps(broken))
+                    np.save(root / "shift.npy", mu)
+                    with self.assertRaises(ValueError):
+                        load_dictionary(root)
+
+    def test_coefficient_count_and_rows_must_match(self):
+        for k in (8, 16, 32):
+            with (
+                self.subTest(n_components=k),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                keys = pd.DataFrame({"slide_id": ["s", "s"]})
+                path = Path(directory) / "codes.parquet"
+                codes = np.ones((2, k), np.float32)
+                write_codes(keys, codes, path)
+                frame = pd.read_parquet(path)
+                np.testing.assert_array_equal(read_codes(frame, k), codes)
+                with self.assertRaisesRegex(ValueError, "Coefficient"):
+                    read_codes(frame, k + 1)
+                with self.assertRaisesRegex(ValueError, "Coefficient"):
+                    read_codes(frame.assign(**{f"c{k}": 1}), k)
+                with self.assertRaisesRegex(ValueError, "Coefficient"):
+                    write_codes(keys, codes[:1], path)
+
     def test_ibd_nnls_and_decode_parity(self):
         h = np.array([[1, -1, 0], [0, 1, -1]], dtype=np.float32)
         x = np.array([[2, -1, -1], [0, 3, -3]], dtype=np.float32)
@@ -126,16 +210,60 @@ class DictionaryTests(unittest.TestCase):
                     "semi_nmf": {"forget": 0.95, "ridge": 1e-6},
                 }
             )
-            fit_dictionary(source, settings, root / "dictionary", use_ray=False)
-            dictionary = load_dictionary(root / "dictionary")
-            np.testing.assert_allclose(
-                dictionary.mu,
-                training.astype(np.float64).mean(0).astype(np.float32),
-                atol=1e-6,
-            )
-            self.assertEqual(dictionary.dictionary.shape, (16, 2560))
-            self.assertTrue(np.any(dictionary.dictionary < 0))
-            self.assertFalse((root / "dictionary" / "coefficients" / "test").exists())
+            module = MammaprintModule(
+                IdentityEncoder(2560), MeanPool(2560), LinearHead(2560)
+            ).eval()
+            for k in (8, 16, 32):
+                with self.subTest(n_components=k):
+                    settings.n_components = k
+                    directory = root / f"dictionary-{k}"
+                    fit_dictionary(source, settings, directory, use_ray=False)
+                    dictionary = load_dictionary(directory)
+                    np.testing.assert_allclose(
+                        dictionary.mu,
+                        training.astype(np.float64).mean(0).astype(np.float32),
+                        atol=1e-6,
+                    )
+                    self.assertEqual(dictionary.dictionary.shape, (k, 2560))
+                    self.assertTrue(np.any(dictionary.dictionary < 0))
+                    self.assertFalse((directory / "coefficients" / "test").exists())
+                    self.assertEqual(
+                        json.loads((directory / "manifest.json").read_text())[
+                            "n_components"
+                        ],
+                        k,
+                    )
+                    codes = pd.read_parquet(
+                        directory / "coefficients/train/train0.parquet"
+                    )
+                    self.assertEqual(
+                        [c for c in codes if c.startswith("c")],
+                        [f"c{i}" for i in range(k)],
+                    )
+                    evaluation = root / f"evaluation-{k}"
+                    with patch(
+                        "ml.concept_explainability.evaluation.load_frozen_model",
+                        return_value=module,
+                    ):
+                        evaluate_concepts(source, directory, "val", evaluation)
+                    effects = pd.read_parquet(
+                        evaluation / "slide_concept_effects.parquet"
+                    )
+                    self.assertEqual(len(effects), 2 * k)
+                    self.assertEqual(set(effects.concept), set(range(k)))
+                    self.assertEqual(
+                        json.loads((evaluation / "manifest.json").read_text())[
+                            "n_components"
+                        ],
+                        k,
+                    )
+                    # Legacy manifests recorded K in the config only.
+                    manifest = json.loads((directory / "manifest.json").read_text())
+                    del manifest["n_components"]
+                    (directory / "manifest.json").write_text(json.dumps(manifest))
+                    self.assertEqual(
+                        load_dictionary(directory).dictionary.shape, (k, 2560)
+                    )
 
     @patch(
         "ml.data.datasets.single_scale.download_level_sources",

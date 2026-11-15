@@ -1,6 +1,7 @@
 """Fit the reused concept dictionary and evaluate native frozen-model effects."""
 
 import json
+from numbers import Integral
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,46 @@ from ml.concept_explainability.upstream import (
 
 def save_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def validate_n_components(value: Any) -> int:
+    """Validate K without silently truncating or coercing configuration values."""
+    if isinstance(value, bool) or not isinstance(value, Integral) or value <= 0:
+        raise ValueError("n_components must be a positive integer.")
+    return int(value)
+
+
+def dictionary_n_components(manifest: dict[str, Any]) -> int:
+    """Read K from new manifests or the saved fit config in older dictionaries."""
+    configured = validate_n_components(manifest["config"]["n_components"])
+    declared = validate_n_components(manifest.get("n_components", configured))
+    if declared != configured:
+        raise ValueError("Dictionary n_components does not match its saved fit config.")
+    return declared
+
+
+def validate_codes(codes: np.ndarray, n_components: int, n_rows: int) -> np.ndarray:
+    if (
+        codes.shape != (n_rows, n_components)
+        or not np.isfinite(codes).all()
+        or np.any(codes < 0)
+    ):
+        raise ValueError(
+            "Coefficient dimensions or values do not match the dictionary."
+        )
+    return codes
+
+
+def read_codes(frame: pd.DataFrame, n_components: int) -> np.ndarray:
+    expected = [f"c{k}" for k in range(n_components)]
+    actual = [
+        c for c in frame if isinstance(c, str) and c.startswith("c") and c[1:].isdigit()
+    ]
+    if actual != expected:
+        raise ValueError("Coefficient columns do not match dictionary n_components.")
+    return validate_codes(
+        frame[expected].to_numpy(dtype=np.float32), n_components, len(frame)
+    )
 
 
 class _FixtureDataset:
@@ -59,8 +100,7 @@ def fit_dictionary(
         raise ValueError(
             "Dictionary output directory must be empty; fitted dictionaries are immutable."
         )
-    if int(config.n_components) != 16:
-        raise ValueError("This replication fixes n_components=16.")
+    n_components = validate_n_components(config.n_components)
     dataset = source_dataset(source, "train")
     identity = corpus_identity(source, dataset)
     total = np.zeros(2560, dtype=np.float64)
@@ -73,8 +113,15 @@ def fit_dictionary(
             if count > 4096:
                 raise ValueError("Fixture fitting is limited to 4096 tiles.")
             fixture_rows.append(slide.embeddings)
-    if count < 16:
-        raise ValueError("At least 16 training tiles are required for the dictionary.")
+    if count < n_components:
+        raise ValueError(
+            f"At least {n_components} training tiles are required for the dictionary."
+        )
+    # The unchanged upstream initializer samples at most 20,000 first-batch rows.
+    if min(count, config.nmf.batch_size, 20_000) < n_components:
+        raise ValueError(
+            f"Dictionary initialization requires at least {n_components} sampled first-batch rows."
+        )
     shift = (total / count).astype(np.float32)
     stream = (
         embedding_dataset(source, "train", dataset)
@@ -84,7 +131,7 @@ def fit_dictionary(
     h = gauge_fix_dictionary(
         fit_semi_nmf_online(stream, config, shift, np.ones_like(shift))
     )
-    if h.shape != (16, 2560) or not np.isfinite(h).all():
+    if h.shape != (n_components, 2560) or not np.isfinite(h).all():
         raise ValueError("Dictionary fit produced invalid atoms.")
     output_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(h).rename_axis("component").to_parquet(output_dir / "h.parquet")
@@ -96,6 +143,7 @@ def fit_dictionary(
         output_dir / "manifest.json",
         {
             "dictionary_id": dictionary_id,
+            "n_components": n_components,
             "upstream_sha": UPSTREAM_SHA,
             "source_run_id": source.run_id,
             "training_sha": source.training_sha,
@@ -121,6 +169,9 @@ def fit_dictionary(
 
 
 def write_codes(keys: pd.DataFrame, codes: np.ndarray, path: Path) -> None:
+    if codes.ndim != 2:
+        raise ValueError("Coefficients must be a two-dimensional matrix.")
+    validate_codes(codes, validate_n_components(codes.shape[1]), len(keys))
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.concat(
         [
@@ -135,10 +186,11 @@ def load_dictionary(directory: Path) -> ConceptAutoencoder:
     from hashlib import sha256
 
     manifest = json.loads((directory / "manifest.json").read_text())
+    n_components = dictionary_n_components(manifest)
     h = pd.read_parquet(directory / "h.parquet").to_numpy(dtype=np.float32)
     shift = np.load(directory / "shift.npy", allow_pickle=False)
     if (
-        h.shape != (16, 2560)
+        h.shape != (n_components, 2560)
         or shift.shape != (2560,)
         or not np.isfinite(h).all()
         or not np.isfinite(shift).all()
@@ -198,7 +250,18 @@ def concept_push(
 def evaluate_bag(
     module, slide, dictionary, spread, label_mode, device, *, codes=None, step_sds=0.25
 ):
+    n_components = validate_n_components(dictionary.dictionary.shape[0])
     codes = encode_slide(slide, dictionary) if codes is None else codes
+    validate_codes(codes, n_components, len(slide.embeddings))
+    spread = np.asarray(spread)
+    if (
+        spread.shape != (n_components,)
+        or not np.isfinite(spread).all()
+        or np.any(spread < 0)
+    ):
+        raise ValueError(
+            "Intervention spread must match dictionary n_components and be finite and nonnegative."
+        )
 
     def raw(features):
         return (
@@ -256,6 +319,7 @@ def evaluate_concepts(
     if identity != dictionary_manifest["corpus"]:
         raise ValueError("Source training corpus does not match the fitted dictionary.")
     dictionary = load_dictionary(dictionary_dir)
+    n_components = dictionary.dictionary.shape[0]
     module = load_frozen_model(source).to(device)
     mode = str(source.config.label_mode)
     dataset = source_dataset(source, split)
@@ -271,7 +335,7 @@ def evaluate_concepts(
         slide_ids.append(slide.slide_id)
     means = np.asarray(means)
     sufficient = len(means) >= 2
-    spread = means.std(axis=0, ddof=1) if sufficient else np.zeros(16)
+    spread = means.std(axis=0, ddof=1) if sufficient else np.zeros(n_components)
     slide_rows, per_slide_effects = [], []
     squared_error = tiles = 0
     targets = ["luminal_a_probability"] if mode == "type" else ["mammaprint_index"]
@@ -281,7 +345,7 @@ def evaluate_concepts(
         frame = pd.read_parquet(
             output_dir / "coefficients" / f"{slide.slide_id}.parquet"
         )
-        codes = frame[[f"c{k}" for k in range(16)]].to_numpy(dtype=np.float32)
+        codes = read_codes(frame, n_components)
         result = evaluate_bag(
             module,
             slide,
@@ -310,7 +374,7 @@ def evaluate_concepts(
                     "label": float(slide.label[column]),
                 }
             )
-            for k in range(16):
+            for k in range(n_components):
                 per_slide_effects.append(
                     {
                         "slide_id": slide.slide_id,
@@ -356,7 +420,7 @@ def evaluate_concepts(
             if not len(ids):
                 continue
             mask = np.isin(slide_ids, ids)
-            for k in range(16):
+            for k in range(n_components):
                 selected = effects[
                     (effects.target == target)
                     & (effects.concept == k)
@@ -409,6 +473,7 @@ def evaluate_concepts(
         output_dir / "manifest.json",
         {
             "dictionary_id": dictionary_manifest["dictionary_id"],
+            "n_components": n_components,
             "corpus": identity,
             "source_run_id": source.run_id,
             "training_sha": source.training_sha,
