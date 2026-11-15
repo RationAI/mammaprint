@@ -5,5 +5,5 @@ defaults:
   - _self_
 
 metadata:
-  run_name: Multiscale local + slide attention — L5/L4/L3
+  run_name: Multiscale local + slide attention — L${pyramid.level_order.0}/L${pyramid.level_order.1}/L${pyramid.level_order.2}
   description: Shared projection with gated attention within every level and across aligned slide regions.

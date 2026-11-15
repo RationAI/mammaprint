@@ -5,5 +5,5 @@ defaults:
   - _self_
 
 metadata:
-  run_name: Multiscale raw 21-slot flatten + linear — L5/L4/L3
+  run_name: Multiscale raw 21-slot flatten + linear — L${pyramid.level_order.0}/L${pyramid.level_order.1}/L${pyramid.level_order.2}
   description: Preserves the fixed aligned 21-token layout, averages by slide region, and flattens into a linear head.

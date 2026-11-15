@@ -5,5 +5,5 @@ defaults:
   - _self_
 
 metadata:
-  run_name: Multiscale mean/concat/mean + linear — L5/L4/L3
+  run_name: Multiscale mean/concat/mean + linear — L${pyramid.level_order.0}/L${pyramid.level_order.1}/L${pyramid.level_order.2}
   description: Parameter-free per-level and slide means with concatenated levels and a linear head.

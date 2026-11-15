@@ -167,6 +167,9 @@ class MultiscaleExperimentTest(unittest.TestCase):
                 self.assertEqual(
                     metadata,
                     {
+                        "dataset_family": "tissue_only",
+                        "level_order": [5, 4, 3],
+                        "level_ratios": [1, 2, 4],
                         "tile_extent": 224,
                         "overlap_policy": "non_overlapping",
                         "selection_seed": 0,

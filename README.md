@@ -29,3 +29,13 @@ uv run python -m ml.train +experiment=ml/multiscale/multiscale_mean_linear
 See the [modular multiscale MIL configuration reference](docs/multiscale-mil-config.md)
 for stage options, compatible combinations, named presets, and data-card
 overrides.
+
+Select a final mask dataset and level window with `data/pyramid`, for example:
+
+```bash
+uv run python -m ml.train +experiment=ml/multiscale/multiscale_transformer \
+  data/pyramid=epithel_and_cancer_5_l5_l4_l3
+```
+
+All six final embedding families support L5/L4/L3 and L4/L3/L2; see the
+configuration reference for the available selections.

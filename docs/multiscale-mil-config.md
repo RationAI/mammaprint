@@ -1,14 +1,51 @@
 # Modular multi-scale MIL configuration
 
 This reference configures `ml.models.aggregators.ModularMultiScaleMIL` for a
-complete L5/L4/L3 embedding pyramid. The model receives a single slide bag with
-shape `(R, 21, D)`: `R` retained level-5 anchor regions, and `21 = 1 + 4 + 16`
-ordered tokens for L5, L4, and L3. The current pyramid data card fixes
+complete three-level embedding pyramid, using L5/L4/L3 by default. The model
+receives a single slide bag with shape `(R, 21, D)`: `R` retained anchor regions
+and `21 = 1 + 4 + 16` ordered coarse/intermediate/fine tokens. The default card fixes
 `level_ratios: [1, 2, 4]`, `anchor_level: 5`, `level_order: [5, 4, 3]`, and
 `tile_extent: 224`. `R` can differ between slides; all other axes are fixed. Before downloading
 artifacts, each split derives its ordered ratios from the level cards and
 checks them against `ml.aggregator.level_ratios`. Overrides to level order,
 resolutions, or model ratios must agree; equal token counts alone are insufficient.
+
+## Selecting the final datasets
+
+The multiscale cards compose the final embedding cards from `feat/tiling-values`
+without copying or replacing their artifact URIs or predefined splits. All six
+families support both level windows, `l5_l4_l3` and `l4_l3_l2`:
+
+| Family | Existing embedding selection |
+|---|---|
+| `tissue_only` | Tissue-only embeddings |
+| `cancer_mask_5` | Cancer probability threshold 0.5 |
+| `cancer_mask_9` | Cancer probability threshold 0.9 |
+| `epithel` | Epithelium overlap greater than 0.25 |
+| `epithel_and_cancer_5` | Epithelium overlap greater than 0.25 AND cancer probability greater than 0.5 |
+| `epithel_or_cancer_5` | Epithelium overlap greater than 0.25 OR cancer probability greater than 0.5 |
+
+Select `<family>_<level_window>` with `data/pyramid`; this works with every named
+architecture preset. For example:
+
+```bash
+uv run python -m ml.train \
+  +experiment=ml/multiscale/multiscale_transformer \
+  data/pyramid=epithel_and_cancer_5_l5_l4_l3
+
+uv run python -m ml.train \
+  +experiment=ml/multiscale/multiscale_mean_linear \
+  data/pyramid=cancer_mask_9_l4_l3_l2
+```
+
+The default remains `tissue_only_l5_l4_l3`. The L4/L3/L2 cards use L4 anchors
+and the same 1/4/16 layout and feature widths. Learned position and level vectors
+identify relative slots in the selected window. Mask filtering preserves `x`,
+`y`, and `embedding`; complete-pyramid selection runs on the remaining tiles.
+Empty bags and regions missing required tiles are excluded, with selection
+outcomes recorded in the pyramid audit. Run names reflect the selected level window, and MLflow hyperparameters record
+the dataset family, level order, and ratios. No tiling, embedding, filtering, or
+split-writing job is launched by these training configurations.
 
 The base card is `configs/ml/aggregator/multiscale_modular.yaml`. It makes all
 five stages visible, with `null` meaning identity/preserve rather than an

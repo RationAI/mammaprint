@@ -5,5 +5,5 @@ defaults:
   - _self_
 
 metadata:
-  run_name: Multiscale projected mean + linear — L5/L4/L3
+  run_name: Multiscale projected mean + linear — L${pyramid.level_order.0}/L${pyramid.level_order.1}/L${pyramid.level_order.2}
   description: Shared feature projection followed by per-level and slide means, level concatenation, and a linear head.
