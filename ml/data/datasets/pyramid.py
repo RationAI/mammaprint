@@ -136,7 +136,7 @@ class PyramidLayout:
 
 
 class PyramidScaleDataset(Dataset[PyramidSample]):
-    """Lazily gather complete aligned pyramids from existing embedding Parquets."""
+    """Gather aligned pyramids after validating the model's ordered level ratios."""
 
     def __init__(
         self,
@@ -146,6 +146,7 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
         anchor_level: int,
         level_order: Sequence[int],
         tile_extent: int,
+        level_ratios: Sequence[int],
         label_mode: str = "type",
         require_complete: bool = True,
         overlap_policy: OverlapPolicy | str = OverlapPolicy.NON_OVERLAPPING,
@@ -167,6 +168,13 @@ class PyramidScaleDataset(Dataset[PyramidSample]):
             level_order=level_order,
             tile_extent=tile_extent,
         )
+        model_ratios = tuple(level_ratios)
+        if self.layout.ratios != model_ratios:
+            raise ValueError(
+                f"Dataset level_order={self.layout.level_order!r} and level-card "
+                f"resolutions produce level_ratios={self.layout.ratios!r}, "
+                f"but the model expects level_ratios={model_ratios!r}."
+            )
         sources = {
             level: split_uri(self.levels[level], "uris", split, level)
             for level in self.layout.level_order
