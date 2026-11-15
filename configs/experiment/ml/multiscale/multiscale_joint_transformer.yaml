@@ -4,7 +4,6 @@ defaults:
   - /ml/aggregator/multiscale_presets: multiscale_joint_transformer
   - _self_
 
-trainable_parameters: 4756226
 metadata:
   run_name: Multiscale joint 21-token Transformer — L5/L4/L3
   description: Joint Transformer over the complete aligned 21-token pyramid, followed by gated slide attention.

@@ -41,5 +41,4 @@ metadata:
     slide_dim: ${slide_dim}
     head: ${ml.head._target_}
     loss: ${ml.loss._target_}
-    trainable_parameters: ${trainable_parameters}
     training_seed: ${seed}
