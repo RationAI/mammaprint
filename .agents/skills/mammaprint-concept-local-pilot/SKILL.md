@@ -112,3 +112,59 @@ Safe tests cover plan isolation, cache hashes, strict transfer budgets/cleanup,
 ZIP safety, target identity, truthful split provenance and complete local bag
 loading. They do not establish live service availability, real-checkpoint parity
 or clinical validity; record actual authorized execution evidence separately.
+
+## Offline same-subset K comparison
+
+After independent review of the completed K16 pilot evidence, reuse its private
+`reuse_inputs.json` with `scripts/ml/run_local_concept_comparison.py`. This is a
+fixed K16/8/32 **smoke comparison**, retaining the same 294 complete train tiles,
+339 validation tiles, seed42 and all baseline settings except K. It requires no
+VPN, authentication or service calls; Python DNS/socket access is blocked.
+
+```bash
+python scripts/ml/run_local_concept_comparison.py \
+  --reuse-inputs /private/pilot/results-v1/reuse_inputs.json \
+  --reuse-inputs-sha256 HANDOFF_SHA256 \
+  --baseline-manifest-sha256 PILOT_MANIFEST_SHA256 \
+  --output-root /private/pilot/comparison-v1
+```
+
+Recover both command pins from the reviewed private evidence. Default is a
+JSON-only plan: no model imports or writes; full asset/hash/geometry checks are
+deferred. Add `--execute` only for authorized local computation. Keep the locked
+environment, CPU thread limits and fresh private output root used for the pilot.
+The existing caches/results stay untouched. No remote writes, downloads, test
+bags, source-model training or MLflow logging occur.
+
+The runner verifies original config/checkpoint/tiling/bag pins, saved source
+identity/membership, all selected rows and cached mapping values. Live run
+identity is inherited from audited evidence, not rechecked offline. The ordinary
+SingleScaleDataset constructor invokes MLflow transport even for local paths;
+the adapter instead sets its local fields and calls the same production label
+loader, explicitly rejecting any roster/row exclusions. Focused tests compare its
+bags, labels and keys against existing pilot preparation. Existing WSI sidecars
+and geometry are checked. A defined new per-file WSI inventory records lineage to
+audited caches; the old aggregate tree hashes are **unverified** because their
+serialization was not recorded. Never claim those old hashes matched.
+
+K16 must reproduce the baseline dictionary ID before K8/32 proceed. Native,
+adapter and saved original logits must agree exactly across K; reconstructed
+predictions may differ. Inspect `comparison_manifest.json`, `comparison.csv`,
+`comparison.md` and `k{K}/validation/naming_k{K}.html`. A mismatch stops the run;
+preserve failed evidence and investigate before a fresh attempt. Cleanup removes
+only the explicitly chosen new comparison output root; no remote rollback is
+needed. Do not rerun into a nonempty output root.
+
+One seed/two validation slides cannot establish optimal K, stability, patient
+separation or clinical validity. Gallery shortages and per-K cohort SD calibration
+remain visible; effect magnitudes cannot rank K. Local xOpat alignment stays
+unverified. Independently audit real numerical/report artifacts after execution.
+
+```bash
+python -m unittest tests.test_local_concept_comparison -v
+```
+
+These synthetic tests cover offline planning, socket blocking, cache/roster/label
+validation, full local dataset parity and real numerical K16/8/32 orchestration.
+Image IO is substituted in that orchestration fixture; actual cached-slide pixel,
+mask and report checks belong to the independent result-evidence audit.
