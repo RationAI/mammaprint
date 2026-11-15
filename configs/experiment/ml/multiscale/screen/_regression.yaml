@@ -1,0 +1,33 @@
+# @package _global_
+# Shared settings for the proposed three-seed L4/L3/L2 regression screen.
+defaults:
+  - /experiment/ml/multiscale: _common
+  - override /ml/loss@ml.loss: mse
+  - override /ml/metrics:
+      - mae
+      - mse
+      - thresholded_f1
+      - thresholded_precision
+      - thresholded_recall
+      - thresholded_specificity
+  - _self_
+
+label_mode: index
+multiscale_hidden_dim: 256
+seed: 0  # Repeat with seeds 0, 1, and 2; the pyramid selection seed stays fixed.
+test_after_fit: false
+
+ml:
+  metrics:
+    thresholded_f1:
+      threshold: 0.0
+      target_threshold: 0.0
+    thresholded_precision:
+      threshold: 0.0
+      target_threshold: 0.0
+    thresholded_recall:
+      threshold: 0.0
+      target_threshold: 0.0
+    thresholded_specificity:
+      threshold: 0.0
+      target_threshold: 0.0

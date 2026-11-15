@@ -1,0 +1,11 @@
+# @package _global_
+# Matched BCE control for ean5_mean_regression; change only the task.
+defaults:
+  - /experiment/ml/multiscale/multiscale_mean_linear
+  - override /data/pyramid: epithel_and_cancer_5_l4_l3_l2
+  - _self_
+
+seed: 0  # Repeat with seeds 0, 1, and 2.
+test_after_fit: false
+metadata:
+  run_name: Screen ean5 mean BCE L4/L3/L2 seed ${seed}
