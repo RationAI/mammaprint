@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import numpy as np
@@ -133,25 +133,74 @@ def _add_slide_identity(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.drop(columns="path")
 
 
+def _split_audit_roster(source: SourceRun, split: str) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Recover usable membership without fetching any uncached embedding bags."""
+    if split in source.datasets:
+        dataset = source.datasets[split]
+        slides = dataset.slides
+        evidence = {
+            "membership_source": "cached_dataset",
+            "empty_bags": "checked by cached dataset"
+            if hasattr(dataset, "empty_slides")
+            else "unverified: cached roster has no empty-bag evidence",
+        }
+    else:
+        from mlflow.artifacts import list_artifacts
+
+        from ml.data.datasets._sources import load_labeled_slides, split_uri
+        from ml.data.datasets.labels import LabelMode
+
+        config = source.config.datamodule[split]
+        if config.get("_target_") not in {
+            "ml.data.SingleScaleDataset",
+            "ml.data.datasets.single_scale.SingleScaleDataset",
+            "ml.data.SpatialScaleDataset",
+            "ml.data.datasets.spatial_scale.SpatialScaleDataset",
+        }:
+            raise ValueError("Split audit requires a known precomputed embedding dataset.")
+        memberships = []
+        for level, card in config.levels.items():
+            uri = split_uri(dict(card), "uris", str(config.split), int(level))
+            # list_artifacts lists immediate children only. Never recurse, download,
+            # or inspect Parquet metadata: even zero-byte listed bags remain here.
+            memberships.append({
+                PurePosixPath(item.path).stem
+                for item in list_artifacts(artifact_uri=uri)
+                if not item.is_dir and PurePosixPath(item.path).suffix == ".parquet"
+            })
+        present = set.intersection(*memberships) if memberships else set()
+        labeled = load_labeled_slides(config.data_mapping, LabelMode(config.get("label_mode", "type")))
+        slides = labeled[labeled["name"].isin(present)].reset_index(drop=True)
+        evidence = {
+            "membership_source": "artifact_listing",
+            "empty_bags": "unverified: listed bags retained conservatively",
+        }
+    if slides.empty:
+        raise ValueError(f"Empty usable {split} embedding corpus.")
+    if slides["name"].duplicated().any():
+        raise ValueError("Duplicate slide identifiers in source dataset.")
+    return slides, {**evidence, "n_slides": len(slides)}
+
+
 def audit_splits(source: SourceRun) -> dict[str, Any]:
-    """Reject overlapping slides and patients when a stable patient key exists."""
-    datasets = {
-        split: source_dataset(source, split) for split in ("train", "val", "test")
+    """Reject slide/patient leakage using cached rosters or artifact metadata."""
+    rosters = {
+        split: _split_audit_roster(source, split) for split in ("train", "val", "test")
     }
-    groups = {split: set(dataset.slides["name"]) for split, dataset in datasets.items()}
+    groups = {split: set(slides["name"]) for split, (slides, _) in rosters.items()}
     for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
         if groups[left] & groups[right]:
             raise ValueError(f"Slide leakage between {left} and {right}.")
     common = set.intersection(
-        *(set(dataset.slides.columns) for dataset in datasets.values())
+        *(set(slides.columns) for slides, _ in rosters.values())
     )
     patient_key = next(
         (key for key in ("patient_id", "case_id", "record_num") if key in common), None
     )
     if patient_key:
         patients = {
-            split: set(dataset.slides[patient_key].dropna().astype(str))
-            for split, dataset in datasets.items()
+            split: set(slides[patient_key].dropna().astype(str))
+            for split, (slides, _) in rosters.items()
         }
         for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
             if patients[left] & patients[right]:
@@ -164,4 +213,6 @@ def audit_splits(source: SourceRun) -> dict[str, Any]:
         "patient_audit": "checked"
         if patient_key
         else "unavailable: no stable patient key",
+        "splits": {split: evidence for split, (_, evidence) in rosters.items()},
+        "limitation": "Artifact listings and the current label mapping do not establish historical mapping bytes.",
     }

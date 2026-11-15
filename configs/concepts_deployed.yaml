@@ -2,6 +2,8 @@
 defaults:
   - concepts
   - _self_
+action: fit_explain
+include_test: false
 fit:
   metric:
     enabled: true

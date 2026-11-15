@@ -19,6 +19,7 @@ from ml.concept_explainability.model import (
     model_outputs,
     verify_training_revision,
 )
+from ml.concepts import run
 from ml.models.aggregators.mean import MeanPool
 from ml.models.encoders.identity import IdentityEncoder
 from ml.models.heads.linear import LinearHead
@@ -272,8 +273,6 @@ class RevisionCompatibilityTests(unittest.TestCase):
             verify_training_revision(self.revision, config=config)
 
     def test_local_source_cli_checks_configured_compatibility(self):
-        from ml.concepts import run
-
         source_config = self.root / "resolved.yaml"
         OmegaConf.save(embedding_config(), source_config)
         config = OmegaConf.create(
