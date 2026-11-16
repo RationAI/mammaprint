@@ -15,6 +15,7 @@ Use `scripts/ml/run_checkpoint_recovery.py` from the repository root. One invoca
 - The exact implementation SHA must be pushed to `https://github.com/RationAI/mammaprint.git`. The job checks it out detached. The original training SHA is recovered from the source run tag and checked separately; a missing object may be fetched from the verified origin without checking out historical code. `--training-sha` is only for an absent source tag and cannot override a conflict.
 - Original train/validation data paths, label mapping and dependencies must remain available. Replay verifies native source and original dependency pins, but cannot prove historical data bytes or original runtime fingerprints that were never recorded. Same seed does not guarantee identical lost weights.
 - Defaults request one H100, 16 CPUs, 64Gi RAM and 16Gi shared memory. These are configurable starting resources, not a guarantee of GPU capacity or sufficient memory. The established image is `cerit.io/rationai/base:2.0.6`; CUDA availability is checked in the pod and has not been remotely verified by local tests.
+- The existing helper's `mig-1g.10gb` profile is also accepted. For the selected L2 linear + gated-attention regression family, begin with `--gpu mig-1g.10gb --cpu 8 --memory 32Gi --shm 2Gi`; seed 2 historically completed on that profile, but recovery peak usage is not yet measured. Shared memory is a capacity within host RAM, not extra GPU memory. Keep the original batch size and worker settings; do not truncate bags to fit.
 
 ## Plan, then submit only selected runs
 
@@ -33,6 +34,8 @@ python scripts/ml/run_checkpoint_recovery.py \
 The source URL endpoint must equal `--tracking-uri`. To use the internal pod endpoint `http://mlflow-s3.rationai-mlflow`, pass `--source RUN_ID` instead of the public URL.
 
 Default output is a fully offline JSON job plan: no MLflow lookup, kubeconfig, process execution or cluster call. Inspect source, target, pins, output path, resources and `replace_original: true`. Append `--submit` to the same command only when the concrete job and replacement are authorized. For another selected model, invoke it again with its explicit ID and fresh output root. There is no `--all` option.
+
+MIG planning can be checked locally without Kubernetes: run the example with the resource flags above and omit `--submit`. Expect `resources.gpu: mig-1g.10gb`, `gpu_limit: 1`, CPU 8, RAM 32Gi and shared memory 2Gi; the installed helper resolves the GPU limit to `nvidia.com/mig-1g.10gb: 1`. Launcher tests cover resource forwarding using a mocked submitter; this does not establish live MIG availability or successful training.
 
 The pod runs `python -m ml.recover_checkpoint ... --execute --replace-original` after frozen dependency setup and CUDA preflight. It unsets inherited `MLFLOW_RUN_ID`. Existing general sweep scripts pointing at `feat/tiling-values` do not automatically use this fix; the recovery job pins the fixed implementation explicitly.
 

@@ -187,6 +187,38 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(plan["mode"], "submit")
             self.assertEqual(len(plan["jobs"]), 1)
 
+    def test_mig_recovery_resources_reach_submitter_without_changing_training(self):
+        resources = [
+            "--gpu",
+            "mig-1g.10gb",
+            "--cpu",
+            "8",
+            "--memory",
+            "32Gi",
+            "--shm",
+            "2Gi",
+        ]
+        with patch.object(self.launcher.cluster, "submit_plan") as submit:
+            plan = self.plan(resources)
+            submit.assert_not_called()
+            self.assertEqual(
+                plan["resources"],
+                {
+                    "gpu": "mig-1g.10gb",
+                    "gpu_limit": 1,
+                    "cpu": 8,
+                    "memory": "32Gi",
+                    "shm": "2Gi",
+                },
+            )
+            self.assertEqual(
+                plan["jobs"][0]["script"], self.plan()["jobs"][0]["script"]
+            )
+            self.plan([*resources, "--submit"])
+            args, submitted = submit.call_args.args
+            self.assertEqual(args.gpu, "mig-1g.10gb")
+            self.assertEqual(submitted["resources"], plan["resources"])
+
     def test_existing_submitter_rejects_wrong_target_before_loading_kubeconfig(self):
         helper = SimpleNamespace(CLUSTER="wrong", JOB_NAMESPACE="rationai-jobs-ns")
         with (
