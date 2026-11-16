@@ -21,7 +21,8 @@ import hydra
 from lightning.pytorch import seed_everything
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
-from rationai.mlkit.lightning.loggers import MLFlowLogger
+
+from ml.loggers import MLFlowLogger
 
 
 log = logging.getLogger(__name__)
