@@ -24,7 +24,8 @@ import hydra
 from lightning.pytorch import seed_everything
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
-from rationai.mlkit.lightning.loggers import MLFlowLogger
+
+from ml.loggers import MLFlowLogger
 
 from ml.logging.pyramid_audit import ArtifactLogger, log_pyramid_audit
 
