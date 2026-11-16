@@ -23,9 +23,9 @@ import torch
 from lightning.pytorch import seed_everything
 from omegaconf import DictConfig, OmegaConf
 from rationai.mlkit import autolog
-from rationai.mlkit.lightning.loggers import MLFlowLogger
 
 from ml.data import DataModule, SingleScaleDataset
+from ml.loggers import MLFlowLogger
 from ml.models import MammaprintModule
 from ml.models.heads import LinearHead
 
