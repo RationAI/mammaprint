@@ -196,6 +196,71 @@ class PublicationTests(unittest.TestCase):
             any(path in (CHECKPOINT, MODEL) for _, path in self.client.writes)
         )
 
+    def use_original_protocol(self):
+        config = b"seed: 1\nml: native\ntrainer:\n  max_epochs: 10\n  max_steps: -1\n"
+        self.put(SOURCE, "configs/config-resolved.yaml", config)
+        self.manifest.update(
+            format_version=2,
+            source_config_sha256=sha(config),
+            training_policy="original_horizon_and_early_stopping",
+            trainer_max_epochs=10,
+            trainer_max_steps=-1,
+            historical_best_score=0.2,
+            historical_best_epoch=1,
+            historical_target_reached=False,
+            test_evaluation={
+                "checkpoint_sha256": self.manifest["checkpoint_sha256"],
+                "checkpoint_epoch": 2,
+                "checkpoint_global_step": 8,
+                "metrics": {"test/f1": 0.8},
+            },
+        )
+        for key in ("target_score", "target_reached", "stop_epoch"):
+            del self.manifest[key]
+        self.client.runs[RECOVERY].data.tags["recovery.source_config_sha256"] = sha(
+            config
+        )
+        self.put(
+            RECOVERY,
+            "recovery/test-evaluation.json",
+            json.dumps(self.manifest["test_evaluation"]).encode(),
+        )
+
+    def test_original_protocol_publishes_later_best_despite_lower_historical_performance(
+        self,
+    ):
+        self.use_original_protocol()
+        receipt = self.publish()
+        self.assertEqual(receipt["status"], "completed")
+        self.assertEqual(self.client.path(SOURCE, CHECKPOINT).read_bytes(), self.new)
+        source = self.client.runs[SOURCE].data
+        self.assertEqual(source.metrics, {"test/f1": 0.9})
+        self.assertEqual(source.tags["recovery.test_metrics_run_id"], RECOVERY)
+        self.assertEqual(source.tags["recovery.historical_target_reached"], "false")
+
+    def test_original_protocol_requires_bound_test_evidence_before_mutations(self):
+        self.use_original_protocol()
+        self.manifest["test_evaluation"]["checkpoint_sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "checkpoint mismatch"):
+            self.publish()
+        self.assertEqual(self.client.writes, [])
+        self.manifest["test_evaluation"]["checkpoint_sha256"] = self.manifest[
+            "checkpoint_sha256"
+        ]
+        self.put(
+            RECOVERY, "recovery/test-evaluation.json", b'{"metrics": {"test/f1": 0.7}}'
+        )
+        with self.assertRaisesRegex(ValueError, "artifact differs"):
+            self.publish()
+        self.assertEqual(self.client.writes, [])
+
+    def test_original_protocol_checks_actual_source_horizon(self):
+        self.use_original_protocol()
+        self.manifest["trainer_max_epochs"] = 20
+        with self.assertRaisesRegex(ValueError, "limits differ"):
+            self.publish()
+        self.assertEqual(self.client.writes, [])
+
     def test_success_preserves_history_and_only_replaces_two_canonical_artifacts(self):
         old_tags = copy.deepcopy(self.client.runs[SOURCE].data.tags)
         old_metrics = copy.deepcopy(self.client.runs[SOURCE].data.metrics)

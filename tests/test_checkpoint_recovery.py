@@ -1,4 +1,4 @@
-"""Bounded recovery tests use metadata fakes and tiny local CPU models only."""
+"""Original-protocol recovery tests use metadata fakes and tiny CPU models."""
 
 import copy
 import json
@@ -95,8 +95,10 @@ def test_plan_earliest_tie_preserves_original_horizon():
     e = evidence()
     original = copy.deepcopy(e.config)
     p = c.plan_replay(e, implementation_sha="c" * 40)
-    assert p["stop_epoch"] == 1 and p["completed_epoch_cap"] == 2
-    assert p["target_score"] == 0.2 and p["mode"] == "min"
+    assert p["historical_best_epoch"] == 1
+    assert p["training_policy"] == "original_horizon_and_early_stopping"
+    assert "completed_epoch_cap" not in p
+    assert p["historical_best_score"] == 0.2 and p["mode"] == "min"
     assert p["trainer_max_epochs"] == 10
     assert e.config == original
     assert p["source_config_sha256"] != ""
@@ -108,10 +110,8 @@ def test_plan_earliest_tie_preserves_original_horizon():
         (lambda e: e.monitor_history.append(event(float("nan"), 15, 400)), "finite"),
         (lambda e: e.monitor_history.append(event(0.1, 7, 201)), "multiple|conflict"),
         (lambda e: e.epoch_history.append(event(9, 7, 200)), "ambiguous"),
-        (lambda e: e.config["trainer"].update(min_epochs=3), "minimum"),
         (lambda e: e.config["trainer"].update(val_check_interval=0.5), "cadence"),
         (lambda e: e.config.update(checkpoint="old.ckpt"), "initialization"),
-        (lambda e: e.config["trainer"].update(min_steps=20), "minimum"),
         (lambda e: e.config["ml"].update(_target_="os.system"), "target"),
         (
             lambda e: e.config["trainer"]["callbacks"]["best"].update(
@@ -134,7 +134,9 @@ def test_epoch_alignment_fallback_and_checkpoint_eligibility():
     e.config["trainer"]["callbacks"]["best"]["every_n_epochs"] = 2
     e.monitor_history[0].value = 0.01
     p = c.plan_replay(e, implementation_sha="c" * 40)
-    assert p["stop_epoch"] == 1 and p["epoch_alignment"] == "unambiguous_step"
+    assert (
+        p["historical_best_epoch"] == 1 and p["epoch_alignment"] == "unambiguous_step"
+    )
     e.epoch_history.append(event(3, 7, 198))
     with pytest.raises(ValueError, match="ambiguous"):
         c.plan_replay(e, implementation_sha="c" * 40)
@@ -145,7 +147,7 @@ def test_explicit_selection_is_validation_only_and_recorded():
     p = c.plan_replay(
         evidence(), implementation_sha="c" * 40, monitor="valid/f1", mode="max"
     )
-    assert p["selection_changed"] is True and p["stop_epoch"] == 0
+    assert p["selection_changed"] is True and p["historical_best_epoch"] == 0
     with pytest.raises(ValueError, match="validation"):
         c.plan_replay(
             evidence(), implementation_sha="c" * 40, monitor="test/f1", mode="max"
@@ -271,108 +273,42 @@ def test_effective_config_changes_only_operational_allowlist(tmp_path):
     )
     assert effective["trainer"]["max_epochs"] == 10
     assert effective["logger"]["run_id"] == "d" * 32
-    assert effective["test_after_fit"] is False
+    assert effective["test_after_fit"] is True
+    assert "recovery_budget" not in effective["trainer"]["callbacks"]
     assert changes
     effective["ml"]["bad"] = 1
     with pytest.raises(ValueError, match="allowlist"):
         c.validate_effective_config(original, effective, plan)
 
 
-def test_native_budget_preserves_scheduler_prefix_and_best_checkpoint(tmp_path):
-    import torch
-    from lightning.pytorch import LightningModule, Trainer
-    from lightning.pytorch.callbacks import ModelCheckpoint
-    from torch.utils.data import DataLoader, TensorDataset
-
+def test_historical_score_is_comparison_only_and_original_limits_apply():
     c = core()
-
-    class Tiny(LightningModule):
-        def __init__(self):
-            super().__init__()
-            self.weight = torch.nn.Parameter(torch.tensor(1.0))
-            self.lrs = []
-
-        def training_step(self, batch, batch_idx):
-            self.lrs.append(self.trainer.optimizers[0].param_groups[0]["lr"])
-            return self.weight.square()
-
-        def validation_step(self, batch, batch_idx):
-            self.log("valid/loss", float(5 - self.current_epoch))
-
-        def configure_optimizers(self):
-            optimizer = torch.optim.SGD(self.parameters(), lr=0.1)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=self.trainer.max_epochs
-            )
-            return [optimizer], [scheduler]
-
-    loader = DataLoader(TensorDataset(torch.ones(2, 2)), batch_size=2)
-
-    def run(stop, root):
-        model = Tiny()
-        checkpoint = ModelCheckpoint(
-            dirpath=root, monitor="valid/loss", mode="min", filename="best"
-        )
-        trainer = Trainer(
-            max_epochs=5,
-            accelerator="cpu",
-            devices=1,
-            logger=False,
-            enable_progress_bar=False,
-            enable_model_summary=False,
-            callbacks=[checkpoint]
-            + ([] if stop is None else [c.ReplayBudgetCallback(stop)]),
-        )
-        trainer.fit(model, train_dataloaders=loader, val_dataloaders=loader)
-        return (
-            model,
-            trainer,
-            torch.load(
-                checkpoint.best_model_path, map_location="cpu", weights_only=False
-            ),
-        )
-
-    full, _, _ = run(None, tmp_path / "full")
-    bounded, trainer, checkpoint = run(1, tmp_path / "bounded")
-    assert bounded.lrs == full.lrs[:2]
-    assert (
-        trainer.max_epochs == 5 and checkpoint["epoch"] == 1 and len(bounded.lrs) == 2
-    )
-    first, _, checkpoint = run(0, tmp_path / "first")
-    assert len(first.lrs) == 1 and checkpoint["epoch"] == 0
-
-
-def test_budget_ignores_sanity_and_target_miss_is_explicit():
-    c = core()
-    callback = c.ReplayBudgetCallback(0)
-    trainer = SimpleNamespace(current_epoch=0, sanity_checking=True, should_stop=False)
-    callback.on_train_epoch_end(trainer, None)
-    assert trainer.should_stop is False
-    trainer.sanity_checking = False
-    callback.on_train_epoch_end(trainer, None)
-    assert trainer.should_stop is True
-    plan = c.plan_replay(evidence(), implementation_sha="c" * 40)
-    manifest = c.result_manifest(
-        plan,
-        recovery_run_id="d" * 32,
-        score=0.5,
-        checkpoint_epoch=1,
-        checkpoint_global_step=8,
-        checkpoint_sha256="e" * 64,
-        checkpoint_size=10,
-    )
-    assert manifest["target_reached"] is False and manifest["status"] == "target_missed"
+    e = evidence()
+    e.config["trainer"].update(min_epochs=3, min_steps=20)
+    plan = c.plan_replay(e, implementation_sha="c" * 40)
+    assert plan["historical_best_epoch"] == 1
+    values = {
+        "recovery_run_id": "d" * 32,
+        "score": 0.5,
+        "checkpoint_epoch": 4,
+        "checkpoint_global_step": 24,
+        "checkpoint_sha256": "e" * 64,
+        "checkpoint_size": 10,
+        "test_metrics": {"test/f1": 0.75},
+    }
+    manifest = c.result_manifest(plan, **values)
+    assert manifest["historical_target_reached"] is False
+    assert manifest["status"] == "completed"
     assert manifest["historical_test_metrics_revalidated"] is False
-    with pytest.raises(ValueError, match="finite"):
-        c.result_manifest(
-            plan,
-            recovery_run_id="d" * 32,
-            score=float("inf"),
-            checkpoint_epoch=1,
-            checkpoint_global_step=8,
-            checkpoint_sha256="e" * 64,
-            checkpoint_size=10,
-        )
+    for bad in [
+        {"score": float("inf")},
+        {"checkpoint_epoch": 10},
+        {"test_metrics": {}},
+        {"test_metrics": {"test/f1": float("nan")}},
+        {"test_metrics": {"valid/f1": 0.75}},
+    ]:
+        with pytest.raises(ValueError):
+            c.result_manifest(plan, **(values | bad))
 
 
 def test_inherited_mlflow_context_fails_before_mutations(monkeypatch, tmp_path):
@@ -395,7 +331,9 @@ def test_inherited_mlflow_context_fails_before_mutations(monkeypatch, tmp_path):
 def test_original_multiline_description_is_safe_metadata():
     e = evidence()
     e.config["metadata"] = {"description": "original training\nnotes"}
-    assert core().plan_replay(e, implementation_sha="c" * 40)["stop_epoch"] == 1
+    assert (
+        core().plan_replay(e, implementation_sha="c" * 40)["historical_best_epoch"] == 1
+    )
 
 
 def test_dependency_closure_allows_extras_but_keeps_original_transitive_pins():
@@ -436,10 +374,11 @@ def test_training_ast_allows_only_logger_annotation_import():
 
 
 @pytest.mark.parametrize(
-    "score,expected_status", [(0.1, "completed"), (0.5, "target_missed")]
+    "score,reached,fail_test",
+    [(0.1, True, False), (0.5, False, False), (0.5, False, True)],
 )
-def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
-    monkeypatch, tmp_path, score, expected_status
+def test_execute_original_early_stopping_and_test_selected_best(
+    monkeypatch, tmp_path, score, reached, fail_test
 ):
     import hashlib
     import shutil
@@ -488,12 +427,12 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
             self.status = status
 
     client = Client()
-    stages = []
+    stages, tested_weights, logged_metrics, trainers = [], [], [], []
 
     class Data(LightningDataModule):
         def setup(self, stage=None):
             stages.append(stage)
-            assert stage == "fit"
+            assert stage in {"fit", "test"}
 
         def train_dataloader(self):
             return DataLoader(TensorDataset(torch.ones(1, 2)))
@@ -502,7 +441,7 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
             return self.train_dataloader()
 
         def test_dataloader(self):
-            raise AssertionError("Must never touch test bags")
+            return self.train_dataloader()
 
     class Model(LightningModule):
         def __init__(self):
@@ -513,7 +452,16 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
             return self.weight.square()
 
         def validation_step(self, batch, batch_idx):
-            self.log("valid/loss", score)
+            self.log(
+                "valid/loss",
+                score + [0.4, 0.2, 0.0, 0.1, 0.2][min(self.current_epoch, 4)],
+            )
+
+        def test_step(self, batch, batch_idx):
+            if fail_test:
+                raise RuntimeError("simulated test failure")
+            tested_weights.append(self.weight.detach().clone())
+            self.log("test/f1", 0.75)
 
         def configure_optimizers(self):
             return torch.optim.SGD(self.parameters(), lr=0.01)
@@ -530,7 +478,7 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
             pass
 
         def log_metrics(self, metrics, step=None):
-            assert not any(key.startswith("test/") for key in metrics)
+            logged_metrics.append(metrics)
 
         def _log_checkpoint(self, key, path):
             client.log_artifact("d" * 32, path, "unused")
@@ -568,7 +516,7 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
             callbacks = [
                 native_instantiate(value) for value in node["callbacks"].values()
             ]
-            return Trainer(
+            trainer = Trainer(
                 max_epochs=node["max_epochs"],
                 accelerator="cpu",
                 devices=1,
@@ -578,6 +526,8 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
                 callbacks=callbacks,
                 default_root_dir=node["default_root_dir"],
             )
+            trainers.append(trainer)
+            return trainer
         return native_instantiate(node, **kwargs)
 
     monkeypatch.setattr(hydra.utils, "instantiate", instantiate)
@@ -588,15 +538,45 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
         lambda *a, **k: {"historical_data_hashes_verified": False},
     )
     e = evidence()
+    e.config["trainer"]["callbacks"]["early_stopping"] = {
+        "_target_": "lightning.pytorch.callbacks.EarlyStopping",
+        "monitor": "valid/loss",
+        "mode": "min",
+        "patience": 2,
+    }
+    e.config_bytes = json.dumps(e.config).encode()
     original = copy.deepcopy(e.config)
+    if fail_test:
+        with pytest.raises(RuntimeError, match="simulated test failure"):
+            c.execute_replay(
+                e,
+                c.plan_replay(e, implementation_sha="c" * 40),
+                tmp_path / "output",
+                client=client,
+            )
+        assert client.status == "FAILED"
+        assert not (tmp_path / "remote/recovery/recovery-manifest.json").exists()
+        return
     manifest = c.execute_replay(
         e,
         c.plan_replay(e, implementation_sha="c" * 40),
         tmp_path / "output",
         client=client,
     )
-    assert manifest["status"] == expected_status and client.status == "FINISHED"
-    assert stages == ["fit"] and e.config == original
+    assert manifest["status"] == "completed" and client.status == "FINISHED"
+    assert manifest["historical_target_reached"] is reached
+    assert trainers[0].current_epoch == 5  # original patience, not historical epoch 1
+    assert manifest["checkpoint_epoch"] == 2  # new best is later than historical best
+    selected = torch.load(tmp_path / "remote" / c.CHECKPOINT, weights_only=True)
+    assert len(tested_weights) == 1
+    assert torch.equal(tested_weights[0], selected["state_dict"]["weight"])
+    assert manifest["test_evaluation"]["metrics"]["test/f1"] == 0.75
+    assert any("test/f1" in metrics for metrics in logged_metrics)
+    evaluation = json.loads(
+        (tmp_path / "remote/recovery/test-evaluation.json").read_text()
+    )
+    assert evaluation == manifest["test_evaluation"]
+    assert stages == ["fit", "test"] and e.config == original
     assert client.tags["recovery.source_run_id"] == "a" * 32
     assert (
         client.tags["recovery.source_config_sha256"] == manifest["source_config_sha256"]
@@ -609,7 +589,12 @@ def test_execute_native_fit_only_fresh_same_experiment_and_verified_artifact(
         OmegaConf.load(Path(manifest["output_directory"]) / "config-effective.yaml")
     )
     assert effective["trainer"]["max_epochs"] == 10
-    assert not effective["test_after_fit"] and effective["ml"] == original["ml"]
+    assert effective["test_after_fit"] and effective["ml"] == original["ml"]
+    assert (
+        effective["trainer"]["callbacks"]["early_stopping"]
+        == original["trainer"]["callbacks"]["early_stopping"]
+    )
+    assert "recovery_budget" not in effective["trainer"]["callbacks"]
     assert (
         tmp_path / "remote" / "recovery" / "config-original.yaml"
     ).read_bytes() == e.config_bytes
@@ -750,7 +735,7 @@ def test_sheet_run_view_links_are_accepted(view):
 
 
 @pytest.mark.parametrize("reached", [True, False])
-def test_one_job_replay_then_replace_pins_old_bytes_and_blocks_missed_target(
+def test_one_job_replay_then_replace_pins_old_bytes_regardless_of_historical_score(
     monkeypatch, tmp_path, reached
 ):
     import ml.checkpoint_publication as publication
@@ -758,7 +743,7 @@ def test_one_job_replay_then_replace_pins_old_bytes_and_blocks_missed_target(
     c = core()
     sequence = []
     manifest = {
-        "target_reached": reached,
+        "historical_target_reached": reached,
         "output_directory": str(tmp_path),
         "recovery_run_id": "d" * 32,
     }
@@ -781,18 +766,11 @@ def test_one_job_replay_then_replace_pins_old_bytes_and_blocks_missed_target(
     client = SimpleNamespace(log_artifact=lambda *a: sequence.append("receipt"))
     e = evidence()
     plan = c.plan_replay(e, implementation_sha="c" * 40)
-    if reached:
-        result = c.recover_and_replace(
-            e, plan, tmp_path, client=client, replace_original=True
-        )
-        assert result["publication"]["status"] == "completed"
-        assert sequence == ["pin", "fit", "publish", "receipt"]
-    else:
-        with pytest.raises(ValueError, match="missed"):
-            c.recover_and_replace(
-                e, plan, tmp_path, client=client, replace_original=True
-            )
-        assert sequence == ["pin", "fit"]
+    result = c.recover_and_replace(
+        e, plan, tmp_path, client=client, replace_original=True
+    )
+    assert result["publication"]["status"] == "completed"
+    assert sequence == ["pin", "fit", "publish", "receipt"]
     sequence.clear()
     with pytest.raises(ValueError, match="SHA256"):
         c.recover_and_replace(
@@ -804,29 +782,6 @@ def test_one_job_replay_then_replace_pins_old_bytes_and_blocks_missed_target(
             expected_old_sha256="f" * 64,
         )
     assert sequence == ["pin"]
-
-
-def test_recorded_target_stops_early_only_at_eligible_checkpoint_and_minimums():
-    c = core()
-    callback = c.ReplayBudgetCallback(19, "valid/loss", "min", 0.2, every_n_epochs=2)
-    trainer = SimpleNamespace(
-        current_epoch=0,
-        global_step=4,
-        min_steps=0,
-        min_epochs=0,
-        sanity_checking=False,
-        should_stop=False,
-        callback_metrics={"valid/loss": 0.1},
-    )
-    callback.on_train_epoch_end(trainer, None)
-    assert not trainer.should_stop
-    trainer.current_epoch = 1
-    trainer.min_epochs = 3
-    callback.on_train_epoch_end(trainer, None)
-    assert not trainer.should_stop
-    trainer.min_epochs = 0
-    callback.on_train_epoch_end(trainer, None)
-    assert trainer.should_stop
 
 
 def test_missing_training_object_fetches_only_verified_origin(monkeypatch):

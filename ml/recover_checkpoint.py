@@ -1,4 +1,4 @@
-"""Plan bounded checkpoint retraining; execution and publication are explicit.
+"""Retrain selected checkpoints under their original training protocol.
 
 The default reads metadata only. Heavy training dependencies are imported inside
 execution so ``python -S -m ml.recover_checkpoint --help`` stays offline.
@@ -521,18 +521,15 @@ def plan_replay(
         max_steps != -1 and (type(max_steps) is not int or step + 1 > max_steps)
     ):
         raise ValueError("Historical target exceeds original training horizon.")
-    if (trainer.get("min_epochs") or 0) > epoch + 1 or (
-        trainer.get("min_steps") or 0
-    ) > step + 1:
-        raise ValueError(
-            "Original trainer minimum bounds would ignore the recovery budget."
-        )
+    if max_epochs == -1 and max_steps == -1:
+        raise ValueError("Original training must have a finite epoch or step limit.")
     canonical = json.dumps(
         config, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
     return {
-        "format_version": 1,
+        "format_version": 2,
         "kind": "retrained",
+        "training_policy": "original_horizon_and_early_stopping",
         "tracking_uri": evidence.identity.tracking_uri,
         "experiment_id": evidence.experiment_id,
         "source_run_id": evidence.identity.run_id,
@@ -542,13 +539,12 @@ def plan_replay(
         "source_config_canonical_sha256": hashlib.sha256(canonical).hexdigest(),
         "monitor": metric,
         "mode": direction,
-        "target_score": score,
-        "stop_epoch": epoch,
-        "target_step": step,
-        "target_timestamp": timestamp,
-        "completed_epoch_cap": epoch + 1,
-        "trainer_max_epochs": trainer.get("max_epochs"),
-        "trainer_max_steps": trainer.get("max_steps", -1),
+        "historical_best_score": score,
+        "historical_best_epoch": epoch,
+        "historical_best_step": step,
+        "historical_best_timestamp": timestamp,
+        "trainer_max_epochs": max_epochs,
+        "trainer_max_steps": max_steps,
         "checkpoint_callback": checkpoint_name,
         "selection_changed": monitor is not None,
         "epoch_alignment": "unambiguous_step" if fallback else "exact_step_timestamp",
@@ -556,70 +552,6 @@ def plan_replay(
         "historical_test_metrics_revalidated": False,
         "reproducibility": "Seeded retraining; historical runtime and data bytes are unverified; exact lost weights are not guaranteed.",
     }
-
-
-def ReplayBudgetCallback(  # noqa: N802 - public Hydra callback factory
-    stop_epoch: int,
-    monitor: str | None = None,
-    mode: str | None = None,
-    target_score: float | None = None,
-    every_n_epochs: int = 1,
-):
-    """Construct a native callback lazily, without changing trainer horizons.
-
-    Lightning runs non-checkpoint train-epoch-end hooks before ModelCheckpoint;
-    should_stop is consumed by the loop after all epoch-end hooks have run.
-    """
-    from lightning.pytorch import Callback
-
-    if type(stop_epoch) is not int or stop_epoch < 0:
-        raise ValueError("stop_epoch must be a nonnegative integer.")
-    if monitor is not None and (
-        mode not in {"min", "max"}
-        or target_score is None
-        or not math.isfinite(float(target_score))
-        or type(every_n_epochs) is not int
-        or every_n_epochs < 1
-    ):
-        raise ValueError(
-            "Early target stopping requires a finite score and valid checkpoint cadence."
-        )
-
-    class _ReplayBudgetCallback(Callback):
-        def on_train_epoch_end(self, trainer, pl_module):
-            if trainer.sanity_checking:
-                return
-            reached = False
-            if (
-                monitor is not None
-                and (trainer.current_epoch + 1) % every_n_epochs == 0
-            ):
-                value = getattr(trainer, "callback_metrics", {}).get(monitor)
-                if value is not None:
-                    value = float(value)
-                    reached = math.isfinite(value) and (
-                        value <= target_score
-                        if mode == "min"
-                        else value >= target_score
-                    )
-                # Preserve original minimums even if a different trajectory
-                # reaches the historical target earlier.
-                reached = reached and (
-                    (getattr(trainer, "min_epochs", 0) or 0)
-                    <= trainer.current_epoch + 1
-                    and (getattr(trainer, "min_steps", 0) or 0)
-                    <= getattr(trainer, "global_step", 0)
-                )
-            if trainer.current_epoch >= stop_epoch or reached:
-                if (getattr(trainer, "min_steps", 0) or 0) > getattr(
-                    trainer, "global_step", 0
-                ):
-                    raise RuntimeError(
-                        "Runtime minimum steps would exceed the historical epoch budget."
-                    )
-                trainer.should_stop = True
-
-    return _ReplayBudgetCallback()
 
 
 def _config_diff(original: Any, effective: Any, path: str = "") -> list[dict]:
@@ -651,7 +583,6 @@ def validate_effective_config(
     allowed = {
         "test_after_fit",
         "trainer.default_root_dir",
-        "trainer.callbacks.recovery_budget",
         f"{checkpoint}.dirpath",
         f"{checkpoint}.filename",
     }
@@ -674,7 +605,7 @@ def effective_config(
     original: dict, plan: dict, output: Path, run_id: str
 ) -> tuple[dict, list[dict]]:
     config = copy.deepcopy(original)
-    config["test_after_fit"] = False
+    config["test_after_fit"] = True
     tags = dict(config.get("logger", {}).get("tags", {}))
     tags.update(
         {
@@ -701,16 +632,6 @@ def effective_config(
     checkpoint.update(dirpath=str(output / "checkpoints"), filename="best")
     if plan["selection_changed"]:
         checkpoint.update(monitor=plan["monitor"], mode=plan["mode"])
-    if "recovery_budget" in config["trainer"]["callbacks"]:
-        raise ValueError("Source callback namespace conflicts with recovery budget.")
-    config["trainer"]["callbacks"]["recovery_budget"] = {
-        "_target_": "ml.recover_checkpoint.ReplayBudgetCallback",
-        "stop_epoch": plan["stop_epoch"],
-        "monitor": plan["monitor"],
-        "mode": plan["mode"],
-        "target_score": plan["target_score"],
-        "every_n_epochs": checkpoint.get("every_n_epochs") or 1,
-    }
     return config, validate_effective_config(original, config, plan)
 
 
@@ -943,6 +864,7 @@ def result_manifest(
     checkpoint_global_step: int,
     checkpoint_sha256: str,
     checkpoint_size: int,
+    test_metrics: dict,
 ) -> dict:
     score = float(score)
     if not math.isfinite(score):
@@ -951,32 +873,57 @@ def result_manifest(
         not _RUN.fullmatch(recovery_run_id)
         or recovery_run_id == plan["source_run_id"]
         or type(checkpoint_epoch) is not int
-        or not 0 <= checkpoint_epoch <= plan["stop_epoch"]
+        or checkpoint_epoch < 0
+        or (
+            plan["trainer_max_epochs"] != -1
+            and checkpoint_epoch >= plan["trainer_max_epochs"]
+        )
         or type(checkpoint_global_step) is not int
         or checkpoint_global_step < 1
+        or (
+            plan["trainer_max_steps"] != -1
+            and checkpoint_global_step > plan["trainer_max_steps"]
+        )
         or not re.fullmatch(r"[0-9a-f]{64}", checkpoint_sha256)
         or type(checkpoint_size) is not int
         or checkpoint_size < 1
     ):
         raise ValueError(
-            "Recovered checkpoint identity/metadata is invalid or exceeds the budget."
+            "Recovered checkpoint identity/metadata is invalid or exceeds the original training limits."
         )
+    if not isinstance(test_metrics, dict) or not test_metrics:
+        raise ValueError("A completed best-checkpoint test evaluation is required.")
+    if any(
+        not isinstance(key, str)
+        or not key.startswith("test/")
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        for key, value in test_metrics.items()
+    ):
+        raise ValueError("Test metrics must be finite test/... scalar values.")
     reached = (
-        score <= plan["target_score"]
+        score <= plan["historical_best_score"]
         if plan["mode"] == "min"
-        else score >= plan["target_score"]
+        else score >= plan["historical_best_score"]
     )
     return dict(
         plan,
-        status="completed" if reached else "target_missed",
+        status="completed",
         recovery_run_id=recovery_run_id,
         observed_best_score=score,
-        target_reached=reached,
+        historical_target_reached=reached,
         checkpoint_artifact_path=CHECKPOINT,
         checkpoint_sha256=checkpoint_sha256,
         checkpoint_size=checkpoint_size,
         checkpoint_epoch=checkpoint_epoch,
         checkpoint_global_step=checkpoint_global_step,
+        test_evaluation={
+            "checkpoint_sha256": checkpoint_sha256,
+            "checkpoint_epoch": checkpoint_epoch,
+            "checkpoint_global_step": checkpoint_global_step,
+            "metrics": test_metrics,
+        },
         model_artifact_path=MLMODEL,
         historical_test_metrics_revalidated=False,
     )
@@ -1000,7 +947,7 @@ def _write_json(path: Path, value: dict) -> None:
 def execute_replay(
     evidence: SourceEvidence, plan: dict, output_root: Path, *, client: Any
 ) -> dict:
-    """Run native seeded fit only, in a fresh same-experiment linked run.
+    """Run original seeded fit, then test its saved best validation checkpoint.
 
     This deliberately bypasses train.main's autolog/test-after-fit wrapper.
     MLflow and datamodule mutations happen only after all provenance gates pass.
@@ -1049,6 +996,7 @@ def execute_replay(
         "recovery.source_config_sha256": plan["source_config_sha256"],
         "recovery.implementation_sha": plan["implementation_sha"],
         "recovery.historical_test_metrics_revalidated": "false",
+        "recovery.training_policy": plan["training_policy"],
     }
     run = client.create_run(
         experiment_id=plan["experiment_id"],
@@ -1085,6 +1033,8 @@ def execute_replay(
         module = hydra.utils.instantiate(cfg.ml)
         trainer = hydra.utils.instantiate(cfg.trainer, logger=logger)
         trainer.fit(module, datamodule=datamodule, ckpt_path=None)
+        if trainer.interrupted or not trainer.state.finished:
+            raise ValueError("Training did not finish normally; refusing publication.")
         checkpoint = trainer.checkpoint_callback
         if (
             checkpoint is None
@@ -1098,9 +1048,6 @@ def execute_replay(
             or not best.is_file()
         ):
             raise ValueError("Best checkpoint escaped the recovery output directory.")
-        # Force canonical best stem even if native filename versioning occurred;
-        # use the repaired logger's existing MLmodel/byte-copy implementation.
-        logger._log_checkpoint("best", str(best))
         payload = torch.load(best, map_location="cpu", weights_only=False)
         score = float(checkpoint.best_model_score.detach().cpu())
         matching_states = [
@@ -1117,15 +1064,31 @@ def execute_replay(
             raise ValueError(
                 "Saved checkpoint callback score disagrees with final selection."
             )
+        best_hash = hashlib.sha256(best.read_bytes()).hexdigest()
+        # Select on validation only, then test exactly that saved checkpoint.
+        # The test result never controls checkpoint selection or publication.
+        tests = trainer.test(
+            module, datamodule=datamodule, ckpt_path=str(best), verbose=False
+        )
+        if trainer.interrupted or not trainer.state.finished or len(tests) != 1:
+            raise ValueError("Best-checkpoint test evaluation did not finish normally.")
+        if hashlib.sha256(best.read_bytes()).hexdigest() != best_hash:
+            raise ValueError("Selected checkpoint changed during test evaluation.")
+        # Force canonical best stem even if native filename versioning occurred.
+        logger._log_checkpoint("best", str(best))
         manifest = result_manifest(
             plan,
             recovery_run_id=run_id,
             score=score,
             checkpoint_epoch=payload["epoch"],
             checkpoint_global_step=payload["global_step"],
-            checkpoint_sha256=hashlib.sha256(best.read_bytes()).hexdigest(),
+            checkpoint_sha256=best_hash,
             checkpoint_size=best.stat().st_size,
+            test_metrics=tests[0],
         )
+        evaluation = output / "test-evaluation.json"
+        _write_json(evaluation, manifest["test_evaluation"])
+        client.log_artifact(run_id, str(evaluation), "recovery")
         with tempfile.TemporaryDirectory(prefix="recovery-readback-") as directory:
             remote = Path(client.download_artifacts(run_id, CHECKPOINT, directory))
             if (
@@ -1154,7 +1117,9 @@ def execute_replay(
         _write_json(output / "recovery-manifest.json", manifest)
         client.log_artifact(run_id, str(output / "recovery-manifest.json"), "recovery")
         client.set_tag(
-            run_id, "recovery.target_reached", str(manifest["target_reached"]).lower()
+            run_id,
+            "recovery.historical_target_reached",
+            str(manifest["historical_target_reached"]).lower(),
         )
         client.set_terminated(run_id, status="FINISHED")
         completed = True
@@ -1181,7 +1146,7 @@ def recover_and_replace(
     replace_original: bool = False,
     expected_old_sha256: str | None = None,
 ) -> dict:
-    """Pin original bytes before training; replace only a successful recovery.
+    """Pin original bytes; publish after successful original-protocol fit/test.
 
     Publication checks this pin again after training and after verified backups.
     This is a single-writer guard, not an atomic object-store transaction.
@@ -1197,10 +1162,6 @@ def recover_and_replace(
     manifest = execute_replay(evidence, plan, output_root, client=client)
     if not replace_original:
         return manifest
-    if manifest.get("target_reached") is not True:
-        raise ValueError(
-            "Replay missed the historical validation target; recovered output is retained and the original is unchanged."
-        )
     receipt = publish_replacement(client, manifest, old_sha)
     output = Path(manifest["output_directory"]) / "publication-receipt.json"
     try:
@@ -1236,7 +1197,7 @@ def build_parser() -> argparse.ArgumentParser:
     actions.add_argument(
         "--execute",
         action="store_true",
-        help="Train/validate a fresh same-experiment recovery run",
+        help="Train/validate, then test best checkpoint in a fresh linked recovery run",
     )
     actions.add_argument(
         "--publish",

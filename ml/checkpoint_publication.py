@@ -106,10 +106,7 @@ def _validate_manifest(manifest, expected_old):
         "source_config_sha256",
         "monitor",
         "mode",
-        "target_score",
-        "stop_epoch",
         "observed_best_score",
-        "target_reached",
         "checkpoint_artifact_path",
         "checkpoint_sha256",
         "checkpoint_size",
@@ -123,14 +120,14 @@ def _validate_manifest(manifest, expected_old):
         f"Missing recovery manifest fields: {sorted(required - manifest.keys())}",
     )
     _require(
-        type(manifest["format_version"]) is int and manifest["format_version"] == 1,
+        type(manifest["format_version"]) is int
+        and manifest["format_version"] in (1, 2),
         "Unsupported manifest version",
     )
     _require(
         manifest["status"] == "completed" and manifest["kind"] == "retrained",
         "Only completed retraining can be published",
     )
-    _require(manifest["target_reached"] is True, "Recovery target was not reached")
     _require(
         manifest["historical_test_metrics_revalidated"] is False,
         "Historical test metrics cannot be reattributed",
@@ -160,24 +157,95 @@ def _validate_manifest(manifest, expected_old):
         "Publication requires a validation monitor",
     )
     _require(manifest["mode"] in ("min", "max"), "Invalid checkpoint mode")
-    target = _finite(manifest["target_score"], "target score")
-    observed = _finite(manifest["observed_best_score"], "observed score")
-    reached = observed <= target if manifest["mode"] == "min" else observed >= target
-    _require(reached, "Recovery score did not reach its directional target")
-    for name in (
-        "stop_epoch",
-        "checkpoint_epoch",
-        "checkpoint_global_step",
-        "checkpoint_size",
-    ):
+    for name in ("checkpoint_epoch", "checkpoint_global_step", "checkpoint_size"):
         _integer(manifest[name], name)
+    _require(manifest["checkpoint_global_step"] > 0, "Checkpoint has no training steps")
+    observed = _finite(manifest["observed_best_score"], "observed score")
+    if manifest["format_version"] == 1:
+        # Previously completed bounded recoveries retain their original contract.
+        _require(
+            {"target_score", "stop_epoch", "target_reached"} <= manifest.keys(),
+            "Missing legacy recovery target fields",
+        )
+        _require(manifest["target_reached"] is True, "Recovery target was not reached")
+        target = _finite(manifest["target_score"], "target score")
+        reached = (
+            observed <= target if manifest["mode"] == "min" else observed >= target
+        )
+        _require(reached, "Recovery score did not reach its directional target")
+        _integer(manifest["stop_epoch"], "stop_epoch")
+        _require(
+            manifest["checkpoint_epoch"] <= manifest["stop_epoch"],
+            "Checkpoint exceeds replay epoch budget",
+        )
+    else:
+        _require(
+            {
+                "training_policy",
+                "trainer_max_epochs",
+                "trainer_max_steps",
+                "historical_best_score",
+                "historical_target_reached",
+                "test_evaluation",
+            }
+            <= manifest.keys(),
+            "Missing original-protocol recovery fields",
+        )
+        _require(
+            manifest["training_policy"] == "original_horizon_and_early_stopping",
+            "Unsupported retraining policy",
+        )
+        for name in ("trainer_max_epochs", "trainer_max_steps"):
+            value = manifest[name]
+            _require(
+                type(value) is int and (value == -1 or value > 0),
+                f"Invalid original training limit: {name}",
+            )
+        _require(
+            manifest["trainer_max_epochs"] != -1 or manifest["trainer_max_steps"] != -1,
+            "Original training needs a finite limit",
+        )
+        if manifest["trainer_max_epochs"] != -1:
+            _require(
+                type(manifest["checkpoint_epoch"]) is int
+                and 0 <= manifest["checkpoint_epoch"] < manifest["trainer_max_epochs"],
+                "Checkpoint exceeds original epoch limit",
+            )
+        if manifest["trainer_max_steps"] != -1:
+            _require(
+                type(manifest["checkpoint_global_step"]) is int
+                and manifest["checkpoint_global_step"] <= manifest["trainer_max_steps"],
+                "Checkpoint exceeds original step limit",
+            )
+        historical = _finite(manifest["historical_best_score"], "historical score")
+        reached = (
+            observed <= historical
+            if manifest["mode"] == "min"
+            else observed >= historical
+        )
+        _require(
+            type(manifest["historical_target_reached"]) is bool
+            and manifest["historical_target_reached"] == reached,
+            "Historical comparison is inconsistent",
+        )
+        evaluation = manifest["test_evaluation"]
+        _require(isinstance(evaluation, dict), "Missing test evaluation")
+        for key in ("checkpoint_sha256", "checkpoint_epoch", "checkpoint_global_step"):
+            _require(
+                evaluation.get(key) == manifest[key],
+                "Test evaluation checkpoint mismatch",
+            )
+        metrics = evaluation.get("metrics")
+        _require(isinstance(metrics, dict) and bool(metrics), "Missing test metrics")
+        for key, value in metrics.items():
+            _require(
+                isinstance(key, str) and key.startswith("test/"),
+                "Invalid test metric key",
+            )
+            _finite(value, "test metric")
     _require(
         0 < manifest["checkpoint_size"] <= CHECKPOINT_LIMIT,
         "Checkpoint size exceeds allowed bounds",
-    )
-    _require(
-        manifest["checkpoint_epoch"] <= manifest["stop_epoch"],
-        "Checkpoint exceeds replay epoch budget",
     )
     _require(
         manifest["checkpoint_artifact_path"] == CHECKPOINT_PATH,
@@ -397,6 +465,38 @@ def publish_replacement(client, manifest: dict, expected_old_sha256: str) -> dic
             _sha(config) == manifest["source_config_sha256"],
             "Source config SHA256 mismatch",
         )
+        if manifest["format_version"] == 2:
+            import yaml
+
+            original = yaml.safe_load(config)
+            _require(
+                isinstance(original, dict)
+                and isinstance(original.get("trainer"), dict),
+                "Source config lacks original trainer settings",
+            )
+            trainer = original.get("trainer", {})
+            epochs, steps = (
+                trainer.get("max_epochs", 1000),
+                trainer.get("max_steps", -1),
+            )
+            if epochs is None:
+                epochs = 1000 if steps == -1 else -1
+            _require(
+                epochs == manifest["trainer_max_epochs"]
+                and steps == manifest["trainer_max_steps"],
+                "Original training limits differ from source config",
+            )
+            evaluation = _read(
+                client,
+                recovery,
+                "recovery/test-evaluation.json",
+                METADATA_LIMIT,
+                scratch,
+            )
+            _require(
+                json.loads(evaluation) == manifest["test_evaluation"],
+                "Test evaluation artifact differs from recovery manifest",
+            )
         old = _read(client, source, CHECKPOINT_PATH, CHECKPOINT_LIMIT, scratch)
         _require(
             _sha(old) == expected_old_sha256, "Expected old checkpoint SHA256 mismatch"
@@ -518,6 +618,17 @@ def publish_replacement(client, manifest: dict, expected_old_sha256: str) -> dic
                 "recovery.new_checkpoint_sha256": _sha(new),
                 "recovery.historical_test_metrics_revalidated": "false",
             }
+            if manifest["format_version"] == 2:
+                tags.update(
+                    {
+                        "recovery.training_policy": manifest["training_policy"],
+                        "recovery.test_metrics_run_id": recovery,
+                        "recovery.test_evaluation_artifact": "recovery/test-evaluation.json",
+                        "recovery.historical_target_reached": str(
+                            manifest["historical_target_reached"]
+                        ).lower(),
+                    }
+                )
             # Success marker is last; a failed tag write never reports completion.
             for key, value in tags.items():
                 if key != "recovery.publication_status":

@@ -86,6 +86,10 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(plan["target"]["context"], "kubas-cluster")
         self.assertEqual(plan["resources"]["gpu"], "H100")
         self.assertEqual(plan["resources"]["cpu"], 16)
+        self.assertEqual(plan["resources"]["shm"], "16Gi")
+        self.assertIn("early stopping", plan["execution"]["action"])
+        self.assertIn("test best validation checkpoint", plan["execution"]["action"])
+        self.assertIn("comparison only", plan["execution"]["historical_score"])
 
     def test_generated_job_uses_pinned_implementation_and_separate_training_object(
         self,
@@ -195,8 +199,6 @@ class LauncherTests(unittest.TestCase):
             "8",
             "--memory",
             "32Gi",
-            "--shm",
-            "2Gi",
         ]
         with patch.object(self.launcher.cluster, "submit_plan") as submit:
             plan = self.plan(resources)
@@ -208,7 +210,7 @@ class LauncherTests(unittest.TestCase):
                     "gpu_limit": 1,
                     "cpu": 8,
                     "memory": "32Gi",
-                    "shm": "2Gi",
+                    "shm": "16Gi",
                 },
             )
             self.assertEqual(

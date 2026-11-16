@@ -1,8 +1,8 @@
-"""Plan one bounded checkpoint recovery job; only --submit contacts Kubernetes.
+"""Plan one original-protocol recovery job; only --submit contacts Kubernetes.
 
 Ordinary Python planning is stdlib-only, offline and read-only. The generated job
-trains into a linked MLflow run, then backs up and replaces the selected original
-checkpoint after validation and hash checks. No sweep is inferred from a sheet.
+trains and tests in a linked MLflow run, then backs up and replaces the selected
+original checkpoint after integrity checks. No sweep is inferred from a sheet.
 """
 
 from __future__ import annotations
@@ -271,7 +271,9 @@ def build_plan(args: argparse.Namespace) -> dict:
             "shm": args.shm,
         },
         "execution": {
-            "action": "bounded seeded retraining; fit train/validation only",
+            "action": "original seeded training horizon and early stopping; test best validation checkpoint once",
+            "historical_score": "comparison only; never stops training or gates replacement",
+            "test_metrics": "recorded in the linked recovery run; original numerical histories remain historical",
             "selection": {
                 "monitor": args.monitor,
                 "mode": args.mode,

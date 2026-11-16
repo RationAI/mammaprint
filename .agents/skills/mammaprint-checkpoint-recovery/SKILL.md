@@ -1,6 +1,6 @@
 ---
 name: mammaprint-checkpoint-recovery
-description: Use when replaying selected MammaPrint MLflow runs to recover stale best checkpoints, submitting bounded recovery jobs, or diagnosing guarded checkpoint replacement.
+description: Use when retraining selected MammaPrint MLflow runs under their original protocol, submitting recovery jobs, or diagnosing guarded checkpoint replacement.
 ---
 
 # Selected-model checkpoint recovery
@@ -13,9 +13,9 @@ Use `scripts/ml/run_checkpoint_recovery.py` from the repository root. One invoca
 - Use the approved VPN/kubeconfig and existing `kube_jobs`/Kubernetes environment. The private helper target is context `kubas-cluster`, namespace `rationai-jobs-ns`; flags are identity expectations, not arbitrary routing. The reused submitter prints the configured endpoint, rejects existing jobs and confirms the created UID.
 - Authentication uses the existing MLflow environment and helper ConfigMap/Secret references (`mlflow`, `gitlab-deploy-token`), secure DATA and PROJECTS mounts. Never put credentials in links, command arguments, source config overrides or committed files.
 - The exact implementation SHA must be pushed to `https://github.com/RationAI/mammaprint.git`. The job checks it out detached. The original training SHA is recovered from the source run tag and checked separately; a missing object may be fetched from the verified origin without checking out historical code. `--training-sha` is only for an absent source tag and cannot override a conflict.
-- Original train/validation data paths, label mapping and dependencies must remain available. Replay verifies native source and original dependency pins, but cannot prove historical data bytes or original runtime fingerprints that were never recorded. Same seed does not guarantee identical lost weights.
+- Original train/validation/test data paths, label mapping and dependencies must remain available. Replay verifies native source and original dependency pins, but cannot prove historical data bytes or original runtime fingerprints that were never recorded. Same seed does not guarantee identical lost weights.
 - Defaults request one H100, 16 CPUs, 64Gi RAM and 16Gi shared memory. These are configurable starting resources, not a guarantee of GPU capacity or sufficient memory. The established image is `cerit.io/rationai/base:2.0.6`; CUDA availability is checked in the pod and has not been remotely verified by local tests.
-- The existing helper's `mig-1g.10gb` profile is also accepted. For the selected L2 linear + gated-attention regression family, begin with `--gpu mig-1g.10gb --cpu 8 --memory 32Gi --shm 2Gi`; seed 2 historically completed on that profile, but recovery peak usage is not yet measured. Shared memory is a capacity within host RAM, not extra GPU memory. Keep the original batch size and worker settings; do not truncate bags to fit.
+- The existing helper's `mig-1g.10gb` profile is also accepted. For the selected L2 linear + gated-attention regression family, begin with `--gpu mig-1g.10gb --cpu 8 --memory 32Gi`; seed 2 historically completed on that profile, but recovery peak usage is not yet measured. Keep the default 16Gi shared-memory capacity; actual shared-memory usage counts toward host RAM. Keep the original batch size and worker settings; do not truncate bags to fit.
 
 ## Plan, then submit only selected runs
 
@@ -35,15 +35,17 @@ The source URL endpoint must equal `--tracking-uri`. To use the internal pod end
 
 Default output is a fully offline JSON job plan: no MLflow lookup, kubeconfig, process execution or cluster call. Inspect source, target, pins, output path, resources and `replace_original: true`. Append `--submit` to the same command only when the concrete job and replacement are authorized. For another selected model, invoke it again with its explicit ID and fresh output root. There is no `--all` option.
 
-MIG planning can be checked locally without Kubernetes: run the example with the resource flags above and omit `--submit`. Expect `resources.gpu: mig-1g.10gb`, `gpu_limit: 1`, CPU 8, RAM 32Gi and shared memory 2Gi; the installed helper resolves the GPU limit to `nvidia.com/mig-1g.10gb: 1`. Launcher tests cover resource forwarding using a mocked submitter; this does not establish live MIG availability or successful training.
+MIG planning can be checked locally without Kubernetes: run the example with the resource flags above and omit `--submit`. Expect `resources.gpu: mig-1g.10gb`, `gpu_limit: 1`, CPU 8, RAM 32Gi and default shared memory 16Gi; the installed helper resolves the GPU limit to `nvidia.com/mig-1g.10gb: 1`. Launcher tests cover resource forwarding using a mocked submitter; this does not establish live MIG availability or successful training.
 
 The pod runs `python -m ml.recover_checkpoint ... --execute --replace-original` after frozen dependency setup and CUDA preflight. It unsets inherited `MLFLOW_RUN_ID`. Existing general sweep scripts pointing at `feat/tiling-values` do not automatically use this fix; the recovery job pins the fixed implementation explicitly.
 
 ## Stopping rule and preserved training settings
 
-Default selection uses the source ModelCheckpoint monitor and mode: audited runs use minimum `valid/loss`. Complete validation and epoch histories identify the earliest eligible best event. Replay starts from the original seed, preserves the model/data/optimizer/scheduler and original trainer horizon, and stops through a callback after that historical epoch. It does not spend the original early-stopping patience tail and does not run test evaluation.
+Default selection uses the source ModelCheckpoint monitor and mode: audited runs use minimum `valid/loss`. Training starts from the original seed and preserves the model, data, optimizer, scheduler, maximum epochs/steps and native early-stopping settings. There is no historical-score stop or historical-epoch cap. Complete validation and epoch histories provide a comparison only; a score worse than the historical best does not block replacement. For model 1 seed 0 (`b302bc81001f41f780086b6364e32b50`), the source specifies max_epochs 100 and EarlyStopping patience 10 on minimum valid/loss.
 
-If the intended goal is a different validation criterion, supply both `--monitor` and `--mode`, for example `--monitor valid/f1 --mode max` for BCE, or `--monitor valid/thresholded_f1 --mode max` for the regression configurations. This changes checkpoint selection and is recorded as such. Test metrics are forbidden for selection. A new trajectory may miss the recorded target; in that case the output is retained and **the original checkpoint is not replaced**.
+After fit finishes normally, the job explicitly loads the saved best validation checkpoint and calls native test evaluation once on the original held-out test split. Test scores never select the checkpoint or gate publication by performance. The linked run records the new test metrics and `recovery/test-evaluation.json`, bound to the selected checkpoint hash/epoch/step. Interrupted training, failed testing, empty or nonfinite test metrics, or artifact integrity failures prevent replacement. The source run's historical test scores are not reattributed to the replacement weights.
+
+If the intended goal is a different validation criterion, supply both `--monitor` and `--mode`, for example `--monitor valid/f1 --mode max` for BCE, or `--monitor valid/thresholded_f1 --mode max` for regression. These overrides change checkpoint selection only; original early-stopping settings remain untouched and the change is recorded. For the original protocol, omit both flags. Test metrics are forbidden for selection. No historical-score match is required.
 
 For a bounded read-only metadata plan without a cluster job, use:
 
@@ -57,16 +59,16 @@ This core plan contacts MLflow for bounded config/history reads and uses tempora
 
 ## Replacement and evidence
 
-The job captures the original checkpoint hash before training, trains in a **new linked run in the same experiment**, verifies the new checkpoint and its validation target, then:
+The job captures the original checkpoint hash before training, trains in a **new linked run in the same experiment**, verifies the new checkpoint and its bound test evaluation, then:
 
 1. Verifies original/recovery identities, source config/Git binding and finished states.
 2. Backs up the original checkpoint and MLmodel under a unique `checkpoint_repairs/OPERATION/backup` namespace outside `checkpoints/`; reads back their hashes.
 3. Stages and verifies replacement bytes, rechecks the original hash, replaces only `checkpoints/best/checkpoint.ckpt` and `MLmodel`, then reads both back.
-4. Records old/new hashes, recovery run, namespace and publication status. Original config, console and numerical histories remain untouched; historical test scores are explicitly marked **not revalidated** for retrained weights.
+4. Records old/new hashes, recovery run, namespace and publication status. Original config, console and numerical histories remain untouched; source tags point to the linked recovery run and test-evaluation artifact for the replacement's measured performance. Historical test scores remain historical.
 
 Only one repair writer may operate on a given source run at a time. MLflow multi-object writes are not atomic; a hash recheck is not a transaction or atomic compare-and-swap. Backups and a phase journal remain available after partial failure. A CLI failure prints the in-memory partial receipt even when journal storage fails.
 
-Inspect the source run publication tags, linked recovery run, `recovery/recovery-manifest.json`, local `recovery-manifest.json`/`publication-receipt.json`, selected validation score/epoch, exact checkpoint hash and all provenance fields. Successful job creation alone is not successful training or replacement. No new test F1 is claimed unless a separately authorized test evaluation is performed.
+Inspect the source run publication tags, linked recovery run, `recovery/recovery-manifest.json`, local `recovery-manifest.json`/`publication-receipt.json`, selected validation score/epoch, exact checkpoint hash and all provenance fields. Successful job creation alone is not successful training or replacement. Read the replacement's test metrics from the linked recovery run, not the source run's untouched numerical histories. Version-2 manifests use the original training protocol; legacy version-1 manual publication retains its former score/budget requirements and is not generated by new jobs.
 
 For an already completed recovery, manual publication remains available without retraining:
 
@@ -90,10 +92,11 @@ kubectl --context kubas-cluster -n rationai-jobs-ns describe job JOB_NAME
 
 - Pending GPU/OOM: inspect events and the failing stage; amend resources only for an approved rerun. Do not silently truncate bags or alter architecture.
 - Provenance, dependencies, history or missing data: preserve the error and plan. Do not substitute a new training SHA, current config or shorter scheduler horizon.
-- Target missed: retain the linked recovery result for review; no automatic extra epochs, changed tolerance or original overwrite.
+- Historical score missed: informational only. A normally completed, verified fit/test is eligible for publication regardless of this comparison. Do not add epochs, change patience, or select using test performance.
+- Fit/test failed: preserve the linked failed run and logs. No original replacement is attempted. A completed checkpoint alone is insufficient without the bound successful test evaluation.
 - Original hash changed: another repair/update occurred. Stop and inspect; do not bypass the guard or run competing writers.
 - Partial publication: retain the receipt namespace, phase and old/new hashes. Read canonical checkpoint/MLmodel and compare with those hashes before any retry. Do not assume either object is unchanged.
 - Rollback needs separate explicit authorization. Download only that operation's verified `backup/checkpoint.ckpt` and `backup/MLmodel`; verify their recorded hashes, verify the current canonical state matches the failed-operation receipt, then use the standard MLflow artifact client/CLI to restore those two files under `checkpoints/best` and read-verify them again. Never delete or overwrite root configs, console, metric histories or unrelated backups. No automatic rollback is attempted.
 - Deleting a job or output needs separate authorization naming the exact object/path. Job deletion does not undo MLflow changes; preserve recovery evidence before cleanup or TTL removal.
 
-Local fake-client and tiny CPU tests establish script behavior, scheduler/cap semantics and guarded artifact handling. They do not establish remote data availability, image/GPU capacity, exact reproducibility, actual cluster execution or real replacement. No remote training or publication is implied by preparing this workflow.
+Local fake-client and tiny CPU tests establish original early-stopping behavior, later best-checkpoint selection, one test evaluation of those exact weights, publication despite a historical-score miss, and guarded artifact handling. They do not establish remote data availability, image/GPU capacity, exact reproducibility, actual cluster execution or real replacement. No remote training or publication is implied by preparing this workflow.
