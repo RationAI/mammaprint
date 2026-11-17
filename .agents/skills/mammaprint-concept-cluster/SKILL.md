@@ -35,10 +35,14 @@ python3 scripts/ml/run_concept_explainability.py \
   --output-root "$CONCEPT_OUTPUT_ROOT" \
   --experiment-name 'MammaPrint concepts' \
   --context kubas-cluster --namespace rationai-jobs-ns \
-  --gpu H100 --cpu 16 --memory 64Gi --shm 16Gi --ray-cpus 16
+  --gpu A40 --cpu 8 --memory 32Gi --shm 16Gi --ray-cpus 8
 ```
 
-Inspect all emitted JSON jobs and scripts: source/training pin differs in purpose from implementation pin; output destinations are unique; target, image, resources and tracking endpoint match the intended run; `concepts_deployed`, `action=fit_explain`, `device=cuda`, K16 and `include_test=false` appear. Add repeated `--source` pairs for explicit additional sources. Add `--k 8 16 32` (or repeat `--k`) for explicit component counts. This creates distinct jobs, not a queue or resume scheduler. Resource sizing is a configurable starting point, not a measured performance guarantee. Each job requests one full H100 by default; supported alternatives are A100 and A40. Ray CPUs must not exceed allocated CPUs; shared memory must not exceed RAM.
+Inspect all emitted JSON jobs and scripts: source/training pin differs in purpose from implementation pin; output destinations are unique; target, image, resources and tracking endpoint match the intended run; `concepts_deployed`, `action=fit_explain`, `device=cuda`, K16 and `include_test=false` appear. Add repeated `--source` pairs for explicit additional sources. Add `--k 8 16 32` (or repeat `--k`) for explicit component counts. This creates distinct jobs, not a queue or resume scheduler. Defaults request one A40, 8 CPUs, 32Gi host RAM, 16Gi shared-memory capacity and 8 Ray CPUs. H100, A100 and mig-1g.10gb remain explicit alternatives. Ray CPUs must not exceed allocated CPUs; shared memory must not exceed RAM.
+
+The CPU/RAM defaults are a starting request for a K16 run, not measured full-cohort minima. The unchanged fit settings include a 250,000-row shuffle buffer (~2.38 GiB raw FP32 embeddings), 25,600-row batches (~0.244 GiB each), Parquet decoding, Ray workers/object store and temporary arrays. The K16 dictionary itself is only ~0.156 MiB. Keep 16Gi shared-memory capacity within the 32Gi host budget. GPU memory is driven by a single inference bag, not dictionary fitting; estimated 1–3 GiB VRAM for supported L3 mean-linear inference is unmeasured. The core supports CPU inference, but this launcher still explicitly requires CUDA. A40 placement is a user choice; it is not a mathematical or VRAM requirement of the fitting method. Do not change numerical fit parameters just to reduce resources.
+
+For a newly recovered model, prefer its finished linked recovery run as the source so the report and checkpoint refer to the new run. If `mlflow.source.git.commit` is absent, verify its `recovery.implementation_sha` against `recovery/recovery-manifest.json` and pass that actual training implementation as the explicit training SHA; `recovery.source_training_sha` describes the older experiment being reproduced. The explainability implementation pin can be newer. Check graph compatibility and checkpoint hash locally before scheduling a full-cohort job; no embedding or slide download is needed for that preflight.
 
 The default fits the dictionary on train and explains validation in one process, sharing the dataset cache. Split auditing lists train/val/test artifact membership and applies the original mapping; it does not download test bags. Listed zero-row bags are conservatively included in leakage checks because a listing cannot verify row count. Test embedding download, scoring and report generation occur only with `--include-test`.
 
@@ -67,7 +71,7 @@ For scheduling/container failures, describe the exact pod selected by the job's 
 
 | Failure | Next evidence and bounded response |
 | --- | --- |
-| Pending GPU | Pod events and resource/node-selector requests; H100 availability is not guaranteed. Change GPU/resources only with an amended approved plan. |
+| Pending GPU | Pod events and resource/node-selector requests; A40 availability is not guaranteed. Change GPU/resources only with an amended approved plan. |
 | OOM / shared memory | Pod termination reason and stage logs; increase approved RAM/shm/CPU settings or investigate peak CPU arrays. A larger GPU does not solve CPU factorization memory. |
 | CUDA / OpenSlide / libvips preflight | Container import error and CUDA details; use an approved compatible image. Do not upgrade dependencies inside the failed job. |
 | Git pin unavailable | Verify implementation was pushed, optional ref is reachable, and historical object is available from origin. Do not replace either exact pin with a mutable training branch. |

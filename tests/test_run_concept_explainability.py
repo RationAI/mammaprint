@@ -83,8 +83,17 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(job["k"], 16)
         self.assertEqual(job["training_sha"], TRAINING)
         self.assertEqual(job["implementation_sha"], IMPLEMENTATION)
-        self.assertEqual(plan["resources"]["gpu"], "H100")
-        self.assertEqual(plan["resources"]["gpu_limit"], 1)
+        self.assertEqual(
+            plan["resources"],
+            {
+                "gpu": "A40",
+                "gpu_limit": 1,
+                "cpu": 8,
+                "memory": "32Gi",
+                "shm": "16Gi",
+                "ray_cpus": 8,
+            },
+        )
         self.assertFalse(plan["remote_verified"])
 
     def test_help_is_offline(self):
@@ -427,9 +436,10 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
         call = self.calls[0]
         self.assertFalse(call["public"])
-        self.assertEqual(call["gpu"], "H100")
-        self.assertEqual(call["cpu"], 16)
-        self.assertEqual(call["memory"], "64Gi")
+        self.assertEqual(call["gpu"], "A40")
+        self.assertEqual(call["cpu"], 8)
+        self.assertEqual(call["memory"], "32Gi")
+        self.assertEqual(call["shm"], "16Gi")
         self.assertEqual(call["storage"], ["data-ref", "projects-ref"])
         self.assertEqual(self.config_calls, [{"context": "kubas-cluster"}])
 

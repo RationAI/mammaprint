@@ -78,12 +78,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="One or more component counts; repeatable (default: 16).",
     )
     parser.add_argument(
-        "--gpu", choices=["H100", "A100", "A40", "mig-1g.10gb"], default="H100"
+        "--gpu", choices=["H100", "A100", "A40", "mig-1g.10gb"], default="A40"
     )
-    parser.add_argument("--cpu", type=_positive, default=16)
-    parser.add_argument("--memory", default="64Gi")
+    parser.add_argument("--cpu", type=_positive, default=8)
+    parser.add_argument("--memory", default="32Gi")
     parser.add_argument("--shm", default="16Gi")
-    parser.add_argument("--ray-cpus", type=_positive, default=16)
+    parser.add_argument("--ray-cpus", type=_positive, default=8)
     parser.add_argument(
         "--context",
         default=CONTEXT,
