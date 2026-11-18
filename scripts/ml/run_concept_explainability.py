@@ -317,7 +317,7 @@ def build_plan(args: argparse.Namespace) -> dict:
             "test_membership_audit": "metadata listing only; test bags downloaded only with --include-test",
             "cpu_stages": ["output metric", "semi-NMF fitting", "NNLS encoding"],
             "gpu_stage": "native PyTorch explanation inference",
-            "supported_graph": "IdentityEncoder + MeanPool + single LinearHead + BCE/type; no attention term",
+            "supported_graph": "IdentityEncoder + MeanPool + single LinearHead; BCE/type or MSE/index; no attention term",
             "mlflow": "new destination run; source run read-only",
         },
         "unverified": [

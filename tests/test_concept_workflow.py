@@ -457,7 +457,7 @@ class CombinedWorkflowTests(unittest.TestCase):
             source = SourceRun(
                 "source",
                 "a" * 40,
-                OmegaConf.create({"label_mode": "index"}),
+                OmegaConf.create({"label_mode": "both"}),
                 None,
                 None,
             )

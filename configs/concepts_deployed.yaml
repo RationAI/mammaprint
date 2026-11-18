@@ -1,4 +1,4 @@
-# Adam's deployed metric settings, adapted explicitly to native mean-linear BCE.
+# Adam's deployed metric settings for native mean-linear BCE/type or MSE/index.
 defaults:
   - concepts
   - _self_

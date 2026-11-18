@@ -39,5 +39,9 @@ Native binary logits are represented as [0,z] before class centering. MeanPool
 has no attention output, so its inapplicable attention term is explicitly omitted
 and recorded; this is not the unchanged UC attention graph. Validation and
 artifact/source binding checks are MammaPrint integration code.
+The native_mean_linear_index_regression_v1 adapter applies the same normalized
+output-gradient/variance algebra to one raw index output, without class centering.
+Index contribution accounting and its explicit reconstruction residual are
+MammaPrint integration code, not an upstream regression deployment claim.
 Deployed dictionary run: be859ae30ca143b78d957493d4f8a8c8
 Deployed gallery run: b30054c6bffb4df8896c8acb75a48959

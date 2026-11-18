@@ -1,4 +1,4 @@
-"""Native mean-linear classifier adaptation of Adam's deployed output metric.
+"""Native mean-linear classifier/regressor adapters for Adam's output metric.
 
 Classifier algebra and hash sampling adapted from RationAI/ulcerative-colitis,
 75c22a2a98d3b16a1c298735e2ea385cccfd07fb, explainability/model.py and
@@ -24,6 +24,18 @@ from ml.models.heads import LinearHead
 
 METRIC_UPSTREAM_SHA = "75c22a2a98d3b16a1c298735e2ea385cccfd07fb"
 METRIC_ADAPTER = "native_mean_linear_binary_classifier_v1"
+REGRESSION_METRIC_ADAPTER = "native_mean_linear_index_regression_v1"
+
+
+def metric_adapter(source: SourceRun) -> str:
+    mode = source.config.get("label_mode")
+    if mode == "type":
+        return METRIC_ADAPTER
+    if mode == "index":
+        return REGRESSION_METRIC_ADAPTER
+    raise ValueError(
+        "Deployed metric requires label_mode=type or index; joint is unsupported."
+    )
 
 
 def metric_enabled(config) -> bool:
@@ -60,9 +72,12 @@ def _validate_metric_data_config(config):
             raise ValueError(
                 f"Deployed metric requires exact SingleScaleDataset for {split}."
             )
-        if dataset.get("split") != split or dataset.get("label_mode", "type") != "type":
+        if (
+            dataset.get("split") != split
+            or dataset.get("label_mode", "type") != config.label_mode
+        ):
             raise ValueError(
-                f"Deployed metric requires matching split and type labels for {split}."
+                f"Deployed metric requires matching split and {config.label_mode} labels for {split}."
             )
         selected = dataset.get("levels")
         if (
@@ -94,6 +109,9 @@ def _validate_metric_data_config(config):
 
 def preflight_metric_source(source: SourceRun):
     """Validate the metric graph and return its frozen CPU model before data reads."""
+    adapter = metric_adapter(source)
+    regression = adapter == REGRESSION_METRIC_ADAPTER
+    loss = "MSELoss" if regression else "BCEWithLogitsLoss"
     allowed = {
         "encoder": {
             "ml.models.encoders.IdentityEncoder",
@@ -105,19 +123,15 @@ def preflight_metric_source(source: SourceRun):
         },
         "head": {"ml.models.heads.LinearHead", "ml.models.heads.linear.LinearHead"},
         "loss": {
-            "torch.nn.BCEWithLogitsLoss",
-            "torch.nn.modules.loss.BCEWithLogitsLoss",
+            f"torch.nn.{loss}",
+            f"torch.nn.modules.loss.{loss}",
         },
     }
-    if source.config.get("label_mode") != "type":
-        raise ValueError(
-            "Deployed metric requires label_mode=type; index/joint are unsupported."
-        )
     for name, targets in allowed.items():
         target = OmegaConf.select(source.config, f"ml.{name}._target_")
         if target not in targets:
             raise ValueError(
-                f"Deployed metric does not support {name}={target}; requires IdentityEncoder + MeanPool + LinearHead + BCE."
+                f"Deployed metric does not support {name}={target}; requires IdentityEncoder + MeanPool + LinearHead + {loss}."
             )
     activation = OmegaConf.select(source.config, "ml.output_activation._target_")
     if activation not in (
@@ -132,14 +146,15 @@ def preflight_metric_source(source: SourceRun):
         type(module.encoder) is not IdentityEncoder
         or type(module.aggregator) is not MeanPool
         or type(module.head) is not LinearHead
-        or type(module.loss) is not torch.nn.BCEWithLogitsLoss
+        or type(module.loss)
+        is not (torch.nn.MSELoss if regression else torch.nn.BCEWithLogitsLoss)
         or module.head.linear.out_features != 1
         or module.encoder.out_dim != 2560
         or module.encoder.out_dim != module.head.linear.in_features
         or module.aggregator.out_dim != module.encoder.out_dim
     ):
         raise ValueError(
-            "Deployed metric requires the native mean-linear single BCE logit graph."
+            "Deployed metric requires the native mean-linear single-output graph."
         )
     source_binding(source)  # Verify checkpoint bytes as well as architecture.
     return module
@@ -171,6 +186,20 @@ def classifier_output_metric(z, weight, bias, *, ridge=0.3) -> np.ndarray:
     Keeps upstream float32 classifier arithmetic and float64 sample/matrix
     arithmetic, trace normalization, ridge, CPU eigh and float32 T orientation.
     """
+    return _linear_output_metric(z, weight, bias, ridge=ridge, binary=True)
+
+
+def regression_output_metric(z, weight, bias, *, ridge=0.3) -> np.ndarray:
+    """The same upstream output-gradient/variance metric for one raw index.
+
+    A single output must not be centered across outputs: that would erase it.
+    Trace normalization makes this metric equivalent to the binary adapter for
+    the same weights, while its provenance correctly records one index output.
+    """
+    return _linear_output_metric(z, weight, bias, ridge=ridge, binary=False)
+
+
+def _linear_output_metric(z, weight, bias, *, ridge, binary):
     z = np.asarray(z)
     weight, bias = np.asarray(weight), np.asarray(bias)
     if z.ndim != 2 or len(z) < 2 or not np.isfinite(z).all():
@@ -187,9 +216,12 @@ def classifier_output_metric(z, weight, bias, *, ridge=0.3) -> np.ndarray:
     if isinstance(ridge, bool) or not np.isfinite(ridge) or ridge <= 0:
         raise ValueError("Metric ridge must be positive and finite.")
     z = z.astype(np.float64)
-    theta = np.concatenate([np.zeros_like(weight), weight])
-    b = np.concatenate([np.zeros_like(bias), bias])
-    theta, b = theta - theta.mean(axis=0), b - b.mean()
+    if binary:
+        theta = np.concatenate([np.zeros_like(weight), weight])
+        b = np.concatenate([np.zeros_like(bias), bias])
+        theta, b = theta - theta.mean(axis=0), b - b.mean()
+    else:
+        theta, b = weight, bias
     logits = z @ theta.T + b
     dim = z.shape[1]
     metric = np.zeros((dim, dim))

@@ -262,9 +262,22 @@ def row_urls(
     return urls
 
 
-def render_naming_html(manifest, selected, images, effects, presence, fidelity):
+def render_naming_html(
+    manifest,
+    selected,
+    images,
+    effects,
+    presence,
+    fidelity,
+    *,
+    contributions=None,
+    decompositions=None,
+):
     n_components = validate_n_components(manifest.get("n_components", 16))
-    for frame in (selected, effects, presence):
+    index_report = manifest.get("label_mode") == "index"
+    contributions = pd.DataFrame() if contributions is None else contributions
+    decompositions = pd.DataFrame() if decompositions is None else decompositions
+    for frame in (selected, effects, presence, contributions):
         if not frame.empty:
             if "concept" not in frame:
                 raise ValueError("Report rows must declare their concept.")
@@ -285,6 +298,41 @@ def render_naming_html(manifest, selected, images, effects, presence, fidelity):
         key: manifest.get(key) for key in ("dictionary_id", "source_run_id", "split")
     }
     report_id["n_components"] = n_components
+    if index_report:
+        report_id["expected_question"] = "index_direction"
+    additive_html = ""
+    if not decompositions.empty:
+        if not index_report or contributions.empty:
+            raise ValueError(
+                "Index decompositions require matching concept contributions."
+            )
+        if decompositions.slide_id.duplicated().any() or set(
+            decompositions.slide_id
+        ) != set(contributions.slide_id):
+            raise ValueError("Index decomposition slide identities disagree.")
+        counts = contributions.groupby("slide_id").concept.agg(["size", "nunique"])
+        if not (counts == n_components).all().all():
+            raise ValueError(
+                "Each index decomposition must contain every concept once."
+            )
+        wide = contributions.pivot(
+            index="slide_id", columns="concept", values="contribution"
+        ).reindex(columns=range(n_components))
+        wide.columns = [f"C{k}" for k in range(n_components)]
+        table = decompositions.set_index("slide_id").join(wide)
+        columns = ["baseline", *wide.columns, "residual", "prediction"]
+        if not np.isfinite(table[columns].to_numpy()).all() or not np.allclose(
+            table.baseline + table[wide.columns].sum(axis=1) + table.residual,
+            table.prediction,
+            rtol=1e-9,
+            atol=1e-9,
+        ):
+            raise ValueError("Index contributions do not account for the prediction.")
+        additive_html = (
+            '<h2>Per-slide index contributions</h2><p>All values are raw index units. Positive contributions increase the index toward A; negative contributions decrease it toward B. The reference is the model output at the tile-weighted mean training embedding. Baseline + all concept contributions + residual = original prediction. The residual includes reconstruction error and numerical roundoff; it is not prediction error against the measured index.</p><div style="overflow-x:auto">'
+            + table[columns].reset_index().to_html(index=False, escape=True)
+            + "</div>"
+        )
     rows = []
     for k in range(n_components):
         examples = selected[selected.concept == k]
@@ -312,13 +360,26 @@ def render_naming_html(manifest, selected, images, effects, presence, fidelity):
             if not presence.empty
             else ""
         )
+        choices = (
+            (
+                "increase index (toward A)",
+                "decrease index (toward B)",
+                "no effect",
+                "unsure",
+            )
+            if index_report
+            else ("A", "B", "no effect", "unsure")
+        )
+        expected_label = (
+            "Expected index direction" if index_report else "Expected luminal type"
+        )
         options = '<option value="">Choose</option>' + "".join(
-            f"<option>{option}</option>" for option in ("A", "B", "no effect", "unsure")
+            f"<option>{option}</option>" for option in choices
         )
         rows.append(f"""<section><h2>Concept {k}</h2><div class="tiles">{tiles}</div>{shortage}
 <label>Name <input id="name-{k}"></label>
 <label><input type="checkbox" id="unclear-{k}">Unclear or mixed</label>
-<label>Expected luminal type <select class="expected" id="expected-{k}">{options}</select></label>
+<label>{expected_label} <select class="expected" id="expected-{k}">{options}</select></label>
 <label>Same as concept <input id="same-{k}" type="number" min="0" max="{n_components - 1}"></label>
 <label>Comment <textarea id="comment-{k}"></textarea></label>
 <div class="model-info">{labels}{numbers}{prevalence}</div></section>""")
@@ -332,16 +393,22 @@ def render_naming_html(manifest, selected, images, effects, presence, fidelity):
         if not fidelity.empty
         else "Fidelity not available."
     )
+    question_note = (
+        "Predict whether more of each pattern would increase or decrease the MammaPrint index. Index &gt;= 0 is A and index &lt; 0 is B in this model's convention. Effects use the raw model output without clipping to [-1, 1]."
+        if index_report
+        else "Expected luminal type is a proposed breast-specific question. A pathologist must confirm its wording. Model index effects are shown separately after reveal."
+    )
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>MammaPrint concept naming: K={n_components}</title>
 <style>body{{font:15px system-ui;margin:24px}}body.blind .model-info{{display:none}}section{{border-top:1px solid #bbb;padding:16px 0}}.tiles{{display:flex;gap:8px;flex-wrap:wrap}}.tiles a{{display:flex;flex-direction:column}}label{{display:inline-block;margin:8px}}textarea{{vertical-align:middle}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px}}.warning{{color:#a00}}#answers{{width:95%;height:240px}}</style></head>
 <body class="blind"><h1>MammaPrint: {n_components} visual concepts</h1>{fixture}
 <p>Patterns extracted from frozen Virchow2 embeddings. Name them from the images before revealing labels and model effects. Each row uses distinct slides. Click a tile to inspect the slide and concept-presence layer in xOpat (VPN required).</p>
-<p>Expected luminal type is a proposed breast-specific question. A pathologist must confirm its wording. Model index effects are shown separately after reveal.</p>
-<p>Reloading or closing this page loses answers. Copy them regularly. Revealing results freezes expected-type answers. This is procedural blinding, not access control.</p>
+<p>{question_note}</p>
+<p>Reloading or closing this page loses answers. Copy them regularly. Revealing results freezes expected answers. This is procedural blinding, not access control.</p>
 <button id="reveal" onclick="revealResults()">Show labels and effects</button>
 <button onclick="copyAnswers()">Copy your answers</button><span id="copy-status"></span><textarea id="answers" hidden readonly></textarea>
 <div class="model-info"><h2>Fidelity and interpretation</h2>{fidelity_html}
 <p>Effects compare two-sided concept changes against reconstructed-model output, not the original embeddings. Classification effects are percentage points of P(A) in group A or P(B) in group B; regression uses raw index units. Presence is relative concept frequency. Direction disagreement is flagged. These are model responses, not biological causal effects.</p></div>
+<div class="model-info">{additive_html}</div>
 {"".join(rows)}<script>const REPORT_ID={json.dumps(report_id).replace("<", chr(92) + "u003c")};{FORM_SCRIPT}</script></body></html>"""
 
 
@@ -362,14 +429,18 @@ def build_report(
         raise ValueError("Report source run or dictionary identity mismatch.")
     n_components = dictionary_n_components(dictionary_manifest)
     load_dictionary(
-        dictionary_dir
+        dictionary_dir, source=source
     )  # Validate dimensions and checksum before using its codes.
     if (
         validate_n_components(manifest.get("n_components", n_components))
         != n_components
     ):
         raise ValueError("Evaluation n_components does not match the dictionary.")
-    manifest = {**manifest, "n_components": n_components}
+    manifest = {
+        **manifest,
+        "n_components": n_components,
+        "label_mode": str(source.config.label_mode),
+    }
     output_dir.mkdir(parents=True, exist_ok=True)
     split = manifest["split"]
     dataset = source_dataset(source, split)
@@ -453,6 +524,14 @@ def build_report(
     effects = pd.read_parquet(evaluation_dir / "concept_effects.parquet")
     presence = pd.read_parquet(evaluation_dir / "concept_presence.parquet")
     fidelity = pd.read_parquet(evaluation_dir / "fidelity.parquet")
+    contributions = decompositions = None
+    if "index_decomposition" in manifest:
+        contributions = pd.read_parquet(
+            evaluation_dir / "slide_concept_contributions.parquet"
+        )
+        decompositions = pd.read_parquet(
+            evaluation_dir / "slide_index_decomposition.parquet"
+        )
     path = output_dir / f"naming_k{n_components}.html"
     path.write_text(
         render_naming_html(
@@ -462,6 +541,8 @@ def build_report(
             effects,
             presence,
             fidelity,
+            contributions=contributions,
+            decompositions=decompositions,
         )
     )
     save_json(

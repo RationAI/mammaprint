@@ -19,10 +19,13 @@ from ml.concept_explainability.data import (
 from ml.concept_explainability.metric import (
     METRIC_ADAPTER,
     METRIC_UPSTREAM_SHA,
+    REGRESSION_METRIC_ADAPTER,
     classifier_output_metric,
+    metric_adapter,
     metric_dictionary_id,
     metric_enabled,
     preflight_metric_source,
+    regression_output_metric,
     sample_metric_rows,
     source_binding,
 )
@@ -39,6 +42,9 @@ from ml.concept_explainability.upstream import (
     fit_semi_nmf_online,
     gauge_fix_dictionary,
 )
+from ml.models.aggregators import MeanPool
+from ml.models.encoders.identity import IdentityEncoder
+from ml.models.heads import LinearHead
 
 
 def save_json(path: Path, value: dict[str, Any]) -> None:
@@ -109,7 +115,12 @@ class _FixtureDataset:
             selected = indices[start : start + batch_size]
             batch = {"embedding": self.rows[selected]}
             if self.keys is not None:
-                batch.update({column: self.keys[column].to_numpy()[selected] for column in self.keys})
+                batch.update(
+                    {
+                        column: self.keys[column].to_numpy()[selected]
+                        for column in self.keys
+                    }
+                )
             yield batch
 
 
@@ -151,34 +162,65 @@ def fit_dictionary(
     stream = (
         embedding_dataset(source, "train", dataset, include_keys=enabled)
         if use_ray
-        else _FixtureDataset(np.concatenate(fixture_rows), pd.concat(fixture_keys, ignore_index=True) if enabled else None)
+        else _FixtureDataset(
+            np.concatenate(fixture_rows),
+            pd.concat(fixture_keys, ignore_index=True) if enabled else None,
+        )
     )
     transform = None
     metric_metadata = None
     if enabled:
         sample, sample_metadata = sample_metric_rows(
-            stream, count, shift, batch_size=config.nmf.batch_size,
-            n_tiles=config.metric.get("n_tiles", 20_000), seed=config.nmf.random_state,
+            stream,
+            count,
+            shift,
+            batch_size=config.nmf.batch_size,
+            n_tiles=config.metric.get("n_tiles", 20_000),
+            seed=config.nmf.random_state,
         )
         # Preserve upstream float32 subtract/restore roundoff before metric estimation.
-        transform = classifier_output_metric(
-            sample + shift, module.head.linear.weight.detach().cpu().numpy(),
-            module.head.linear.bias.detach().cpu().numpy(), ridge=config.metric.get("ridge", 0.3),
+        adapter = metric_adapter(source)
+        output_metric = (
+            regression_output_metric
+            if adapter == REGRESSION_METRIC_ADAPTER
+            else classifier_output_metric
+        )
+        transform = output_metric(
+            sample + shift,
+            module.head.linear.weight.detach().cpu().numpy(),
+            module.head.linear.bias.detach().cpu().numpy(),
+            ridge=config.metric.get("ridge", 0.3),
         )
         requested_attention = config.metric.get("attention_weight", 1.0)
-        if isinstance(requested_attention, bool) or not np.isfinite(requested_attention) or requested_attention < 0:
+        if (
+            isinstance(requested_attention, bool)
+            or not np.isfinite(requested_attention)
+            or requested_attention < 0
+        ):
             raise ValueError("metric.attention_weight must be finite and nonnegative.")
         metric_metadata = {
-            "adapter": METRIC_ADAPTER, "upstream_sha": METRIC_UPSTREAM_SHA,
-            "binding": source_binding(source), "sample": sample_metadata,
+            "adapter": adapter,
+            "upstream_sha": METRIC_UPSTREAM_SHA,
+            "binding": source_binding(source),
+            "sample": sample_metadata,
             "ridge": float(config.metric.get("ridge", 0.3)),
             "attention_weight_requested": float(requested_attention),
-            "attention_applicable": False, "attention_terms": 0,
-            "attention_reason": "aggregator_has_no_attention", "output_terms": 2,
-            "binary_logits": "[0,z], centered across classes",
+            "attention_applicable": False,
+            "attention_terms": 0,
+            "attention_reason": "aggregator_has_no_attention",
         }
+        if adapter == REGRESSION_METRIC_ADAPTER:
+            metric_metadata.update(
+                output_terms=1, output="raw_mammaprint_index", units="index"
+            )
+        else:
+            metric_metadata.update(
+                output_terms=2, binary_logits="[0,z], centered across classes"
+            )
     if enabled:
-        h = fit_semi_nmf_online(stream, config, shift, np.ones_like(shift), transform=transform)
+        h = fit_semi_nmf_online(
+            stream, config, shift, np.ones_like(shift), transform=transform
+        )
         h = (h @ np.linalg.inv(transform).T).astype(np.float32)
     else:
         h = fit_semi_nmf_online(stream, config, shift, np.ones_like(shift))
@@ -194,12 +236,17 @@ def fit_dictionary(
     if enabled:
         np.save(output_dir / "transform.npy", transform)
         metric_metadata["transform"] = {
-            "file": "transform.npy", "shape": list(transform.shape),
-            "dtype": str(transform.dtype), "sha256": file_sha256(output_dir / "transform.npy"),
+            "file": "transform.npy",
+            "shape": list(transform.shape),
+            "dtype": str(transform.dtype),
+            "sha256": file_sha256(output_dir / "transform.npy"),
         }
     dictionary_id = (
-        metric_dictionary_id(h, shift, transform, metric_metadata["binding"])
-        if enabled else sha256(h.tobytes() + shift.tobytes()).hexdigest()
+        metric_dictionary_id(
+            h, shift, transform, metric_metadata["binding"], metric_metadata["adapter"]
+        )
+        if enabled
+        else sha256(h.tobytes() + shift.tobytes()).hexdigest()
     )
     save_json(
         output_dir / "manifest.json",
@@ -221,7 +268,9 @@ def fit_dictionary(
             "fixture_only": not use_ray,
         },
     )
-    autoencoder = ConceptAutoencoder(h, shift, False, int(config.nmf.nnls_iter), transform=transform)
+    autoencoder = ConceptAutoencoder(
+        h, shift, False, int(config.nmf.nnls_iter), transform=transform
+    )
     for slide in iter_slides(source, "train", dataset):
         write_codes(
             slide.keys,
@@ -245,7 +294,9 @@ def write_codes(keys: pd.DataFrame, codes: np.ndarray, path: Path) -> None:
     ).to_parquet(path, index=False)
 
 
-def load_dictionary(directory: Path, *, source: SourceRun | None = None) -> ConceptAutoencoder:
+def load_dictionary(
+    directory: Path, *, source: SourceRun | None = None
+) -> ConceptAutoencoder:
     from hashlib import sha256
 
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -265,8 +316,15 @@ def load_dictionary(directory: Path, *, source: SourceRun | None = None) -> Conc
     transform = None
     if enabled:
         metadata = manifest.get("metric", {})
-        if manifest.get("format_version") != 2 or metadata.get("adapter") != METRIC_ADAPTER:
+        if manifest.get("format_version") != 2 or metadata.get("adapter") not in {
+            METRIC_ADAPTER,
+            REGRESSION_METRIC_ADAPTER,
+        }:
             raise ValueError("Unsupported metric dictionary format or adapter.")
+        if source is not None and metadata["adapter"] != metric_adapter(source):
+            raise ValueError(
+                "Metric dictionary adapter does not match this model objective."
+            )
         saved_transform = metadata.get("transform", {})
         path = directory / "transform.npy"
         if not path.is_file() or saved_transform.get("file") != "transform.npy":
@@ -277,28 +335,46 @@ def load_dictionary(directory: Path, *, source: SourceRun | None = None) -> Conc
             transform = np.load(path, allow_pickle=False)
         except (ValueError, OSError) as exc:
             raise ValueError("Invalid metric transform file.") from exc
-        if (transform.shape != (2560, 2560) or transform.dtype != np.float32
+        if (
+            transform.shape != (2560, 2560)
+            or transform.dtype != np.float32
             or saved_transform.get("shape") != list(transform.shape)
             or saved_transform.get("dtype") != str(transform.dtype)
-            or not np.isfinite(transform).all()):
+            or not np.isfinite(transform).all()
+        ):
             raise ValueError("Invalid metric transform shape, dtype or values.")
         sign, logdet = np.linalg.slogdet(transform.astype(np.float64))
         if sign == 0 or not np.isfinite(logdet):
             raise ValueError("Metric transform must be invertible.")
         binding = metadata.get("binding")
-        if not isinstance(binding, dict) or not {"source_run_id", "training_sha", "checkpoint_sha256", "resolved_config_sha256"}.issubset(binding):
+        if not isinstance(binding, dict) or not {
+            "source_run_id",
+            "training_sha",
+            "checkpoint_sha256",
+            "resolved_config_sha256",
+        }.issubset(binding):
             raise ValueError("Metric dictionary source binding is missing.")
-        expected_id = metric_dictionary_id(h, shift, transform, binding, metadata["adapter"])
+        expected_id = metric_dictionary_id(
+            h, shift, transform, binding, metadata["adapter"]
+        )
         if source is not None and source_binding(source) != binding:
-            raise ValueError("Metric dictionary source binding does not match this model/config.")
+            raise ValueError(
+                "Metric dictionary source binding does not match this model/config."
+            )
     else:
-        if manifest.get("format_version", 1) >= 2 and ("metric" in manifest or (directory / "transform.npy").exists()):
+        if manifest.get("format_version", 1) >= 2 and (
+            "metric" in manifest or (directory / "transform.npy").exists()
+        ):
             raise ValueError("Contradictory metric flags or transform artifact.")
         expected_id = sha256(h.tobytes() + shift.tobytes()).hexdigest()
     if expected_id != manifest["dictionary_id"]:
         raise ValueError("Dictionary checksum does not match its manifest.")
     return ConceptAutoencoder(
-        h, shift, False, int(manifest["config"]["nmf"]["nnls_iter"]), transform=transform
+        h,
+        shift,
+        False,
+        int(manifest["config"]["nmf"]["nnls_iter"]),
+        transform=transform,
     )
 
 
@@ -344,6 +420,59 @@ def concept_push(
         else codes[:, concept] + step
     )
     return pushed
+
+
+def _linear_index_model(module) -> bool:
+    return (
+        type(module.encoder) is IdentityEncoder
+        and type(module.aggregator) is MeanPool
+        and type(module.head) is LinearHead
+        and type(module.loss) is torch.nn.MSELoss
+        and type(module.output_activation) is torch.nn.Identity
+        and module.head.linear.out_features == 1
+    )
+
+
+def linear_index_decomposition(module, dictionary, codes, original, reconstructed):
+    """Account for a mean-linear index using raw NNLS amounts, not code shares.
+
+    The residual closes the original model prediction, including embedding
+    reconstruction error and floating-point roundoff. The latter is recorded
+    separately against the native reconstructed prediction.
+    """
+    if (
+        not _linear_index_model(module)
+        or module.training
+        or module.head.dropout.training
+    ):
+        raise ValueError("Index decomposition requires a frozen mean-linear MSE model.")
+    atoms = np.asarray(dictionary.dictionary, dtype=np.float64)
+    shift = np.asarray(dictionary.mu, dtype=np.float64)
+    validate_codes(codes, len(atoms), len(codes))
+    if len(codes) == 0:
+        raise ValueError("Index decomposition requires a nonempty bag.")
+    weight = module.head.linear.weight.detach().cpu().numpy()[0].astype(np.float64)
+    bias = float(module.head.linear.bias.detach().cpu().numpy()[0])
+    if atoms.shape != (codes.shape[1], len(weight)) or shift.shape != weight.shape:
+        raise ValueError("Index decomposition dictionary/model dimensions disagree.")
+    amounts = np.asarray(codes, dtype=np.float64).mean(axis=0)
+    contributions = amounts * (atoms @ weight)
+    baseline = float(bias + shift @ weight)
+    concept_sum = float(contributions.sum())
+    represented = baseline + concept_sum
+    values = {
+        "baseline": baseline,
+        "concept_sum": concept_sum,
+        "reconstructed_from_concepts": represented,
+        "prediction": float(original),
+        "residual": float(original) - represented,
+        "reconstruction_roundoff": float(reconstructed) - represented,
+    }
+    if not np.isfinite(contributions).all() or not all(
+        np.isfinite(v) for v in values.values()
+    ):
+        raise ValueError("Index decomposition produced nonfinite values.")
+    return contributions, values
 
 
 def evaluate_bag(
@@ -421,6 +550,7 @@ def evaluate_concepts(
     n_components = dictionary.dictionary.shape[0]
     module = load_frozen_model(source).to(device)
     mode = str(source.config.label_mode)
+    decompose_index = mode == "index" and _linear_index_model(module)
     dataset = source_dataset(source, split)
     output_dir.mkdir(parents=True, exist_ok=True)
     means = []
@@ -435,7 +565,12 @@ def evaluate_concepts(
     means = np.asarray(means)
     sufficient = len(means) >= 2
     spread = means.std(axis=0, ddof=1) if sufficient else np.zeros(n_components)
-    slide_rows, per_slide_effects = [], []
+    slide_rows, per_slide_effects, index_contributions, index_decompositions = (
+        [],
+        [],
+        [],
+        [],
+    )
     squared_error = tiles = 0
     targets = ["luminal_a_probability"] if mode == "type" else ["mammaprint_index"]
     if mode == "both":
@@ -457,6 +592,26 @@ def evaluate_concepts(
         )
         squared_error += result["embedding_squared_error"]
         tiles += result["n_tiles"]
+        if decompose_index:
+            contributions, decomposition = linear_index_decomposition(
+                module,
+                dictionary,
+                codes,
+                result["original"][0],
+                result["reconstructed"][0],
+            )
+            index_decompositions.append(
+                {"slide_id": slide.slide_id, **decomposition, "units": "index"}
+            )
+            index_contributions.extend(
+                {
+                    "slide_id": slide.slide_id,
+                    "concept": k,
+                    "contribution": float(value),
+                    "units": "index",
+                }
+                for k, value in enumerate(contributions)
+            )
         for column, target in enumerate(targets):
             slide_rows.append(
                 {
@@ -507,6 +662,25 @@ def evaluate_concepts(
                 "n_slides": len(rows),
             }
         )
+        if target == "mammaprint_index":
+            error = rows.original_raw - rows.reconstructed_raw
+            fidelity[-1].update(
+                raw_mae=float(np.abs(error).mean()),
+                zero_boundary_agreement=float(
+                    np.mean((rows.original_raw >= 0) == (rows.reconstructed_raw >= 0))
+                ),
+                prediction_mae=float(np.abs(rows.original_raw - rows.label).mean()),
+                prediction_rmse=float(
+                    np.sqrt(np.mean((rows.original_raw - rows.label) ** 2))
+                ),
+            )
+            if decompose_index:
+                residuals = np.array([r["residual"] for r in index_decompositions])
+                fidelity[-1].update(
+                    residual_abs_mean=float(np.abs(residuals).mean()),
+                    residual_abs_p95=float(np.quantile(np.abs(residuals), 0.95)),
+                    residual_abs_max=float(np.abs(residuals).max()),
+                )
         groups = (
             {
                 "A": rows.index[rows.original_raw >= 0],
@@ -568,12 +742,34 @@ def evaluate_concepts(
         output_dir / "concept_presence.parquet", index=False
     )
     pd.DataFrame(fidelity).to_parquet(output_dir / "fidelity.parquet", index=False)
+    decomposition_metadata = {}
+    if decompose_index:
+        pd.DataFrame(index_contributions).to_parquet(
+            output_dir / "slide_concept_contributions.parquet", index=False
+        )
+        pd.DataFrame(index_decompositions).to_parquet(
+            output_dir / "slide_index_decomposition.parquet", index=False
+        )
+        decomposition_metadata = {
+            "index_decomposition": {
+                "contributions": "slide_concept_contributions.parquet",
+                "slides": "slide_index_decomposition.parquet",
+                "units": "index",
+                "baseline": "model output at the tile-weighted mean training embedding",
+                "identity": "prediction = baseline + sum(contributions) + residual",
+                "residual": "unrepresented model output, including reconstruction error and numerical roundoff",
+            }
+        }
     save_json(
         output_dir / "manifest.json",
         {
             "dictionary_id": dictionary_manifest["dictionary_id"],
             "metric_enabled": dictionary_manifest.get("metric_enabled", False),
-            **({"metric": dictionary_manifest["metric"]} if dictionary_manifest.get("metric_enabled") else {}),
+            **(
+                {"metric": dictionary_manifest["metric"]}
+                if dictionary_manifest.get("metric_enabled")
+                else {}
+            ),
             "n_components": n_components,
             "corpus": identity,
             "source_run_id": source.run_id,
@@ -581,6 +777,7 @@ def evaluate_concepts(
             "checkpoint_sha256": source.checkpoint_sha256,
             "split": split,
             "step_sds": step_sds,
+            "label_mode": mode,
             "spread_ddof": 1,
             "upstream_sha": UPSTREAM_SHA,
             "embedding_rmse": float(np.sqrt(squared_error / tiles)),
@@ -590,6 +787,7 @@ def evaluate_concepts(
             "effects_status": "evaluated" if sufficient else "insufficient_cohort",
             "fixture_only": dictionary_manifest["fixture_only"],
             "fidelity": fidelity,
+            **decomposition_metadata,
         },
     )
     return output_dir

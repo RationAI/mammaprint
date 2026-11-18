@@ -80,11 +80,16 @@ Select `--config-name concepts_deployed` for the deployed fit settings. The
 base `concepts` config remains plain; an absent `fit.metric` means disabled and
 legacy plain dictionary IDs and coefficients are unchanged.
 
-The adapter `native_mean_linear_binary_classifier_v1` supports only
-IdentityEncoder + MeanPool + single LinearHead with `label_mode=type`,
-BCEWithLogitsLoss and Identity output activation. It loads frozen checkpoint
-weights and rejects index/joint, nonlinear heads, max, attention, transformer,
-spatial and non-identity encoder graphs before whole-split dataset access.
+Two explicit adapters support IdentityEncoder + MeanPool + a single-output
+LinearHead and Identity output activation:
+
+- `native_mean_linear_binary_classifier_v1`: `label_mode=type`, BCEWithLogitsLoss.
+- `native_mean_linear_index_regression_v1`: `label_mode=index`, MSELoss.
+
+The adapter follows the saved source objective; there is no label/loss override.
+Both load frozen checkpoint weights and reject joint, nonlinear heads, max,
+attention, transformer, spatial and non-identity encoder graphs before
+whole-split dataset access. Every dataset must match the source label mode.
 `metric.preflight_metric_source(source: SourceRun)` performs this check and
 returns the frozen CPU module; callers must obtain source weights first.
 
@@ -96,8 +101,13 @@ by sampled tile-output population variance, trace-normalized to mean eigenvalue
 1, then ridge 0.3 is added before CPU NumPy eigendecomposition. Constant or
 nonfinite outputs fail explicitly. Native MeanPool has no attention score:
 the manifest records requested attention weight 1, `attention_applicable=false`
-and `aggregator_has_no_attention`. This is an explicit classifier-only native
-architecture adaptation of the deployed method.
+and `aggregator_has_no_attention`. For regression, the same output-gradient /
+population-variance algebra uses one raw scalar output without class centering.
+With a single linear direction its trace-normalized metric equals the binary
+adapter's metric for identical weights, but the adapter identity and provenance
+are distinct. This is a native scalar adaptation, not a claim that an upstream
+regression deployment was verified. The classifier arithmetic and saved IDs are
+unchanged. Classifier and regressor checkpoints require separate metric fits.
 
 Train-only sampling uses the upstream pandas hash of `(slide_id,x,y)`, seed 42,
 and threshold `20000 / n_train`; 20,000 is an expected count, not a hard cap.
@@ -188,6 +198,36 @@ dictionary fitting. A cohort with fewer than two slides is marked insufficient.
   are averaged before shared per-concept quantile scaling; uncovered pixels are
   distinct from a covered tile with zero concept value.
 
+### Linear index contribution accounting
+
+For the supported mean-linear MSE model, evaluation also writes
+`slide_concept_contributions.parquet` and `slide_index_decomposition.parquet`.
+Writing `z_i = mu + sum_k a_ik d_k + r_i`, each slide's concept contribution is
+`mean_i(a_ik) * (w dot d_k)`, using raw NNLS amounts rather than normalized code
+shares. The baseline `b + w dot mu` is the model output at the tile-weighted mean
+training embedding, not the mean patient/slide prediction or a clinical zero.
+
+The accounting identity is `original prediction = baseline + sum(contributions)
++ residual`. The visible residual includes embedding reconstruction error and
+floating-point roundoff; `reconstruction_roundoff` separately records the gap
+between the algebraic concept reconstruction and native reconstructed inference.
+Predictions and contributions are not clipped to [-1, 1]. Positive values move
+toward A; negative values move toward B under the repository's index convention
+(index >= 0 is A). Concept interventions and present-prediction contributions
+answer different questions and are displayed separately.
+
+Index fidelity includes original-versus-reconstructed MAE/RMSE, zero-boundary
+agreement and mean/P95/max absolute residual. Prediction MAE/RMSE against labels
+are reported separately: explanation fidelity does not establish model accuracy.
+No unverified clinical acceptance threshold is imposed. Compare K8/K16/K32 on
+validation after a K16 pilot; keep test reporting for fixed settings.
+
+Use the same `concepts_deployed` CLI with the recovered regression run, for example
+`source_run_id=656ef0c37f264d6eab1d15ed20867335
+training_sha=47938eb79651d91173c5ee0dc516fc440771ec0e`. Fit a fresh dictionary on
+train. The source checkpoint remains frozen; no retraining is involved. The
+existing classifier dictionary cannot be relabelled as a regression dictionary.
+
 ## Doctor naming workflow and differences from IBD
 
 Eight examples are selected by concept share, at most one per slide. Tiles below
@@ -203,8 +243,10 @@ uses consistent level-relative ratios for viewport centering. Stored model
 coordinate inputs remain unchanged, including for spatial transformers.
 
 The HTML starts with labels/effects hidden. A reviewer can enter a concept name,
-unclear/mixed flag, expected luminal type, same-as concept and comment. Revealing
-results freezes expected-type responses. Copy answers exports the dictionary,
+unclear/mixed flag, expected luminal type (classification) or expected index
+direction (regression), same-as concept and comment. Revealing results freezes
+expected responses and reveals the index contribution table with its residual.
+Copy answers exports the dictionary,
 source-run and split identity; nothing is sent automatically. Reloading loses
 answers, so copy them during the session. The blinding is a review convention,
 not a security boundary; numerical content is present in the HTML.

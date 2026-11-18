@@ -25,10 +25,10 @@ from ml.models.heads import LinearHead
 from ml.models.module import MammaprintModule
 
 
-def metric_source(root, dim=2560):
+def metric_source(root, dim=2560, label_mode="type"):
     config = OmegaConf.create(
         {
-            "label_mode": "type",
+            "label_mode": label_mode,
             "feature_dim": dim,
             "ml": {
                 "_target_": "ml.models.MammaprintModule",
@@ -41,7 +41,11 @@ def metric_source(root, dim=2560):
                     "feature_dim": dim,
                 },
                 "head": {"_target_": "ml.models.heads.LinearHead", "in_dim": dim},
-                "loss": {"_target_": "torch.nn.BCEWithLogitsLoss"},
+                "loss": {
+                    "_target_": "torch.nn.MSELoss"
+                    if label_mode == "index"
+                    else "torch.nn.BCEWithLogitsLoss"
+                },
             },
         }
     )
@@ -72,7 +76,9 @@ def metric_source(root, dim=2560):
         IdentityEncoder(dim),
         MeanPool(dim),
         LinearHead(dim),
-        loss=torch.nn.BCEWithLogitsLoss(),
+        loss=torch.nn.MSELoss()
+        if label_mode == "index"
+        else torch.nn.BCEWithLogitsLoss(),
     )
     path = root / "model.ckpt"
     torch.save({"state_dict": module.state_dict()}, path)
