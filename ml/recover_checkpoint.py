@@ -1067,13 +1067,36 @@ def execute_replay(
         best_hash = hashlib.sha256(best.read_bytes()).hexdigest()
         # Select on validation only, then test exactly that saved checkpoint.
         # The test result never controls checkpoint selection or publication.
-        tests = trainer.test(
-            module, datamodule=datamodule, ckpt_path=str(best), verbose=False
-        )
+        # Add the collector only AFTER fit and selection: no training/validation
+        # hooks, config edits, extra forward pass or RNG draws are introduced.
+        from ml.test_evaluation import ComparisonTestCollector, metric_scalars
+
+        collector = ComparisonTestCollector(effective)
+        trainer.callbacks.append(collector)
+        try:
+            tests = trainer.test(
+                module, datamodule=datamodule, ckpt_path=str(best), verbose=False
+            )
+        finally:
+            collector.close()
+            trainer.callbacks.remove(collector)
         if trainer.interrupted or not trainer.state.finished or len(tests) != 1:
             raise ValueError("Best-checkpoint test evaluation did not finish normally.")
         if hashlib.sha256(best.read_bytes()).hexdigest() != best_hash:
             raise ValueError("Selected checkpoint changed during test evaluation.")
+        comparison = collector.report()
+        comparison.update(
+            source_run_id=plan["source_run_id"],
+            recovery_run_id=run_id,
+            checkpoint_sha256=best_hash,
+            checkpoint_epoch=payload["epoch"],
+        )
+        comparison_path = output / "comparison-test-metrics.json"
+        _write_json(comparison_path, comparison)
+        client.log_artifact(run_id, str(comparison_path), "recovery")
+        extra_metrics = metric_scalars(comparison)
+        logger.log_metrics(extra_metrics, step=payload["global_step"])
+        tests[0].update(extra_metrics)
         # Force canonical best stem even if native filename versioning occurred.
         logger._log_checkpoint("best", str(best))
         manifest = result_manifest(

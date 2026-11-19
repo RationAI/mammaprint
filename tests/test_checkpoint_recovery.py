@@ -441,12 +441,20 @@ def test_execute_original_early_stopping_and_test_selected_best(
             return self.train_dataloader()
 
         def test_dataloader(self):
-            return self.train_dataloader()
+            from ml.data.datamodule import mil_collate
+
+            return DataLoader(
+                [(torch.ones(1, 2), torch.tensor([0.2]), {"slide_id": "s1"})],
+                collate_fn=mil_collate,
+            )
 
     class Model(LightningModule):
         def __init__(self):
             super().__init__()
             self.weight = torch.nn.Parameter(torch.tensor(1.0))
+
+        def forward(self, bag):
+            return self.weight.reshape(1), None
 
         def training_step(self, batch, batch_idx):
             return self.weight.square()
@@ -461,6 +469,8 @@ def test_execute_original_early_stopping_and_test_selected_best(
             if fail_test:
                 raise RuntimeError("simulated test failure")
             tested_weights.append(self.weight.detach().clone())
+            for bag, _, _ in batch:
+                self(bag)
             self.log("test/f1", 0.75)
 
         def configure_optimizers(self):
@@ -538,6 +548,10 @@ def test_execute_original_early_stopping_and_test_selected_best(
         lambda *a, **k: {"historical_data_hashes_verified": False},
     )
     e = evidence()
+    e.config["label_mode"] = "index"
+    mapping_path = tmp_path / "mapping.csv"
+    mapping_path.write_text("path,record_num\ns1.mrxs,p1\n")
+    e.config["datamodule"]["test"] = {"data_mapping": str(mapping_path)}
     e.config["trainer"]["callbacks"]["early_stopping"] = {
         "_target_": "lightning.pytorch.callbacks.EarlyStopping",
         "monitor": "valid/loss",
@@ -556,6 +570,8 @@ def test_execute_original_early_stopping_and_test_selected_best(
             )
         assert client.status == "FAILED"
         assert not (tmp_path / "remote/recovery/recovery-manifest.json").exists()
+        assert not trainers[0].lightning_module._forward_hooks
+        assert len(trainers[0].callbacks) == 2
         return
     manifest = c.execute_replay(
         e,
@@ -572,6 +588,16 @@ def test_execute_original_early_stopping_and_test_selected_best(
     assert torch.equal(tested_weights[0], selected["state_dict"]["weight"])
     assert manifest["test_evaluation"]["metrics"]["test/f1"] == 0.75
     assert any("test/f1" in metrics for metrics in logged_metrics)
+    assert any(
+        "test/comparison_slide/weighted_f1" in metrics for metrics in logged_metrics
+    )
+    comparison = json.loads(
+        (tmp_path / "remote/recovery/comparison-test-metrics.json").read_text()
+    )
+    assert comparison["checkpoint_sha256"] == manifest["checkpoint_sha256"]
+    assert comparison["patient"]["n"] == 1
+    assert comparison["repeated_evaluation"]["standard_deviation"] is None
+    assert len(trainers[0].callbacks) == 2  # original early stopping and checkpoint
     evaluation = json.loads(
         (tmp_path / "remote/recovery/test-evaluation.json").read_text()
     )
