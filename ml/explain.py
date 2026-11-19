@@ -34,6 +34,7 @@ from rationai.mlkit.stream import StreamCapture, StreamLogger
 from ml.explainability.checkpoint import (
     CheckpointBootstrap,
     bootstrap_checkpoint,
+    compose_resolved_explanation_config,
     compose_training_config,
     load_lightning_checkpoint,
     stable_config_hash,
@@ -123,6 +124,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help="Torch device, e.g. auto, cpu, cuda, cuda:0 (default: auto).",
     )
+    parser.add_argument(
+        "--resolved-source-config",
+        action="store_true",
+        help="Use the source run's saved graph instead of Hydra task history.",
+    )
+    parser.add_argument("--expected-checkpoint-sha256")
+    parser.add_argument("--expected-source-config-sha256")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -292,11 +300,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             caller_overrides=_effective_caller_overrides(args),
             tracking_uri=tracking_uri,
             client=client,
+            resolved_config_only=args.resolved_source_config,
         )
-        config = compose_training_config(
-            bootstrap.effective_overrides,
-            config_name="explain",
-        )
+        for expected, actual, kind in (
+            (
+                args.expected_checkpoint_sha256,
+                bootstrap.checkpoint_sha256,
+                "checkpoint",
+            ),
+            (
+                args.expected_source_config_sha256,
+                bootstrap.source_config_sha256,
+                "source config",
+            ),
+        ):
+            if expected is not None and expected != actual:
+                raise ValueError(f"Expected {kind} SHA-256 no longer matches MLflow.")
+        if args.resolved_source_config:
+            if bootstrap.source_config_path is None:
+                raise ValueError(
+                    "--resolved-source-config requires an MLflow source run."
+                )
+            config = compose_resolved_explanation_config(
+                bootstrap.source_config_path, bootstrap.caller_overrides
+            )
+        else:
+            config = compose_training_config(
+                bootstrap.effective_overrides,
+                config_name="explain",
+            )
         source_critical_config_hash: str | None = None
         if bootstrap.source_config_path is not None:
             source_config = OmegaConf.load(bootstrap.source_config_path)

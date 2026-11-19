@@ -13,6 +13,14 @@ explain:
   seed: 42
   counterfactual_batch_size: 1024
 
+  exact_mean:
+    enabled: false
+    # Uses ig.baseline_split=train and its streamed mean, without gradients.
+    region_tiles: 8
+    top_tiles: 3
+    absolute_tolerance: 1.0e-5
+    relative_tolerance: 1.0e-5
+
   ig:
     enabled: false
     # Numerical integration points for mean/attention. Max + linear/MLP uses an

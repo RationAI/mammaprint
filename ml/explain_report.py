@@ -34,7 +34,7 @@ def main() -> int:
         nargs="+",
         choices=REPORT_METHODS,
         default=list(DEFAULT_REPORT_METHODS),
-        help="Methods to compare (default: tile removal, single-tile output, attention).",
+        help="Methods to compare (default: exact mean, tile removal, single, attention when available).",
     )
     parser.add_argument(
         "--no-upload", action="store_true", help="Render locally for inspection."
@@ -57,6 +57,13 @@ def main() -> int:
         client.download_artifacts(args.run_id, f"{root}/slides.parquet", str(output))
     )
     manifest = json.loads(manifest_path.read_text())
+    evidence_path = None
+    if "exact_mean" in args.methods and manifest.get("mean_evidence", {}).get("path"):
+        evidence_path = Path(
+            client.download_artifacts(
+                args.run_id, f"{root}/mean_evidence.json", str(output)
+            )
+        )
     masks = {
         file.path
         for target in manifest["targets"]
@@ -80,6 +87,7 @@ def main() -> int:
         artifact_mount=args.artifact_mount,
         mask_artifact_paths=masks,
         included_methods=args.methods,
+        evidence_path=evidence_path,
     )
     print(f"REPORT_FILE={report}")
     if args.no_upload:

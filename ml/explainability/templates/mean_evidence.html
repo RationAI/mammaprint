@@ -1,0 +1,73 @@
+<section id="mean-evidence" aria-labelledby="mean-evidence-title">
+<style>
+#mean-evidence{max-width:1200px;margin:24px auto;padding:20px;color:#182333;background:#f6f8fb;font:15px/1.5 system-ui,sans-serif;border-radius:12px}
+#mean-evidence *{box-sizing:border-box}#mean-evidence h2,#mean-evidence h3,#mean-evidence h4{color:inherit}
+#mean-evidence details{background:white;border:1px solid #cbd5e1;border-radius:8px;margin:12px 0;padding:12px;scroll-margin-top:20px}
+#mean-evidence summary{cursor:pointer;font-weight:650}#mean-evidence table{border-collapse:collapse;width:100%;font-size:14px}
+#mean-evidence td,#mean-evidence th{padding:6px 10px;text-align:right;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+#mean-evidence td:first-child,#mean-evidence th:first-child{text-align:left}#mean-evidence .scroll{overflow-x:auto}
+#mean-evidence .equation{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}#mean-evidence .value{padding:10px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;min-width:145px}
+#mean-evidence .value small{display:block}#mean-evidence .up{color:#a52222}#mean-evidence .down{color:#1e52a1}
+#mean-evidence .warning{color:#8b3500;background:#fff0cf;padding:10px}#mean-evidence .muted{color:#506176}
+#mean-evidence .crops{display:flex;flex-wrap:wrap;gap:12px}#mean-evidence figure{margin:0;padding:8px;background:#eef2f7;width:190px;border-radius:6px}
+#mean-evidence img{width:160px;height:160px;object-fit:contain}#mean-evidence figure:target{outline:4px solid #356fd6}
+#mean-evidence input{padding:8px;width:min(100%,450px);margin-left:10px}#mean-evidence [hidden]{display:none!important}
+#mean-evidence svg{max-width:100%;height:auto}#mean-evidence a{color:#1456a6;text-decoration:underline}
+</style>
+<h2 id="mean-evidence-title">Exact tile evidence</h2>
+<p>Each tile contributes <strong>w · (tile embedding − training tile mean) / number of tiles</strong>.
+The reference is the model output for the training tile mean, including its bias. It represents typical training embeddings, not healthy tissue.
+The reference plus all tile contributions reconstructs the raw slide prediction.</p>
+<p>Regression uses index units. BCE uses logit units; sigmoid is applied only to the final logit.
+Positive contributions increase that output relative to the reference; negative contributions decrease it.
+These explain the frozen model, not biological causation or individual visual features.</p>
+<p class="muted">Heatmaps use a shared absolute {{ data.scale_percentile }}th-percentile scale across this cohort; the actual scales are listed below.
+Contributions are divided by the slide's tile count, so large slides may have fainter tiles. Histogram axes vary per slide and use unscaled single-tile outputs.
+Tile removal and these scores share a signed ranking for a mean + linear model; they are not independent corroborating explanations.</p>
+<p>Training reference: {{ data.reference_tile_count }} tiles.
+{% if data.reference_skipped_slides %}<strong class="warning">Reference incomplete: {{ data.reference_skipped_slides | length }} training slides could not be read.</strong>{% endif %}
+{% for target, scale in data.visualization_scales.items() %} {{ target }} heatmap scale: {{ scale | number }} raw units.{% endfor %}</p>
+<label>Find slide or record <input id="mean-evidence-search" type="search" placeholder="Slide ID or record number"></label>
+<p id="mean-evidence-count" aria-live="polite">{{ data.slides | length }} slides</p>
+{% for slide in data.slides %}
+{% set slide_index = loop.index0 %}
+{% set first_target = slide.targets.values() | first %}
+<details class="evidence-slide" data-search="{{ slide.slide_id }} {{ slide.record_num }}">
+<summary>{{ slide.record_num }} · {{ slide.slide_id }} · {{ first_target.tile_count }} tiles</summary>
+{% if slide.viewer_url %}<p><a href="{{ slide.viewer_url }}" target="_blank" rel="noopener">Open slide and contribution layers in xOpat</a></p>{% endif %}
+{% if slide.overlay_status != 'ok' %}<p class="warning">Slide masks are unavailable. Numerical evidence is retained.</p>{% endif %}
+{% for target_name, target in slide.targets.items() %}
+<h3>{{ 'MammaPrint index' if target_name == 'mammaprint_index' else 'Luminal A logit' }}</h3>
+<div class="equation" aria-label="Reference plus upward and downward evidence equals reconstruction">
+{% for name, value, cls in [('Training reference',target.reference,''),('Upward contribution',target.up,'up'),('Downward contribution',target.down,'down'),('Reconstructed prediction',target.reconstructed,'')] %}
+<div class="value {{ cls }}"><small>{{ name }}</small><strong>{{ value | number }}</strong> {{ target.units }}</div>
+{% endfor %}</div>
+<p>Independent model prediction: <strong>{{ target.prediction | number }}</strong> {{ target.units }}.
+{% if target.probability is defined %} Final Luminal A probability: <strong>{{ '%.2f' | format(100 * target.probability) }}%</strong>.{% endif %}
+Residual (model − reconstruction): {{ target.residual | number }}; tolerance: {{ target.tolerance | number }}.</p>
+{% if target.warning %}<p class="warning">Reconstruction exceeds numerical tolerance. Review this slide before relying on the decomposition.</p>{% endif %}
+<h4>Single-tile score distribution</h4>
+<svg width="500" height="135" viewBox="0 0 500 135" role="img" aria-label="Single-tile score histogram. {{ target.tile_count }} tiles in 20 bins.">
+{% for height in target.histogram.heights %}<rect x="{{ 20 + loop.index0 * 23 }}" y="{{ 90 - height }}" width="21" height="{{ height }}" fill="#527ab5"><title>{{ target.histogram.edges[loop.index0] | number }} to {{ target.histogram.edges[loop.index] | number }}: {{ target.histogram.counts[loop.index0] }} tiles</title></rect>{% endfor %}
+<text x="20" y="110" font-size="12">{{ target.histogram.edges[0] | number }}</text><text x="480" y="110" text-anchor="end" font-size="12">{{ target.histogram.edges[-1] | number }}</text>
+<text x="250" y="130" text-anchor="middle" font-size="12">Single-tile output ({{ target.units }}); bin height = tile count</text></svg>
+<h4>Strongest tiles relative to the training reference</h4>
+<div class="scroll"><table><thead><tr><th>Direction</th><th>Tile</th><th>x, y (level {{ slide.level }})</th><th>Single-tile output</th><th>Contribution</th></tr></thead><tbody>
+{% for side, tiles in target.top_tiles.items() %}{% for tile in tiles %}<tr><td>{{ side }}</td><td><a href="#evidence-crop-{{ slide_index }}-{{ tile.tile_index }}">{{ tile.tile_index }}</a></td><td>{{ tile.x }}, {{ tile.y }}</td><td>{{ tile.singleton | number }}</td><td class="{{ side }}">{{ tile.contribution | number }}</td></tr>{% else %}<tr><td>{{ side }}</td><td colspan="4">No tiles on this side of the reference.</td></tr>{% endfor %}{% endfor %}
+</tbody></table></div>
+<details><summary>{{ target.regions | length }} spatial grid regions · largest absolute net contributions first</summary>
+<p>Tiles are assigned once by their origin to grid cells of {{ data.region_size }} × {{ data.region_size }} pixels at level {{ slide.level }}.
+Bounds enclose the assigned tiles, including their extents. Overlapping pixels are not area weighted. These groups are not anatomical regions or effects of removing a region.</p>
+<div class="scroll"><table><thead><tr><th>Grid x, y</th><th>Bounds x₀,y₀,x₁,y₁</th><th>Tiles</th><th>Upward sum</th><th>Downward sum</th><th>Net contribution</th></tr></thead><tbody>
+{% for region in target.regions %}<tr><td>{{ region.grid_x }}, {{ region.grid_y }}</td><td>{{ region.bounds | join(', ') }}</td><td>{{ region.tile_count }}</td><td class="up">{{ region.up | number }}</td><td class="down">{{ region.down | number }}</td><td>{{ region.contribution | number }}</td></tr>{% endfor %}
+</tbody></table></div></details>
+{% endfor %}
+<h4>Representative tile images</h4><div class="crops">
+{% for tile_index, preview in slide.previews.items() %}<figure id="evidence-crop-{{ slide_index }}-{{ tile_index }}">
+{% if preview.status == 'ok' %}<img loading="lazy" src="data:image/jpeg;base64,{{ preview.jpeg }}" alt="Tile {{ tile_index }} from slide {{ slide.slide_id }}">{% else %}<p>Tile image unavailable.</p>{% endif %}<figcaption>Tile {{ tile_index }} · level {{ slide.level }}</figcaption></figure>{% endfor %}
+</div></details>
+{% endfor %}
+<script>
+(()=>{const root=document.getElementById('mean-evidence');const search=root.querySelector('input');const slides=[...root.querySelectorAll('.evidence-slide')];search.addEventListener('input',()=>{const query=search.value.trim().toLowerCase();let visible=0;for(const slide of slides){slide.hidden=!slide.dataset.search.toLowerCase().includes(query);if(!slide.hidden)visible++;}root.querySelector('#mean-evidence-count').textContent=visible+' / '+slides.length+' slides';});})();
+</script>
+</section>

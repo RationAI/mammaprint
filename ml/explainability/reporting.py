@@ -11,6 +11,7 @@ from report.masks import AbstractMasksRetriever, Masks
 from report.reporter import ReportAssembler
 from report.save import LocalReportStorer
 
+from ml.explainability.evidence_report import evidence_document, render_evidence
 from ml.explainability.viewer import explanation_layers, mlflow_mount_path
 
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-DEFAULT_REPORT_METHODS = ("leave_one_out", "single", "attention")
+DEFAULT_REPORT_METHODS = ("exact_mean", "leave_one_out", "single", "attention")
 REPORT_METHODS = ("integrated_gradients", *DEFAULT_REPORT_METHODS)
 
 
@@ -96,6 +97,7 @@ def write_rationai_report(
     artifact_mount: str = "secure_mlflow",
     mask_artifact_paths: Collection[str],
     included_methods: Collection[str] = DEFAULT_REPORT_METHODS,
+    evidence_path: Path | None = None,
 ) -> Path:
     """Render with the upstream assembler; read metadata only, never mask pixels.
 
@@ -103,9 +105,20 @@ def write_rationai_report(
     and slides without rendered masks stay in the raw tables, outside the gallery.
     """
     manifest = json.loads(manifest_path.read_text())
+    if evidence_path is None and manifest.get("mean_evidence", {}).get("path"):
+        evidence_path = manifest_path.parent / "mean_evidence.json"
+    evidence = (
+        render_evidence(evidence_path)
+        if evidence_path is not None and "exact_mean" in included_methods
+        else None
+    )
     slides = pd.read_parquet(slides_path)
     slides = slides.loc[(slides.status == "ok") & (slides.overlay_status == "ok")]
     if slides.empty:
+        if evidence is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(evidence_document(evidence))
+            return path
         raise ValueError("No successful slides with rendered masks for the report.")
     if slides.slide_id.duplicated().any():
         raise ValueError("Report slide IDs must be unique.")
@@ -135,7 +148,16 @@ def write_rationai_report(
                 "ground_truth": label,
             }
         )
-        for layer in explanation_layers(row["slide_id"], methods):
+        # Removal has no defined empty-bag counterfactual for a one-tile slide.
+        slide_methods = {
+            target: [
+                method
+                for method in choices
+                if not (method == "leave_one_out" and row.get("tile_count") == 1)
+            ]
+            for target, choices in methods.items()
+        }
+        for layer in explanation_layers(row["slide_id"], slide_methods):
             artifact_path = f"{artifact_root.rstrip('/')}/{layer.artifact_path}"
             if artifact_path not in available:
                 raise ValueError(f"Missing mask artifact: {artifact_path}")
@@ -188,4 +210,9 @@ def write_rationai_report(
     if run_id not in assembler.evaluations.get_metadata():
         path.unlink(missing_ok=True)
         raise RuntimeError("RationAI report could not load the per-slide MLflow table.")
+    if evidence is not None:
+        document = path.read_text()
+        # Extend the upstream template without forking its gallery or viewer controls.
+        position = document.index("</h1>") + len("</h1>")
+        path.write_text(document[:position] + evidence + document[position:])
     return path

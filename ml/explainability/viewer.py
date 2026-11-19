@@ -165,6 +165,7 @@ def explanation_layers(
     first_target = next(iter(targets), None)
     attention_added = False
     colors = {
+        "exact_mean": ("#d73027", "#4575b4"),
         "integrated_gradients": ("#d73027", "#4575b4"),
         "leave_one_out": ("#ef476f", "#118ab2"),
         "single": ("#f28e2b", "#9467bd"),
@@ -178,6 +179,7 @@ def explanation_layers(
             (
                 method
                 for method in (
+                    "exact_mean",
                     "integrated_gradients",
                     "leave_one_out",
                     "single",
@@ -187,11 +189,12 @@ def explanation_layers(
             ),
             None,
         )
-        for method in ("integrated_gradients", "leave_one_out", "single"):
+        for method in ("exact_mean", "integrated_gradients", "leave_one_out", "single"):
             if method not in methods:
                 continue
             positive_color, negative_color = colors[method]
             method_label = {
+                "exact_mean": "Exact contribution vs training reference",
                 "integrated_gradients": "Integrated gradients",
                 "leave_one_out": "Tile removal",
                 "single": "Single-tile output",

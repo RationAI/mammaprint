@@ -48,7 +48,7 @@ class ExplainJobSpec:
     image: str
     cpu: int
     memory: str
-    gpu: str
+    gpu: str | None
     public: bool
     script: tuple[str, ...]
     storage: tuple[str, ...] = STORAGE_NAMES
@@ -107,7 +107,16 @@ def build_job_spec(args: argparse.Namespace) -> ExplainJobSpec:
         args.mlflow_ui_uri,
         "--xopat-ui-uri",
         args.xopat_ui_uri,
+        "--device",
+        args.device,
     ]
+    if args.resolved_source_config:
+        explain_arguments.append("--resolved-source-config")
+    for option in ("expected_checkpoint_sha256", "expected_source_config_sha256"):
+        if getattr(args, option):
+            explain_arguments.extend(
+                ("--" + option.replace("_", "-"), getattr(args, option))
+            )
     if args.run_name:
         explain_arguments.extend(("--run-name", args.run_name))
     for slide_id in args.slide_id:
@@ -115,23 +124,46 @@ def build_job_spec(args: argparse.Namespace) -> ExplainJobSpec:
     for override in args.override:
         explain_arguments.extend(("--override", override))
 
+    if args.cpu < 1:
+        raise ValueError("--cpu must be positive.")
+    gpu = None if args.gpu.lower() == "none" else args.gpu
+    scratch_commands = ()
+    if args.scratch_root:
+        if not args.scratch_root.startswith("/mnt/projects/"):
+            raise ValueError(
+                "--scratch-root must be below /mnt/projects/ on the secured mount."
+            )
+        scratch_commands = (
+            _quoted_command(("mkdir", "-p", args.scratch_root)),
+            'export TMPDIR="$(mktemp -d '
+            + shlex.quote(args.scratch_root.rstrip("/") + "/explain.XXXXXX")
+            + ')"',
+        )
     script = (
+        "set -euo pipefail",
         _quoted_command(("git", "clone", REPOSITORY, "workdir")),
         _quoted_command(("cd", "workdir")),
         _quoted_command(("git", "checkout", "--quiet", branch)),
         f"export MLFLOW_TRACKING_URI={shlex.quote(args.tracking_uri)}",
         f"export MLFLOW_UI_URI={shlex.quote(args.mlflow_ui_uri)}",
         f"export XOPAT_UI_URI={shlex.quote(args.xopat_ui_uri)}",
+        f"export OMP_NUM_THREADS={args.cpu} MKL_NUM_THREADS={args.cpu} OPENBLAS_NUM_THREADS={args.cpu}",
+        *(
+            ('export CUDA_VISIBLE_DEVICES="" NVIDIA_VISIBLE_DEVICES=void',)
+            if gpu is None
+            else ()
+        ),
         _quoted_command(("uv", "sync", "--frozen")),
+        *scratch_commands,
         _quoted_command(explain_arguments),
     )
     return ExplainJobSpec(
         job_name=kubernetes_job_name(args.checkpoint_uri, args.run_name),
         username=USER,
         image=IMAGE,
-        cpu=CPU,
-        memory=MEMORY,
-        gpu=args.gpu,
+        cpu=args.cpu,
+        memory=args.memory,
+        gpu=gpu,
         public=False,
         script=script,
     )
@@ -214,6 +246,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Git branch containing the explainer (default: {DEFAULT_BRANCH}).",
     )
     parser.add_argument("--gpu", default="A40", help="GPU type (default: A40).")
+    parser.add_argument("--cpu", type=int, default=CPU)
+    parser.add_argument("--memory", default=MEMORY)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--scratch-root",
+        help="Secure shared directory for downloaded embedding/temp files.",
+    )
+    parser.add_argument("--resolved-source-config", action="store_true")
+    parser.add_argument("--expected-checkpoint-sha256")
+    parser.add_argument("--expected-source-config-sha256")
     parser.add_argument(
         "--dry-run",
         action="store_true",

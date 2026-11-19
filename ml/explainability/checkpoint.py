@@ -433,6 +433,7 @@ def bootstrap_checkpoint(
     caller_overrides: Sequence[str] = (),
     tracking_uri: str | None = None,
     client: ArtifactClient | None = None,
+    resolved_config_only: bool = False,
 ) -> CheckpointBootstrap:
     """Resolve weights and reconstruct the effective explanation configuration.
 
@@ -461,9 +462,10 @@ def bootstrap_checkpoint(
             raise AssertionError(
                 "MLflow checkpoint resolved without an artifact client."
             )
-        logged, hydra_path = recover_hydra_overrides(
-            artifact_client, resolved.source_run_id, root / "config"
-        )
+        if not resolved_config_only:
+            logged, hydra_path = recover_hydra_overrides(
+                artifact_client, resolved.source_run_id, root / "config"
+            )
         source_config_path = recover_source_config(
             artifact_client, resolved.source_run_id, root / "source-config"
         )
@@ -494,6 +496,33 @@ def bootstrap_checkpoint(
         override_hash=override_hash,
         source_hash=source_hash,
     )
+
+
+def compose_resolved_explanation_config(
+    source_config_path: str | Path,
+    overrides: Sequence[str],
+) -> DictConfig:
+    """Use a recovery run's saved graph; permit explanation settings only."""
+    source = OmegaConf.load(source_config_path)
+    if not isinstance(source, DictConfig):
+        raise SourceConfigMismatchError(
+            "Resolved source configuration must be a mapping."
+        )
+    defaults_path = Path(__file__).resolve().parents[2] / "configs" / "explain.yaml"
+    config = OmegaConf.merge(source, {"explain": OmegaConf.load(defaults_path).explain})
+    OmegaConf.set_struct(config, True)
+    for item in overrides:
+        if "=" not in item:
+            raise ValueError(f"Expected explain.KEY=VALUE, got {item!r}.")
+        key, value = item.split("=", 1)
+        if not key.startswith("explain.") or key.startswith("explain.."):
+            raise SourceConfigMismatchError(
+                f"Resolved-config mode permits only explain.* overrides, got {key!r}."
+            )
+        parsed = OmegaConf.from_dotlist([f"value={value}"]).value
+        OmegaConf.update(config, key, parsed, merge=False)
+    validate_replayed_source_config(config, source_config_path)
+    return config
 
 
 def compose_training_config(

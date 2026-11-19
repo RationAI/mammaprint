@@ -36,6 +36,11 @@ from ml.explainability.data import (
     streaming_mean_embedding,
     target_names,
 )
+from ml.explainability.exact_mean import (
+    attach_previews,
+    decompose_mean,
+    summarize_evidence,
+)
 from ml.explainability.faithfulness import patch_flipping
 from ml.explainability.outputs import (
     TILE_TABLE_COLUMNS,
@@ -49,7 +54,9 @@ from ml.explainability.outputs import (
     write_tile_table,
 )
 from ml.explainability.viewer import build_xopat_review_url, explanation_layers
+from ml.models.aggregators.mean import MeanPool
 from ml.models.encoders.identity import IdentityEncoder
+from ml.models.heads.linear import LinearHead
 
 
 if TYPE_CHECKING:
@@ -73,6 +80,7 @@ class RenderSlide:
     scores: dict[str, dict[str, np.ndarray]]
     predictions: dict[str, float]
     labels: dict[str, float]
+    evidence: dict[str, Any] | None = None
 
 
 @dataclass
@@ -125,6 +133,32 @@ def validate_module(module: MammaprintModule, config: DictConfig | None = None) 
             f"config.feature_dim={feature_dim}, encoder.out_dim={module.encoder.out_dim}."
         )
     target_names(str(config.label_mode), module.head.out_dim)
+    if OmegaConf.select(config, "explain.exact_mean.enabled", default=False):
+        if not (
+            isinstance(module.aggregator, MeanPool)
+            and isinstance(module.head, LinearHead)
+            and isinstance(module.output_activation, torch.nn.Identity)
+        ):
+            raise TypeError(
+                "exact_mean requires MeanPool, LinearHead and identity output."
+            )
+        if str(config.explain.ig.baseline_split) != "train":
+            raise ValueError("exact_mean requires ig.baseline_split=train.")
+        settings = config.explain.exact_mean
+        for name, maximum in (("region_tiles", 128), ("top_tiles", 10)):
+            value = settings[name]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 1 <= value <= maximum
+            ):
+                raise ValueError(
+                    f"exact_mean.{name} must be an integer in 1..{maximum}."
+                )
+        for name in ("absolute_tolerance", "relative_tolerance"):
+            value = float(settings[name])
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"exact_mean.{name} must be finite and nonnegative.")
 
 
 def run_cohort(
@@ -210,6 +244,8 @@ def run_cohort(
                 config=explain_config,
                 output_dir=output_dir,
                 device=torch_device,
+                tile_extent=int(level_spec["tile_extent"]),
+                stride=int(level_spec["stride"]),
             )
             attribution_runtime = time.monotonic() - started
             slide_row["attribution_runtime_seconds"] = attribution_runtime
@@ -256,6 +292,39 @@ def run_cohort(
         provenance=provenance,
     )
 
+    evidence_slides = []
+    for slide in state.render_slides:
+        if slide.evidence is not None:
+            row = next(
+                row for row in state.slide_rows if row["slide_id"] == slide.slide_id
+            )
+            slide.evidence.update(
+                {
+                    "viewer_url": row.get("viewer_url"),
+                    "overlay_status": row.get("overlay_status"),
+                    "record_num": str(row.get("record_num") or slide.slide_id),
+                }
+            )
+            evidence_slides.append(slide.evidence)
+    if evidence_slides:
+        write_manifest(
+            output_dir / "mean_evidence.json",
+            {
+                "schema_version": "1.0",
+                "reference_kind": "training_split_tile_mean",
+                "reference_tile_count": baseline_tile_count,
+                "reference_skipped_slides": list(baseline_failures),
+                "region_size": int(explain_config.exact_mean.region_tiles)
+                * int(level_spec["stride"]),
+                "coordinate_space": "selected_wsi_level_pixels",
+                "visualization_scales": {
+                    target: scales[(target, "exact_mean")] for target in targets
+                },
+                "scale_percentile": float(explain_config.output.scale_percentile),
+                "slides": evidence_slides,
+            },
+        )
+
     slides_frame = pd.DataFrame(state.slide_rows)
     slides_path = output_dir / "slides.parquet"
     slides_frame.to_parquet(slides_path, index=False)
@@ -291,7 +360,7 @@ def run_cohort(
         "methods": enabled_methods,
         "primary_methods": [
             method
-            for method in ("integrated_gradients", "leave_one_out")
+            for method in ("exact_mean", "integrated_gradients", "leave_one_out")
             if method in enabled_methods
         ],
         "complementary_methods": [
@@ -302,6 +371,7 @@ def run_cohort(
             "layout": "one row per tile and target",
             "columns": list(TILE_TABLE_COLUMNS),
             "nullable_methods": [
+                "exact_mean",
                 "integrated_gradients",
                 "leave_one_out",
                 "single",
@@ -346,6 +416,15 @@ def run_cohort(
             "tile_count": baseline_tile_count,
             "batch_size": int(explain_config.ig.get("baseline_batch_size", 1024)),
             "skipped_slides": list(baseline_failures),
+        },
+        "mean_evidence": {
+            "path": "mean_evidence.json" if evidence_slides else None,
+            "enabled": bool(
+                OmegaConf.select(explain_config, "exact_mean.enabled", default=False)
+            ),
+            "formula": "c_i = w @ (x_i - training_tile_mean) / N",
+            "region_assignment": "one grid cell per tile origin; no area weighting",
+            "baseline_is_healthy_tissue": False,
         },
         "level": level,
         "tile_extent": int(level_spec["tile_extent"]),
@@ -399,6 +478,7 @@ def run_cohort(
                 ),
             },
             "methods": {
+                "exact_mean": "exact signed contribution relative to the training-tile-mean output; additive in raw output units",
                 "integrated_gradients": (
                     "signed contribution relative to the repeated training-mean "
                     "embedding baseline"
@@ -444,12 +524,43 @@ def _explain_slide(
     config: DictConfig,
     output_dir: Path,
     device: torch.device,
+    tile_extent: int | None = None,
+    stride: int | None = None,
 ) -> tuple[RenderSlide, dict[str, Any], list[dict[str, Any]]]:
     bag = slide.embeddings.to(device)
     full_output = forward_raw(module.aggregator, module.head, bag).scores
     method_tensors: dict[str, Tensor] = {}
     ig_baseline: Tensor | None = None
     ig_residual: Tensor | None = None
+    evidence = None
+
+    if OmegaConf.select(config, "exact_mean.enabled", default=False):
+        values, reference, singleton = decompose_mean(
+            module.aggregator,
+            module.head,
+            bag,
+            baseline,
+            batch_size=int(config.counterfactual_batch_size),
+        )
+        method_tensors["exact_mean"] = values
+        if tile_extent is None or stride is None:
+            raise ValueError("Exact mean evidence requires tile_extent and stride.")
+        evidence = {"slide_id": slide.slide_id, "level": slide.level, "targets": {}}
+        for index, target in enumerate(targets):
+            evidence["targets"][target] = summarize_evidence(
+                x=slide.x,
+                y=slide.y,
+                contributions=_as_numpy(values[:, index]),
+                singleton=_as_numpy(singleton[:, index]),
+                reference=float(reference[index]),
+                prediction=float(full_output[index]),
+                target=target,
+                region_size=int(config.exact_mean.region_tiles) * stride,
+                tile_extent=tile_extent,
+                top_tiles=int(config.exact_mean.top_tiles),
+                atol=float(config.exact_mean.absolute_tolerance),
+                rtol=float(config.exact_mean.relative_tolerance),
+            )
 
     batch_size = int(config.counterfactual_batch_size)
     if bool(config.leave_one_out.enabled) and bag.shape[0] > 1:
@@ -535,6 +646,19 @@ def _explain_slide(
         prediction = predictions[target]
         slide_row[f"prediction_raw/{target}"] = prediction
         slide_row[f"label/{target}"] = labels[target]
+        if evidence is not None:
+            for name in (
+                "reference",
+                "up",
+                "down",
+                "reconstructed",
+                "residual",
+                "absolute_error",
+                "warning",
+            ):
+                slide_row[f"exact_mean_{name}/{target}"] = evidence["targets"][target][
+                    name
+                ]
         if target == "luminal_a_logit":
             slide_row[f"prediction_probability/{target}"] = _sigmoid(prediction)
         if ig_baseline is not None and ig_residual is not None:
@@ -559,6 +683,8 @@ def _explain_slide(
     patch_rows: list[dict[str, Any]] = []
     if bool(config.patch_flipping.enabled):
         for method, tile_scores in method_tensors.items():
+            if method == "exact_mean":
+                continue  # Same signed ordering as singleton; no independent faithfulness evidence.
             # Recreate the same deterministic random comparator for every method on
             # one slide, so method-to-method faithfulness comparisons are paired.
             generator = torch.Generator(device="cpu")
@@ -611,6 +737,7 @@ def _explain_slide(
             scores=scores,
             predictions=predictions,
             labels=labels,
+            evidence=evidence,
         ),
         slide_row,
         patch_rows,
@@ -803,6 +930,16 @@ def _render_outputs(
             overlay_runtime = time.monotonic() - render_started
             row["overlay_runtime_seconds"] = overlay_runtime
             row["runtime_seconds"] = float(row["runtime_seconds"]) + overlay_runtime
+        if slide.evidence is not None:
+            preview_started = time.monotonic()
+            attach_previews(
+                slide.evidence,
+                slide_path=str(slide.slide_path),
+                level=slide.level,
+                tile_extent=tile_extent,
+            )
+            row["preview_runtime_seconds"] = time.monotonic() - preview_started
+            row["runtime_seconds"] += row["preview_runtime_seconds"]
 
 
 def _attach_viewer_url(
@@ -868,7 +1005,7 @@ def _write_slide_summary(
     scales: dict[tuple[str, str], float],
 ) -> None:
     preview_downsample = max(1, math.ceil(max(geometry.width, geometry.height) / 1024))
-    primary_methods = {"integrated_gradients", "leave_one_out"}
+    primary_methods = {"exact_mean", "integrated_gradients", "leave_one_out"}
     selected = [
         (target, method, scores)
         for target, methods in slide.scores.items()
@@ -1157,6 +1294,8 @@ def _optional_python_value(value: Any) -> Any | None:
 
 def _enabled_methods(config: DictConfig, module: MammaprintModule) -> list[str]:
     methods = []
+    if OmegaConf.select(config, "exact_mean.enabled", default=False):
+        methods.append("exact_mean")
     if bool(config.leave_one_out.enabled):
         methods.append("leave_one_out")
     if bool(config.ig.enabled):

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from ml.explainability.data import SlideGeometry
 
 
-OUTPUT_SCHEMA_VERSION = "1.0"
+OUTPUT_SCHEMA_VERSION = "1.1"
 TILE_TABLE_BASE_COLUMNS = (
     "slide_id",
     "tile_index",
@@ -37,6 +37,7 @@ TILE_TABLE_BASE_COLUMNS = (
     "label",
 )
 TILE_ATTRIBUTION_COLUMNS = (
+    "exact_mean",
     "integrated_gradients",
     "leave_one_out",
     "single",
