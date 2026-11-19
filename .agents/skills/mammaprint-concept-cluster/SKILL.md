@@ -1,6 +1,6 @@
 ---
 name: mammaprint-concept-cluster
-description: Use when planning, submitting, monitoring, or diagnosing pinned MammaPrint deployed-metric concept jobs on the private GPU cluster with scripts/ml/run_concept_explainability.py.
+description: Use when planning, submitting, monitoring, or diagnosing pinned MammaPrint concept jobs, or repairing their MLflow HTML report presentation in place.
 ---
 
 # MammaPrint concept cluster workflow
@@ -86,6 +86,25 @@ For scheduling/container failures, describe the exact pod selected by the job's 
 | Unconfirmed create / existing job | Inspect the exact name and UID before retries. A helper can catch a creation error; the launcher therefore requires read-back confirmation. |
 
 ## Cleanup and limits
+
+### Repair existing report signs without rerunning inference
+
+Use `scripts/ml/update_concept_report_signs.py` for presentation-only updates of a finished validation report. It uses the existing authenticated MLflow client environment (VPN/private HTTPS connectivity; credentials remain in the environment). No GPU or Kubernetes job is needed. The user must explicitly authorize the particular runs before `--apply`; read-only preparation is safe without write authorization.
+
+```bash
+python scripts/ml/update_concept_report_signs.py \
+  --tracking-uri https://mlflow-s3.rationai.cloud.trusted.e-infra.cz \
+  --experiment-id 84 --run-id '<exact explanation run ID>' \
+  --work-dir '/private/tmp/concept-signs-<run>-prepare'
+```
+
+The default downloads only `val/report_manifest.json`, `val/concept_effects.parquet`, and `val/naming_kK.html` to a fresh local directory. Inspect `updated/naming_kK.html` and `receipt.json`. Rerun with a **different fresh work directory** and `--apply` for the authorized replacement. It checks experiment/status, manifest/report identities, concept counts and exact original tables before making changes. Unfamiliar templates or mismatched data fail closed.
+
+Both displayed intervention columns use after minus before. Classification always uses P(A), undoing the legacy B-cohort sign flip; removal undoes the legacy before-minus-after convention. Regression stays in raw index units. Raw Parquet evaluation fields retain Adam's upstream convention; consumers must not interpret their `subtract` column using the new HTML display convention. Future reports use the same shared presentation function, and their report manifest records `effect_display_version`.
+
+Before replacement the script uploads and downloads a byte-verified backup at `report_updates/after-minus-before-v1/val/original/naming_kK.html`. It detects intervening changes to the original HTML, effects or report manifest, uploads/read-verifies a prepared receipt, replaces only the HTML under `val`, verifies its bytes by a fresh download, and uploads/read-verifies the final receipt beside the backup. Existing report manifests, scientific tables, model artifacts, run status, metrics, viewer links, embedded images and form behavior are retained. The HTML marker and receipt describe the presentation revision; the original manifest continues to describe the original computation. Applying again validates the upgraded report and its backup/receipt without writes; if the last attempt stopped after HTML replacement, it completes the prepared receipt after verifying the artifacts.
+
+Success evidence is `status=verified`, a matching remote HTML SHA-256, and a verified backup and receipt. If upload/read-back fails, inspect the exact artifact and backup before retrying; do not rerun training. To roll back an authorized repair, download the backup, verify its hash against `original_sha256` in the receipt, and use `MlflowClient.log_artifact(run_id, local_backup_path, 'val')`; download the restored HTML and compare its hash again. A different existing backup is never overwritten. MLflow has no compare-and-swap artifact write, so the last pre-write recheck reduces but cannot eliminate concurrent-edit races; avoid concurrent report edits.
 
 Deletion needs separate explicit authorization naming the new job or result directory. If authorized, delete only the exact new job with `kubectl --context kubas-cluster -n rationai-jobs-ns delete job "$CONCEPT_JOB_NAME"`; preserve logs/evidence first. Results and new destination MLflow runs require their own explicit cleanup decision. Deleting a job does not roll back PROJECTS files or MLflow publications. Never delete or modify the source run/checkpoint. The helper currently retains completed jobs for seven days; export evidence before TTL cleanup.
 

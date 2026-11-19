@@ -23,6 +23,11 @@ from ml.concept_explainability.evaluation import (
     save_json,
     validate_n_components,
 )
+from ml.concept_explainability.presentation import (
+    EFFECT_DISPLAY_VERSION,
+    EFFECT_NOTE,
+    render_effect_table,
+)
 from ml.concept_explainability.upstream import code_share
 
 
@@ -351,7 +356,7 @@ def render_naming_html(
             else ""
         )
         numbers = (
-            effects[effects.concept == k].to_html(index=False, escape=True)
+            render_effect_table(effects[effects.concept == k])
             if not effects.empty
             else "No evaluated effects."
         )
@@ -407,7 +412,7 @@ def render_naming_html(
 <button id="reveal" onclick="revealResults()">Show labels and effects</button>
 <button onclick="copyAnswers()">Copy your answers</button><span id="copy-status"></span><textarea id="answers" hidden readonly></textarea>
 <div class="model-info"><h2>Fidelity and interpretation</h2>{fidelity_html}
-<p>Effects compare two-sided concept changes against reconstructed-model output, not the original embeddings. Classification effects are percentage points of P(A) in group A or P(B) in group B; regression uses raw index units. Presence is relative concept frequency. Direction disagreement is flagged. These are model responses, not biological causal effects.</p></div>
+{EFFECT_NOTE}</div>
 <div class="model-info">{additive_html}</div>
 {"".join(rows)}<script>const REPORT_ID={json.dumps(report_id).replace("<", chr(92) + "u003c")};{FORM_SCRIPT}</script></body></html>"""
 
@@ -553,6 +558,7 @@ def build_report(
             "mask_scale_low": low.tolist(),
             "mask_scale_high": high.tolist(),
             "template": "adapted_ibd_report_plus_slack_brief",
+            "effect_display_version": EFFECT_DISPLAY_VERSION,
             "publication": publication,
             "notes": [
                 "Exact original naming template pending Adam",
