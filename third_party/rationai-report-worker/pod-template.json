@@ -1,0 +1,145 @@
+{
+  "metadata": {
+    "labels": {}
+  },
+  "spec": {
+    "containers": [
+      {
+        "command": [],
+        "env": [
+          {
+            "name": "MLFLOW_TRACKING_URI",
+            "valueFrom": {
+              "configMapKeyRef": {
+                "key": "tracking-uri",
+                "name": "mlflow"
+              }
+            }
+          },
+          {
+            "name": "MLFLOW_TRACKING_USERNAME",
+            "value": "kissmi"
+          },
+          {
+            "name": "HYDRA_FULL_ERROR",
+            "value": "1"
+          },
+          {
+            "name": "HTTPS_PROXY",
+            "value": "http://proxy.ics.muni.cz:3128"
+          },
+          {
+            "name": "NO_PROXY",
+            "value": "mlflow.rationai-mlflow,svc.cluster.local"
+          },
+          {
+            "name": "MLFLOW_HTTP_REQUEST_TIMEOUT",
+            "value": "600"
+          },
+          {
+            "name": "VCS_USER",
+            "valueFrom": {
+              "secretKeyRef": {
+                "key": "username",
+                "name": "gitlab-deploy-token"
+              }
+            }
+          },
+          {
+            "name": "VCS_PASSWORD",
+            "valueFrom": {
+              "secretKeyRef": {
+                "key": "password",
+                "name": "gitlab-deploy-token"
+              }
+            }
+          }
+        ],
+        "image": "cerit.io/rationai/base:2.0.6",
+        "imagePullPolicy": "Always",
+        "name": "mammaprint-explain-cpu-config1-20261117",
+        "resources": {
+          "limits": {
+            "cpu": "8",
+            "ephemeral-storage": "20Gi",
+            "memory": "16Gi"
+          },
+          "requests": {
+            "cpu": "8",
+            "ephemeral-storage": "20Gi",
+            "memory": "16Gi"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "privileged": false,
+          "runAsGroup": 1000,
+          "runAsUser": 1000
+        },
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "volumeMounts": [
+          {
+            "mountPath": "/mnt/data",
+            "name": "data"
+          },
+          {
+            "mountPath": "/mnt/data/Public",
+            "name": "public-data"
+          },
+          {
+            "mountPath": "/mnt/projects",
+            "name": "projects"
+          },
+          {
+            "mountPath": "/dev/shm",
+            "name": "shm"
+          }
+        ]
+      }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "restartPolicy": "Never",
+    "schedulerName": "default-scheduler",
+    "securityContext": {
+      "fsGroupChangePolicy": "OnRootMismatch",
+      "runAsNonRoot": true,
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "terminationGracePeriodSeconds": 5,
+    "volumes": [
+      {
+        "name": "data",
+        "persistentVolumeClaim": {
+          "claimName": "data-ro"
+        }
+      },
+      {
+        "name": "public-data",
+        "persistentVolumeClaim": {
+          "claimName": "rationai-data-ro-pvc-jobs"
+        }
+      },
+      {
+        "name": "projects",
+        "persistentVolumeClaim": {
+          "claimName": "projects-rw"
+        }
+      },
+      {
+        "emptyDir": {
+          "medium": "Memory",
+          "sizeLimit": "1Gi"
+        },
+        "name": "shm"
+      }
+    ]
+  }
+}
