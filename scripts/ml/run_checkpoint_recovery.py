@@ -92,7 +92,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--username", default="kissmi")
     parser.add_argument("--image", default=cluster.IMAGE)
     parser.add_argument(
-        "--gpu", choices=("H100", "A100", "A40", "mig-1g.10gb"), default="H100"
+        "--gpu",
+        choices=("H100", "A100", "A40", "mig-1g.10gb", "mig-2g.20gb"),
+        default="H100",
     )
     parser.add_argument("--cpu", type=cluster._positive, default=16)
     parser.add_argument("--memory", default="64Gi")
