@@ -104,6 +104,18 @@ class LauncherTests(unittest.TestCase):
             self.launcher.main(["--help"])
         self.assertEqual(error.exception.code, 0)
 
+    def test_plain_profile_is_explicit_and_does_not_enable_output_metric(self):
+        plan = self.plan(["--profile", "plain"])
+        command = shlex.split(plan["jobs"][0]["script"][-1])
+        self.assertEqual(command[command.index("--config-name") + 1], "concepts")
+        self.assertIn("+include_test=false", command)
+        self.assertFalse(plan["execution"]["metric_enabled"])
+        self.assertNotIn("output metric", plan["execution"]["cpu_stages"])
+        self.assertNotEqual(
+            plan["jobs"][0]["job_name"], self.plan()["jobs"][0]["job_name"]
+        )
+        self.assertIn("attention", plan["execution"]["supported_graph"])
+
     def test_rendered_job_pins_both_revisions_and_one_deployed_combined_action(self):
         job = self.plan(["--git-ref", "refs/heads/feat/concepts"])["jobs"][0]
         script = job["script"]

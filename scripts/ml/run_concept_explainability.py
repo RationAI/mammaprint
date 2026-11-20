@@ -67,6 +67,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Fresh absolute directory beneath /mnt/projects.",
     )
     parser.add_argument("--experiment-name", default="MammaPrint concepts")
+    parser.add_argument(
+        "--profile",
+        choices=("deployed", "plain"),
+        default="deployed",
+        help="Explicit plain semi-NMF supports attention; deployed uses the mean-linear output metric.",
+    )
     parser.add_argument("--job-prefix", default="mammaprint-concepts")
     parser.add_argument("--username", default="kissmi")
     parser.add_argument("--image", default=IMAGE)
@@ -255,13 +261,13 @@ def _script(
         "-m",
         "ml.concepts",
         "--config-name",
-        "concepts_deployed",
+        "concepts_deployed" if args.profile == "deployed" else "concepts",
         "action=fit_explain",
         _hydra("source_run_id", run_id),
         _hydra("training_sha", training_sha),
         _hydra("output_dir", output),
         _hydra("experiment_name", args.experiment_name),
-        f"include_test={str(args.include_test).lower()}",
+        f"{'+' if args.profile == 'plain' else ''}include_test={str(args.include_test).lower()}",
         "device=cuda",
         f"ray_cpus={args.ray_cpus}",
         f"fit.n_components={k}",
@@ -276,6 +282,10 @@ def build_plan(args: argparse.Namespace) -> dict:
         for k in args.k:
             output = f"{args.output_root}/{run_id}/k-{k}"
             identity = json.dumps([run_id, training_sha, args.git_sha, output, k])
+            if args.profile == "plain":
+                identity = json.dumps(
+                    [run_id, training_sha, args.git_sha, output, k, "plain"]
+                )
             digest = hashlib.sha256(identity.encode()).hexdigest()[:12]
             job_name = f"{args.job_prefix}-{run_id.lower()[:12].rstrip('-_').replace('_', '-')}-{digest}"
             jobs.append(
@@ -312,14 +322,22 @@ def build_plan(args: argparse.Namespace) -> dict:
             "ray_cpus": args.ray_cpus,
         },
         "execution": {
-            "profile": "concepts_deployed",
+            "profile": "concepts_deployed"
+            if args.profile == "deployed"
+            else "concepts",
+            "metric_enabled": args.profile == "deployed",
             "action": "fit_explain",
             "fit_split": "train",
             "explain_splits": ["val", "test"] if args.include_test else ["val"],
             "test_membership_audit": "metadata listing only; test bags downloaded only with --include-test",
-            "cpu_stages": ["output metric", "semi-NMF fitting", "NNLS encoding"],
+            "cpu_stages": (["output metric"] if args.profile == "deployed" else [])
+            + ["semi-NMF fitting", "NNLS encoding"],
             "gpu_stage": "native PyTorch explanation inference",
-            "supported_graph": "IdentityEncoder + MeanPool + single LinearHead; BCE/type or MSE/index; no attention term",
+            "supported_graph": (
+                "IdentityEncoder + MeanPool + single LinearHead; BCE/type or MSE/index; no attention term"
+                if args.profile == "deployed"
+                else "Native frozen model, including attention; plain semi-NMF without output-metric fitting or additive attention decomposition"
+            ),
             "mlflow": "new destination run; source run read-only",
         },
         "unverified": [
