@@ -112,7 +112,7 @@ def test_rejects_wrong_source_or_graph(change):
     if change == "identity":
         run["info"]["run_id"] = "c" * 32
     if change == "graph":
-        config = config.replace(b"AttentionMIL", b"MeanPool")
+        config = config.replace(b"AttentionMIL", b"TransformerMIL")
     with pytest.raises(ValueError):
         launcher().build_job(args, run, config)
 
@@ -133,3 +133,42 @@ def test_help_is_stdlib_only_and_never_contacts_services():
         [sys.executable, "-S", str(SCRIPT), "--help"], capture_output=True, text=True
     )
     assert result.returncode == 0 and "--submit" in result.stdout
+
+
+@pytest.mark.parametrize("bce", [False, True])
+def test_mean_uses_existing_frozen_mean_profile_without_attention(bce):
+    module = launcher()
+    args, run, config = inputs()
+    cfg = yaml.safe_load(config)
+    cfg["ml"]["aggregator"]["_target_"] = "ml.models.aggregators.MeanPool"
+    if bce:
+        cfg["label_mode"] = "type"
+        cfg["ml"]["loss"]["_target_"] = "torch.nn.BCEWithLogitsLoss"
+        run["data"]["metrics"] = [{"key": "test/f1", "value": 0.76506}]
+    summary, job = module.build_job(args, run, yaml.safe_dump(cfg).encode())
+    assert summary["methods"] == ["leave_one_out", "single"]
+    assert summary["profile"] == ("config3" if bce else "config2")
+    container = job["spec"]["template"]["spec"]["containers"][0]
+    chunks = {
+        e["name"]: e["value"]
+        for e in container["env"]
+        if e["name"].startswith("MAMMAPRINT_SOURCE_")
+    }
+    payload = base64.b64decode("".join(chunks[k] for k in sorted(chunks)))
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+        files = {m.name: archive.extractfile(m).read() for m in archive.getmembers()}
+    original = module.frozen_files()
+    assert {k for k in files if files[k] != original[k]} == {"prepared/plan.json"}
+    selected = json.loads(files["prepared/plan.json"])["jobs"][0]
+    old = next(
+        j
+        for j in json.loads(original["prepared/plan.json"])["jobs"]
+        if j["key"] == summary["profile"]
+    )
+    assert selected["aggregator"] == "MeanPool"
+    assert selected["label_mode"] == cfg["label_mode"]
+    assert selected["explain_overrides"] == old["explain_overrides"]
+    assert "explain.attention.enabled=false" in selected["explain_overrides"]
+    assert selected["expected_test_metrics"] == {
+        ("test/f1" if bce else "test/thresholded_f1"): (0.76506 if bce else 0.81268)
+    }

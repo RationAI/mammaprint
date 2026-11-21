@@ -1,4 +1,4 @@
-"""Reuse the verified CPU attention-report worker; --submit creates one job.
+"""Reuse the verified CPU tile-report worker; --submit creates one job.
 
 Planning reads only the selected MLflow run/config. The frozen worker is the
 same one used for the November 17 M1 report; only prepared/plan.json changes.
@@ -65,21 +65,31 @@ def build_job(args, run: dict, config_bytes: bytes) -> tuple[dict, dict]:
         raise ValueError("Expected one finished source in MammaPrint experiment 3.")
     cfg = yaml.safe_load(config_bytes)
     graph = cfg["ml"]
+    profiles = {
+        ("ml.models.aggregators.AttentionMIL", "torch.nn.MSELoss", "index"): "config1",
+        ("ml.models.aggregators.MeanPool", "torch.nn.MSELoss", "index"): "config2",
+        (
+            "ml.models.aggregators.MeanPool",
+            "torch.nn.BCEWithLogitsLoss",
+            "type",
+        ): "config3",
+    }
+    profile = profiles.get(
+        (graph["aggregator"]["_target_"], graph["loss"]["_target_"], cfg["label_mode"])
+    )
     required = {
         "encoder": "ml.models.encoders.IdentityEncoder",
-        "aggregator": "ml.models.aggregators.AttentionMIL",
         "head": "ml.models.heads.LinearHead",
-        "loss": "torch.nn.MSELoss",
     }
     if (
-        cfg["label_mode"] != "index"
+        profile is None
         or cfg["feature_dim"] != 2560
         or any(graph[key]["_target_"] != target for key, target in required.items())
         or graph.get("output_activation", {}).get("_target_", "torch.nn.Identity")
         != "torch.nn.Identity"
     ):
         raise ValueError(
-            "This workflow requires the native attention-linear index regressor."
+            "Expected a native linear attention regressor or mean regression/BCE model."
         )
     levels = cfg["dataset"]["levels"]
     if len(levels) != 1:
@@ -89,16 +99,22 @@ def build_job(args, run: dict, config_bytes: bytes) -> tuple[dict, dict]:
         for m in run["data"].get("metrics", [])
         if m["key"].startswith("test/") and not m["key"].startswith("test/comparison_")
     }
-    if "test/thresholded_f1" not in metrics:
+    f1_key = "test/thresholded_f1" if cfg["label_mode"] == "index" else "test/f1"
+    if f1_key not in metrics:
         raise ValueError("Source test evaluation is missing.")
     files = frozen_files()
     plan = json.loads(files["prepared/plan.json"])
-    job = copy.deepcopy(plan["jobs"][0])
+    job = copy.deepcopy(next(job for job in plan["jobs"] if job["key"] == profile))
     job.update(
         key="selected",
         job_name=args.job_name,
         run_name=args.run_name,
         source_run_id=args.source,
+        model=(
+            f"L{int(next(iter(levels)))} linear + "
+            f"{'attention' if profile == 'config1' else 'mean'}, "
+            f"{'regression' if cfg['label_mode'] == 'index' else 'BCE'}"
+        ),
         checkpoint_uri=f"mlflow-artifacts:/3/{args.source}/artifacts/checkpoints/best",
         checkpoint_sha256=args.checkpoint_sha256,
         source_config_sha256=hashlib.sha256(config_bytes).hexdigest(),
@@ -165,6 +181,9 @@ def build_job(args, run: dict, config_bytes: bytes) -> tuple[dict, dict]:
             "template": template,
         },
     }
+    methods = ["leave_one_out", "single"]
+    if job["aggregator"] == "AttentionMIL":
+        methods.append("attention")
     summary = {
         "mode": "submit" if args.submit else "plan",
         "job_name": args.job_name,
@@ -177,7 +196,8 @@ def build_job(args, run: dict, config_bytes: bytes) -> tuple[dict, dict]:
         "server": SERVER,
         "resources": RESOURCES,
         "expected_slides": args.expected_slides,
-        "methods": ["leave_one_out", "single", "attention"],
+        "methods": methods,
+        "profile": profile,
         "split": "test",
         "worker_code_unchanged": True,
         "source_read_only": True,
