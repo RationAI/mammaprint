@@ -1,0 +1,3 @@
+# @package ml.metrics
+sign_auroc:
+  _target_: ml.metrics.regression.IndexSignAUROC

@@ -1,0 +1,5 @@
+# @package trainer.callbacks.attention_diagnostics
+_target_: ml.models.attention_diagnostics.AttentionValidationDiagnostics
+seed: ${seed}
+min_tiles: 20
+random_repeats: 20

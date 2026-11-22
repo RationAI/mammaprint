@@ -2,11 +2,13 @@
 
 from ml.models.encoders.base import Encoder
 from ml.models.encoders.identity import IdentityEncoder
+from ml.models.encoders.tile_projector import TileProjector
 from ml.models.encoders.vgg16 import VGG16Encoder
 
 
 __all__ = [
     "Encoder",
     "IdentityEncoder",
+    "TileProjector",
     "VGG16Encoder",
 ]

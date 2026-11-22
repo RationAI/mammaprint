@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - /experiment/ml/train_mil_embeddings_abmil_mean_regression
+  - override /ml/aggregator@ml.aggregator: abmil_attention
+  - _self_
+
+metadata:
+  run_name: ABMIL gated-attention regression, seed ${seed}
+  description: MammaPrint index regression with a per-tile projector and gated attention.

@@ -1,0 +1,57 @@
+# @package _global_
+defaults:
+  - /ml: module
+  - /ml/encoder@ml.encoder: tile_projector
+  - /ml/aggregator@ml.aggregator: mean
+  - /ml/head@ml.head: linear
+  - /ml/output_activation@ml.output_activation: identity
+  - /ml/loss@ml.loss: mse
+  - /ml/optimizer@ml.optimizer: adamw
+  - /ml/lr_scheduler@ml.lr_scheduler: cosine
+  - /ml/metrics:
+      - mae
+      - mse
+      - spearman
+      - sign_auroc
+  - /trainer: abmil
+  - /data: _template
+  - /data/embedded: cancer_mask_5/l2
+  - _self_
+
+label_mode: index
+feature_dim: ${ml.encoder.out_dim}
+initialize_index_head: true
+test_after_fit: false
+
+ml:
+  head:
+    dropout: 0.0
+    weight_init_gain: 0.01
+
+datamodule:
+  batch_size: 4
+  eval_batch_size: 1
+  train_seed: ${seed}
+  train:
+    train_tile_cap: 1024
+    tile_seed: ${seed}
+    validate_index_split: true
+  val:
+    validate_index_split: true
+  test:
+    validate_index_split: true
+
+metadata:
+  experiment_name: MammaPrint
+  run_name: ABMIL mean regression, seed ${seed}
+  description: MammaPrint index regression with a per-tile projector and mean pooling.
+  hyperparams:
+    seed: ${seed}
+    aggregator: ${ml.aggregator._target_}
+    projector_width: ${feature_dim}
+    projector_dropout: ${ml.encoder.dropout}
+    train_tile_cap: ${datamodule.train.train_tile_cap}
+    batch_size: ${datamodule.batch_size}
+    lr: ${ml.optimizer.lr}
+    weight_decay: ${ml.optimizer.weight_decay}
+    max_epochs: ${trainer.max_epochs}

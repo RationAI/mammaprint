@@ -1,0 +1,4 @@
+_target_: ml.models.encoders.TileProjector
+in_dim: 2560
+out_dim: 256
+dropout: 0.20
