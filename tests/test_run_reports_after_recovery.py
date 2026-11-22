@@ -141,3 +141,21 @@ def test_default_is_offline_and_creates_no_waiter_or_job(tmp_path):
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["mode"] == "plan"
     assert not state.exists()
+
+
+@pytest.mark.parametrize("prefix", ["mammaprint-best-bce-s2", "b" * 30])
+def test_generated_concept_command_passes_real_launcher_validation(prefix):
+    _source, recovery, _docs, _original, _run, manifest = evidence()
+    args = SimpleNamespace(
+        recovery_run=recovery,
+        context="kubas-cluster",
+        namespace="rationai-jobs-ns",
+        job_prefix=prefix,
+        output_root="/mnt/projects/selected-bce",
+        git_sha="e" * 40,
+    )
+    _html, concepts = module().commands(args, manifest)
+    assert concepts[-1] == "--submit"
+    result = subprocess.run(concepts[:-1], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["jobs"][0]["job_name"].startswith(prefix + "-")

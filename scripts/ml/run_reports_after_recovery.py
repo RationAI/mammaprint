@@ -112,7 +112,7 @@ def commands(args, manifest):
             "--output-root",
             args.output_root + "/concepts",
             "--job-prefix",
-            args.job_prefix + "-concepts",
+            args.job_prefix,
             "--experiment-name",
             "MammaPrint concepts",
             "--k",

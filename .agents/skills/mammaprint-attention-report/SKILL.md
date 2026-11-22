@@ -138,3 +138,11 @@ The state file is evidence, not a cluster scheduler, and cannot survive a reboot
 without a separately configured process supervisor. Local tests cover readiness,
 identity/hash binding, training-vs-implementation pins and offline planning;
 actual deferred creation is unverified until the recovery completes.
+
+The deferred concept command forwards the selected `--job-prefix` unchanged;
+its launcher adds source/hash suffixes itself. Do not append `-concepts` to a
+valid 30-character prefix: that can fail offline validation after the HTML was
+already submitted. Tests invoke the real concept launcher in plan-only mode
+with the selected BCE prefix and a 30-character boundary case. If this happens
+on an older watcher, preserve its failed state and submit only the missing
+concept command with a valid prefix; do not rerun the completed HTML.
