@@ -2,6 +2,8 @@
 
 Test whether 20× L1 improves MammaPrint index prediction over 10× L2 at the same per-slide tile count. Use existing cancer-mask coordinates and L2 embeddings, embed a capped L1 sample once, then compare the current regression model on the existing validation split. Exclude re-tiling, L0, stain augmentation, and architecture changes.
 
+For the requested direct run, use one A40 job to select and embed L1, with pod-local scratch and MLflow for durable artifacts. Skip the benchmark for this run and prepare the L2 control and split datasets afterward. [Direct A40 workflow](../../../.agents/skills/l1-resolution-comparison/SKILL.md#submit-one-a40-embedding-job-with-mlflow-storage)
+
 ## 1. Freeze the tile selection and expected slide inventory
 
 - [ ] Inspect `slides.parquet` and `tiles.parquet` from the existing L1 and L2 cards in `configs/data/tiled/cancer_mask_5/`. Verify source run provenance, slide IDs, pyramid levels, physical scale, per-slide stride and tile footprint, coordinate origin and units, and mask thresholds. The level configs specify 224 px tiles and 112 px stride at each target scale. Use the realized source geometry for grid filtering.

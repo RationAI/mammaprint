@@ -7,6 +7,20 @@ description: Run the MammaPrint Virchow2 L1 A40 embedding pilot, resumable shard
 
 Run from the MammaPrint repo on the pinned Linux runtime with `uv sync --frozen`, CUDA for embedding/training, the native OpenSlide library, secure DATA/PROJECTS mounts, an authenticated Hugging Face model cache or injected `HF_TOKEN`, and the approved MLflow endpoint. Use cluster-managed credentials. Check the context and namespace of the allocation against the approved target before running workload commands. The following commands run inside an existing allocation and do not submit Kubernetes jobs. Obtain explicit approval before creating any pilot, shard, publishing, training, or test job on a cluster.
 
+## Submit one A40 embedding job with MLflow storage
+
+Use this route when the user requests L1 embeddings directly and skips the benchmark. The job selects up to 3,000 non-overlapping tiles per slide with seed 42, then embeds all selected slides using FP32 Virchow2. It reads the secure DATA and PROJECTS mounts read-only and writes temporary files to a pod-local `emptyDir`. The selection, per-slide Parquets, upload receipts, and failure inventory remain in one MLflow run. L2 preparation and train/validation/test publication are subsequent stages.
+
+Render the exact job before asking for submission approval. The renderer packages only the committed embedding code over the published Git base, references the cluster-managed Hugging Face Secret, and takes the cluster context and namespace explicitly.
+
+```bash
+uv run --frozen python -m scripts.preprocessing.run_l1_dataset_a40 \
+  --source-commit "$(git rev-parse HEAD)" --context kubas-cluster \
+  --namespace rationai-jobs-ns --job-name mammaprint-l1-embed-a40
+```
+
+After explicit approval, add `--submit` to create the job. Inspect its pod logs for the MLflow run ID. Expect `selection/manifest.json`, `selection/frozen.tar.gz`, `embeddings/`, `complete/`, and `metadata/l1_inventory.json`. Inspect the attempt report and missing-slide inventory if the run fails. To resume, confirm the prior pod stopped, retain the source commit, pass the recorded `--run-id` with a distinct job name, and obtain approval for the new submission. The worker restores the exact frozen selection and uses completed upload receipts to skip saved slides. Duplicate concurrent writers to the same run are unsupported.
+
 ## Prepare immutable input manifests
 
 Run on a CPU allocation with enough local scratch for the projected tile metadata and shared space for manifests and selected L2 embeddings. Use the existing artifacts listed in the corresponding raw and embedded Hydra cards. Match the encoder SHA to the historical L2 artifact and record any provenance gap before interpreting the result. Use a pinned epithelium mask snapshot if available.

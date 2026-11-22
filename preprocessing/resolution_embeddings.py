@@ -27,6 +27,8 @@ import torch
 from numpy.typing import NDArray
 from torch.utils.data import DataLoader, Dataset
 
+from preprocessing.embedding_artifacts import EmbeddingArtifacts
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -205,7 +207,11 @@ def is_complete(output: Path, slide: dict[str, Any]) -> bool:
 
 
 def _publish_slide(
-    selection: Path, output: Path, slide: dict[str, Any], features: np.ndarray
+    selection: Path,
+    output: Path,
+    slide: dict[str, Any],
+    features: np.ndarray,
+    artifacts: EmbeddingArtifacts | None = None,
 ) -> tuple[int, float]:
     from preprocessing.embedding_selection import selection_digest
 
@@ -236,6 +242,8 @@ def _publish_slide(
                 "sha256": digest,
             },
         )
+        if artifacts is not None:
+            artifacts.upload(parquet, record)
     finally:
         temporary.unlink(missing_ok=True)
     return table.num_rows, time.perf_counter() - start
@@ -284,6 +292,7 @@ def _infer(
     device: torch.device,
     model: torch.nn.Module,
     staged: dict[str, str],
+    artifacts: EmbeddingArtifacts | None = None,
 ) -> None:
     dataset = ResolutionTiles(selection, slides, staged)
     multiprocessing = (
@@ -392,7 +401,12 @@ def _infer(
                             finish_write()
                         write_queue.append(
                             writer.submit(
-                                _publish_slide, selection, output, slide, features
+                                _publish_slide,
+                                selection,
+                                output,
+                                slide,
+                                features,
+                                artifacts,
                             )
                         )
         while write_queue:
@@ -402,6 +416,8 @@ def _infer(
 def _run(args: argparse.Namespace) -> int:
     selection = args.manifest.resolve().parent
     manifest = _manifest(args.manifest)
+    if args.mlflow_run_id and (args.pilot is not None or manifest["shards"] != 1):
+        raise ValueError("Direct MLflow storage requires a single production shard")
     if args.pilot is not None:
         requested = set(args.pilot_slides or [])
         available = {
@@ -481,10 +497,21 @@ def _run(args: argparse.Namespace) -> int:
             if not state_path.exists():
                 write_json(state_path, config)
         validation_start = time.perf_counter()
+        artifacts = None
+        if args.mlflow_run_id:
+            from mlflow import MlflowClient
+
+            artifacts = EmbeddingArtifacts(
+                MlflowClient(), args.mlflow_run_id, output / ".mlflow"
+            )
+            artifacts.prepare(config)
         pending = [
             slide
             for slide in items
-            if slide["tile_count"] and not is_complete(output, slide)
+            if slide["tile_count"]
+            and not (
+                artifacts.complete(slide) if artifacts else is_complete(output, slide)
+            )
         ]
         summary = {
             "job": job,
@@ -531,7 +558,15 @@ def _run(args: argparse.Namespace) -> int:
                         pending, Path(directory) if directory is not None else None
                     )
                     _infer(
-                        args, selection, output, pending, summary, device, model, staged
+                        args,
+                        selection,
+                        output,
+                        pending,
+                        summary,
+                        device,
+                        model,
+                        staged,
+                        artifacts,
                     )
         except Exception as exc:
             summary["fatal"] = f"{type(exc).__name__}: {exc}"
@@ -553,7 +588,14 @@ def _run(args: argparse.Namespace) -> int:
             )
             write_json(report, summary)
             print(json.dumps({"report": str(report), **summary}, indent=2))
-        return int(bool(summary["failures"]))
+            if artifacts is not None:
+                artifacts.client.log_artifact(
+                    artifacts.run_id, str(report), artifact_path="attempts"
+                )
+                inventory_ok = artifacts.report(output / "l1_inventory.json", items)
+            else:
+                inventory_ok = True
+        return int(bool(summary["failures"]) or not inventory_ok)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -586,6 +628,9 @@ def _parser() -> argparse.ArgumentParser:
         "--stage-dir", type=Path, help="Optional pilot-only local WSI staging"
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--mlflow-run-id", help="Stream completed slides to this MLflow run"
+    )
     return parser
 
 
