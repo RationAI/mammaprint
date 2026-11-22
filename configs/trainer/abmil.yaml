@@ -1,0 +1,18 @@
+_target_: rationai.mlkit.lightning.Trainer
+
+max_epochs: 50
+log_every_n_steps: 1
+accelerator: auto
+devices: 1
+
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: valid/mae
+    mode: min
+    save_top_k: 1
+    filename: best-{epoch:02d}
+    auto_insert_metric_name: false
+  lr_monitor:
+    _target_: lightning.pytorch.callbacks.LearningRateMonitor
+    logging_interval: epoch

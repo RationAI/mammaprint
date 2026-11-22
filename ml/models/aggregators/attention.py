@@ -23,12 +23,18 @@ class AttentionMIL(Aggregator[Bag]):
     Args:
         feature_dim: Dimensionality of the incoming tile features.
         attention_dim: Width of the attention hidden layer.
+        normalize_features: Apply LayerNorm before scoring and pooling.
     """
 
-    def __init__(self, feature_dim: int, attention_dim: int = 512) -> None:
+    def __init__(
+        self,
+        feature_dim: int,
+        attention_dim: int = 512,
+        normalize_features: bool = True,
+    ) -> None:
         super().__init__()
         self.feature_dim = feature_dim
-        self.norm = nn.LayerNorm(feature_dim)
+        self.norm = nn.LayerNorm(feature_dim) if normalize_features else nn.Identity()
         self.attention_v = nn.Linear(feature_dim, attention_dim)
         self.attention_u = nn.Linear(feature_dim, attention_dim)
         self.attention_weights = nn.Linear(attention_dim, 1)
@@ -37,13 +43,18 @@ class AttentionMIL(Aggregator[Bag]):
     def out_dim(self) -> int:
         return self.feature_dim
 
-    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
+    def attention_inputs(self, bag: Tensor) -> tuple[Tensor, Tensor]:
+        """Return the tile values and logits used by the attention pool."""
         bag = self.norm(bag)  # (N, D)
 
         gate = torch.tanh(self.attention_v(bag)) * torch.sigmoid(
             self.attention_u(bag)
         )  # (N, attention_dim)
         scores = self.attention_weights(gate).squeeze(-1)  # (N,)
+        return bag, scores
+
+    def forward(self, bag: Tensor) -> tuple[Tensor, Tensor]:
+        bag, scores = self.attention_inputs(bag)
         attention = torch.softmax(scores, dim=0)  # (N,)
 
         pooled = (attention.unsqueeze(-1) * bag).sum(dim=0)  # (D,)

@@ -1,0 +1,4 @@
+_target_: ml.models.aggregators.AttentionMIL
+feature_dim: ${feature_dim}
+attention_dim: 128
+normalize_features: false
