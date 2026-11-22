@@ -1,6 +1,6 @@
 ---
 name: l1-resolution-comparison
-description: Run the MammaPrint Virchow2 L1 A40 embedding pilot, resumable shards, MLflow registration, and paired L1/L2 MIL regression comparison.
+description: Run the MammaPrint Virchow2 L1 A40 embedding pilot, resumable shards, MLflow registration, and validation-only L1/L2 MIL regression training.
 ---
 
 # L1 resolution comparison
@@ -87,26 +87,16 @@ uv run --frozen python -m preprocessing.resolution_data \
 
 Expect `l1_inventory.json`, `l1_data_card.json`, a verified MLflow run with all four artifact URIs, and the checksummed `comparison` bundle. Reissue the same publish command after an artifact transfer failure to resume the same MLflow run. For generic Hydra L1 callers, populate `MAMMAPRINT_L1_{ALL,TRAIN,VAL,TEST}_URI` from the generated data card. Preserve the frozen files and do not edit comparison Parquets in place.
 
-## Train and evaluate
+## Train and compare by hand
 
 Use a GPU allocation for fitting. The matrix runs sequentially by default. To distribute work across approved allocations, pass `--level 1 --pooling attention --seed 0` with the corresponding values for each fit. On an I/O-limited node, stage the immutable comparison bundle on local scratch and use the staged path as `--bundle`. Keep the same durable `--output` for checkpoints. Omit `--execute` to list the fit matrix.
 
 ```bash
-uv run --frozen python -m scripts.ml.run_resolution_comparison \
+uv run --frozen python -m scripts.ml.run_resolution_training \
   --bundle "$RUN/data/comparison" --data-mapping "$MAPPING" --output "$RUN/fits" --execute
 ```
 
-Once 12 fits have completed, set `EMBED_GPU_HOURS` from actual allocation records including failed attempts and agree on `BUDGET_GPU_HOURS`. If patient IDs are available, use `--patient-column` with the relevant mapping header. Review validation metrics and the locked decision. Only then run the test command once.
-
-```bash
-uv run --frozen python -m scripts.ml.evaluate_resolution_comparison validation \
-  --bundle "$RUN/data/comparison" --data-mapping "$MAPPING" --output "$RUN/fits" \
-  --gpu-hours "$EMBED_GPU_HOURS" --budget-gpu-hours "$BUDGET_GPU_HOURS"
-uv run --frozen python -m scripts.ml.evaluate_resolution_comparison test \
-  --bundle "$RUN/data/comparison" --data-mapping "$MAPPING" --output "$RUN/fits"
-```
-
-Expect `validation.md`, `validation_metrics.json`, `decision.json`, and after the sole held-out prediction pass, `test_predictions.parquet` and `test_metrics.json`. If test fails after the attempt marker is written, preserve it and the available evidence. Investigate without running predictions again.
+Compare the MLflow runs by `resolution_level`, `resolution_pooling`, and `resolution_seed`. Read `valid/mae`, `valid/spearman`, and `valid/sign_auroc` at each run's minimum `valid/loss` step, which selects the saved best checkpoint. Pair L1 and L2 by pooling and seed. Record the chosen checkpoint before evaluating the held-out test data once through the existing test entry point.
 
 ## Diagnose and recover
 

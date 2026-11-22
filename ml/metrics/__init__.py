@@ -4,6 +4,7 @@ from ml.metrics.column import ColumnMetric
 from ml.metrics.logits import BinaryLogitMetric
 from ml.metrics.summary import binary_logit_summary, regression_summary
 from ml.metrics.thresholded import (
+    SignAUROC,
     ThresholdedBinaryMetric,
     thresholded_f1,
     thresholded_precision,
@@ -15,6 +16,7 @@ from ml.metrics.thresholded import (
 __all__ = [
     "BinaryLogitMetric",
     "ColumnMetric",
+    "SignAUROC",
     "ThresholdedBinaryMetric",
     "binary_logit_summary",
     "regression_summary",
