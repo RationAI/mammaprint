@@ -16,6 +16,7 @@ import tempfile
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pandas as pd
 from mlflow.artifacts import (
@@ -173,10 +174,23 @@ def load_labeled_slides(
 
 
 def download_level_sources(sources: Mapping[int, str]) -> dict[int, Path]:
-    """Download each pyramid level's artifact and return ``level -> local dir``."""
-    return {
-        level: download_artifacts_with_retries(uri) for level, uri in sources.items()
-    }
+    """Use local artifact directories in place and download remote sources."""
+    directories = {}
+    for level, uri in sources.items():
+        parsed = urlsplit(uri)
+        if parsed.scheme == "file" and parsed.netloc in {"", "localhost"}:
+            path = Path(unquote(parsed.path))
+        elif not parsed.scheme and Path(uri).is_absolute():
+            path = Path(uri)
+        else:
+            directories[level] = download_artifacts_with_retries(uri)
+            continue
+        if not path.is_dir():
+            raise FileNotFoundError(
+                f"Level {level} artifact directory is missing: {path}"
+            )
+        directories[level] = path
+    return directories
 
 
 def available_slides(dirs: Mapping[int, Path]) -> set[str]:

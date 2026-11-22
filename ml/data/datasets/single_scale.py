@@ -93,7 +93,7 @@ class SingleScaleDataset(Dataset[MILSample]):
     def __getitem__(self, idx: int) -> MILSample:
         row = self.slides.iloc[idx]
         frame = pd.read_parquet(
-            (self.embeddings_dir / row["name"]).with_suffix(".parquet")
+            self.embeddings_dir / f"{row['name']}.parquet", columns=["embedding"]
         )
         bag = torch.from_numpy(np.stack(frame["embedding"].to_numpy())).float()
         label = get_label(row, self.label_mode)

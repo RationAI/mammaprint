@@ -17,12 +17,15 @@ from ml.data.datasets import SlideDataset
 
 
 class Virchow2(torch.nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, revision: str | None = None) -> None:
         super().__init__()
 
         # For this, you need to setup HF_TOKEN=<X> env.variable.
+        model_id = "hf-hub:paige-ai/Virchow2"
+        if revision is not None:
+            model_id = f"{model_id}@{revision}"
         self.module = timm.create_model(
-            "hf-hub:paige-ai/Virchow2",
+            model_id,
             pretrained=True,
             mlp_layer=SwiGLUPacked,
             act_layer=torch.nn.SiLU,
@@ -131,7 +134,7 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
                 embeddings_path,
             )
 
-        except Exception as e:  # noqa: BLE001 - continue with the remaining slides
+        except Exception as e:
             print(f"Error processing slide {slide_name}: {e}")
 
     logger.log_artifacts(str(dest), artifact_path="embeddings")
