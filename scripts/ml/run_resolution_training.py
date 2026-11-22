@@ -1,4 +1,4 @@
-"""Render or execute the fixed twelve-fit resolution comparison in the current environment."""
+"""Render or execute the twelve validation-only L1 and L2 training fits."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import tempfile
 import uuid
 from itertools import product
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, NotRequired, TypedDict
+from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 
 if TYPE_CHECKING:
@@ -30,13 +30,10 @@ POOLINGS = ("mean", "attention")
 SEEDS = (0, 1, 2)
 
 
-class ComparisonManifest(TypedDict):
+class TrainingManifest(TypedDict):
     digest: str
     data_mapping_digest: str
     splits: dict[str, dict[str, int]]
-    files: dict[str, dict[str, dict[str, str]]]
-    realized_scale: NotRequired[dict[str, dict[str, object]]]
-    exclusions: NotRequired[dict[str, dict[str, str]]]
 
 
 class FitKey(TypedDict):
@@ -79,8 +76,8 @@ def file_digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def load_manifest(bundle: Path, data_mapping: Path) -> ComparisonManifest:
-    manifest: ComparisonManifest = json.loads((bundle / "manifest.json").read_text())
+def load_manifest(bundle: Path, data_mapping: Path) -> TrainingManifest:
+    manifest: TrainingManifest = json.loads((bundle / "manifest.json").read_text())
     content = {key: value for key, value in manifest.items() if key != "digest"}
     digest = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
     if manifest.get("digest") != digest:
@@ -91,7 +88,7 @@ def load_manifest(bundle: Path, data_mapping: Path) -> ComparisonManifest:
 
 
 def split_rows(
-    data_mapping: Path, manifest: ComparisonManifest, split: str
+    data_mapping: Path, manifest: TrainingManifest, split: str
 ) -> dict[str, MappingRow]:
     expected = manifest["splits"][split]
     if not expected or any(
@@ -128,8 +125,6 @@ def verify_split(
     level: int,
     split: str,
     expected: dict[str, int],
-    *,
-    digests: dict[str, str] | None = None,
 ) -> Path:
     import pyarrow.parquet as pq
 
@@ -139,15 +134,9 @@ def verify_split(
         raise ValueError(
             f"{directory} has unexpected or missing slides: {sorted(files.keys() ^ expected.keys())}"
         )
-    if digests is not None and digests.keys() != expected.keys():
-        raise ValueError(
-            f"{directory} has a different slide inventory in its manifest digests"
-        )
     for slide, count in expected.items():
         if pq.read_metadata(files[slide]).num_rows != count:
             raise ValueError(f"{directory} has a mismatched bag count for {slide}")
-        if digests is not None and file_digest(files[slide]) != digests[slide]:
-            raise ValueError(f"{directory} has a changed bag for {slide}")
     return directory
 
 
@@ -178,6 +167,9 @@ def fit_overrides(fit: Fit, bundle: Path, attempt: Path, digest: str) -> list[st
         f"seed={fit.seed}",
         "mode=fit",
         "test_after_fit=false",
+        "+ml.metrics.spearman._target_=torchmetrics.SpearmanCorrCoef",
+        "+ml.metrics.sign_auroc._target_=ml.metrics.SignAUROC",
+        "+ml.metrics.sign_auroc.metric._target_=torchmetrics.classification.BinaryAUROC",
         f"metadata.run_name={fit.name}",
         f"metadata.description={json.dumps('Matched L1/L2 validation-only MammaPrint regression')}",
         f"+logger.tags.resolution_bundle={digest}",
@@ -251,7 +243,7 @@ def _create_run(
 def _execute_fit(
     fit: Fit,
     args: argparse.Namespace,
-    manifest: ComparisonManifest,
+    manifest: TrainingManifest,
     rows: list[MappingRow],
 ) -> None:
     import fcntl
