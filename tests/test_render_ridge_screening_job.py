@@ -172,6 +172,17 @@ def test_cache_pilot_with_committed_overlay(tmp_path, capsys, monkeypatch):
     assert b"<--pilot-slides>\n<10>" in output
 
 
+def test_full_cache_can_use_repo_defaults(capsys):
+    args = _arguments()
+    at = args.index("--config")
+    args[at : at + 2] = ["--repo-config"]
+    main(args)
+    job = json.loads(capsys.readouterr().out)
+    worker = job["spec"]["template"]["spec"]["containers"][0]
+    assert "configs/sweeps/ridge_screening/screening.yaml" in worker["command"]
+    assert "--pilot-slides" not in worker["command"]
+
+
 @pytest.mark.parametrize(
     ("operation", "override", "error"),
     [

@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> None:
     configs.add_argument(
         "--repo-config",
         action="store_true",
-        help="Use the checked-in config for a cache pilot",
+        help="Use the checked-in config for the cache stage",
     )
     parser.add_argument("--output", required=True, type=_absolute_path)
     parser.add_argument("--input-mount", type=_absolute_path, default="/mnt/projects")
@@ -310,8 +310,8 @@ def main(argv: list[str] | None = None) -> None:
     ):
         parser.error("--pilot-slides requires a positive count and the cache operation")
     if args.repo_config:
-        if args.operation != "cache" or not args.pilot_slides:
-            parser.error("--repo-config is valid only for a cache pilot")
+        if args.operation != "cache":
+            parser.error("--repo-config is valid only for the cache stage")
         if args.input_mount != PurePosixPath("/mnt/projects"):
             parser.error("--repo-config requires the default /mnt/projects input mount")
         args.config = PurePosixPath("configs/sweeps/ridge_screening/screening.yaml")
