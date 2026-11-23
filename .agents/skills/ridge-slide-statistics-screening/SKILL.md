@@ -43,6 +43,8 @@ uv run --frozen python -m scripts.ml.render_ridge_screening_job cache \
   --cpu 4 --memory 16Gi --scratch-size 64Gi > ridge-cache-pilot.job.json
 ```
 
+If the ridge worker commit is local, also pass `--overlay-base PUBLISHED_BASE_SHA`. The renderer packages the committed ridge worker and input cards over that published ancestor, with both revisions recorded in Job annotations. For a cache pilot, `--repo-config` can replace the mounted `--config` argument. It uses the checked-in defaults, including the canonical mapping under `/mnt/projects`. Confirm the rendered pilot still has the intended read/write scope.
+
 Review the rendered namespace, context annotation, stage, pinned source, mount scopes, resource requests, and output path. Show the manifest and affected scope for approval. After approval, use the same explicit context and namespace when creating and inspecting the job.
 
 ```bash

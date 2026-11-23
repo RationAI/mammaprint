@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import json
 import re
+import subprocess
 from itertools import combinations
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -15,6 +18,18 @@ OPERATIONS = ("cache", "sanity", "screen", "lock", "test")
 SCREENS = ("levels", "multilevel", "statistics", "masks", "learning-curve", "all")
 OUTPUT_MOUNT = PurePosixPath("/ridge-output")
 REPOSITORY = "https://github.com/RationAI/mammaprint.git"
+ROOT = Path(__file__).resolve().parents[2]
+OVERLAY_PATHS = (
+    "configs/data/embedded",
+    "configs/sweeps/ridge_screening",
+    "ml/ridge_experiment.py",
+    "ml/ridge_report.py",
+    "ml/ridge_screening.py",
+    "preprocessing/slide_statistics.py",
+    "pyproject.toml",
+    "scripts/ml/run_ridge_screening.py",
+    "uv.lock",
+)
 
 
 def _absolute_path(value: str) -> PurePosixPath:
@@ -63,6 +78,28 @@ def _secret(name: str, secret_name: str, key: str) -> dict[str, Any]:
     }
 
 
+def _committed_overlay(base: str, source: str) -> str:
+    subprocess.run(
+        ["git", "merge-base", "--is-ancestor", base, source], cwd=ROOT, check=True
+    )
+    patch = subprocess.check_output(
+        [
+            "git",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            base,
+            source,
+            "--",
+            *OVERLAY_PATHS,
+        ],
+        cwd=ROOT,
+    )
+    if not patch:
+        raise ValueError("The source and base differ in no ridge worker files")
+    return base64.b64encode(gzip.compress(patch, mtime=0)).decode("ascii")
+
+
 def render_job(args: argparse.Namespace) -> dict[str, Any]:
     worker = _worker_command(args)
     # Kubernetes expands $(NAME) in command and args before Bash or uv sees it.
@@ -106,7 +143,9 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
     }
     if args.env_secret:
         container["envFrom"] = [{"secretRef": {"name": args.env_secret}}]
+    annotations = {"mammaprint.rationai.org/target-context": args.context}
     if args.source_commit:
+        annotations["mammaprint.rationai.org/source-commit"] = args.source_commit
         container["workingDir"] = str(args.scratch)
         container["command"] = ["/bin/bash", "-ec"]
         script = ["export GIT_TERMINAL_PROMPT=0"]
@@ -132,13 +171,22 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
                 'git -C "$TMPDIR/repo" checkout --detach "$1"',
                 "shift",
                 'cd "$TMPDIR/repo"',
-                'exec "$@"',
             )
         )
+        if args.overlay_base:
+            overlay = _committed_overlay(args.overlay_base, args.source_commit)
+            annotations["mammaprint.rationai.org/overlay-base"] = args.overlay_base
+            script.extend(
+                (
+                    "set -o pipefail",
+                    f"printf '%s' '{overlay}' | base64 --decode | gzip -dc | git apply",
+                )
+            )
+        script.append('exec "$@"')
         container["args"] = [
             "\n".join(script),
             "ridge-job",
-            args.source_commit,
+            args.overlay_base or args.source_commit,
             *worker,
         ]
 
@@ -148,7 +196,7 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
         "metadata": {
             "name": args.job_name,
             "namespace": args.namespace,
-            "annotations": {"mammaprint.rationai.org/target-context": args.context},
+            "annotations": annotations,
         },
         "spec": {
             "backoffLimit": 0,
@@ -194,11 +242,20 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--namespace", required=True, type=_resource_name)
     parser.add_argument("--job-name", required=True, type=_resource_name)
     parser.add_argument("--image", required=True)
-    parser.add_argument("--source-commit", help="Full Git SHA from the published repo")
+    parser.add_argument("--source-commit", help="Full Git SHA of the ridge worker")
+    parser.add_argument(
+        "--overlay-base", help="Published ancestor of a local source SHA"
+    )
     parser.add_argument(
         "--workdir", type=_absolute_path, default="/workspace/mammaprint"
     )
-    parser.add_argument("--config", required=True, type=_absolute_path)
+    configs = parser.add_mutually_exclusive_group(required=True)
+    configs.add_argument("--config", type=_absolute_path)
+    configs.add_argument(
+        "--repo-config",
+        action="store_true",
+        help="Use the checked-in config for a cache pilot",
+    )
     parser.add_argument("--output", required=True, type=_absolute_path)
     parser.add_argument("--input-mount", type=_absolute_path, default="/mnt/projects")
     parser.add_argument("--input-claim", default="projects-rw")
@@ -234,6 +291,10 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--image must be an OCI image reference")
     if args.source_commit and not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
         parser.error("--source-commit must be a full lowercase Git SHA")
+    if args.overlay_base and (
+        not args.source_commit or not re.fullmatch(r"[0-9a-f]{40}", args.overlay_base)
+    ):
+        parser.error("--overlay-base requires a full Git SHA and --source-commit")
     if ("@" in args.image or not args.source_commit) and not re.fullmatch(
         r"[^@]+@sha256:[0-9a-f]{64}", args.image
     ):
@@ -248,7 +309,13 @@ def main(argv: list[str] | None = None) -> None:
         args.operation != "cache" or args.pilot_slides <= 0
     ):
         parser.error("--pilot-slides requires a positive count and the cache operation")
-    if args.config == args.input_mount or not args.config.is_relative_to(
+    if args.repo_config:
+        if args.operation != "cache" or not args.pilot_slides:
+            parser.error("--repo-config is valid only for a cache pilot")
+        if args.input_mount != PurePosixPath("/mnt/projects"):
+            parser.error("--repo-config requires the default /mnt/projects input mount")
+        args.config = PurePosixPath("configs/sweeps/ridge_screening/screening.yaml")
+    elif args.config == args.input_mount or not args.config.is_relative_to(
         args.input_mount
     ):
         parser.error("--config must be a file under --input-mount")
@@ -264,7 +331,11 @@ def main(argv: list[str] | None = None) -> None:
         if uri and urlsplit(uri).username is not None:
             parser.error("provide URI credentials through cluster Secrets")
 
-    print(json.dumps(render_job(args), indent=2))
+    try:
+        job = render_job(args)
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        parser.error(f"Cannot render ridge Job: {exc}")
+    print(json.dumps(job, indent=2))
 
 
 if __name__ == "__main__":
