@@ -43,7 +43,7 @@
 
 **Step 1 acceptance**
 
-- [ ] Run `uv run pytest -q tests/preprocessing/test_slide_statistics.py tests/test_ridge_screening.py`. Check batched statistics against direct NumPy/PyTorch results for constant vectors, one-tile bags, bad widths, nonfinite values, and empty or missing files. Verify resume and rejection of stale completion markers after input drift. Cover multi-slide records, development/test disjointness, exact fold/slide pairing, nested training fractions, inner-only selection, single-sign and constant inputs, index zero, and paired SE against a hand calculation.
+- [ ] Run the local test command in the [ridge-screening skill](../../../.agents/skills/ridge-slide-statistics-screening/SKILL.md). Check batched statistics against direct NumPy/PyTorch results for constant vectors, one-tile bags, bad widths, nonfinite values, and empty or missing files. Verify resume and rejection of stale completion markers after input drift. Cover multi-slide records, development/test disjointness, exact fold/slide pairing, nested training fractions, inner-only selection, single-sign and constant inputs, index zero, and paired SE against a hand calculation.
 - [ ] Run the synthetic CLI workflow twice and compare sorted numeric tables, selections, and fold ledgers exactly in the pinned environment. Verify that `sanity`, `screen`, and `lock` never open test features or labels, that `test` rejects a missing or mismatched lock, and that retries reuse saved results. Independently review the cache, data boundary, and evaluation logic. Commit each verified logical change with its owned files.
 
 ## Step 2 — Run the experiment and evaluate the results

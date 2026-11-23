@@ -1,0 +1,39 @@
+# Paths can be overridden in a copy of this config on shared storage.
+data_mapping: /mnt/projects/mammaprint/data_mapping.csv
+cache_dir: /ridge-output/ridge-screening/cache
+sanity_dir: /ridge-output/ridge-screening/sanity
+screen_dir: /ridge-output/ridge-screening/screens
+lock_dir: /ridge-output/ridge-screening/lock
+test_registry: /ridge-output/ridge-screening/test-registry
+historical_reference: /mnt/projects/mammaprint/ridge-screening/historical_reference.json
+
+embedding_dim: 2560
+batch_size: 1024
+blas_threads: 1
+outer_seeds: [0, 1, 2, 3, 4]
+outer_folds: 5
+inner_folds: 3
+sanity_f1_margin: 0.02
+sanity_mae_margin: 0.05
+
+features:
+  l1_cm5_mean: [[l1/cancer_mask_5, mean_ln]]
+  l2_cm5_mean: [[l2/cancer_mask_5, mean_ln]]
+  l3_cm5_mean: [[l3/cancer_mask_5, mean_ln]]
+  l4_cm5_mean: [[l4/cancer_mask_5, mean_ln]]
+  l5_cm5_mean: [[l5/cancer_mask_5, mean_ln]]
+  l2_l3_cm5_mean: [[l2/cancer_mask_5, mean_ln], [l3/cancer_mask_5, mean_ln]]
+  l1_l2_cm5_mean: [[l1/cancer_mask_5, mean_ln], [l2/cancer_mask_5, mean_ln]]
+  l2_cm5_mean_std: [[l2/cancer_mask_5, mean_ln], [l2/cancer_mask_5, std_ln]]
+  l2_cm9_mean: [[l2/cancer_mask_9, mean_ln]]
+  l2_tissue_mean: [[l2/tissue_only, mean_ln]]
+  l2_epithel_mean: [[l2/epithel, mean_ln]]
+  l2_epithel_and_cm5_mean: [[l2/epithel_and_cancer_5, mean_ln]]
+  l2_epithel_or_cm5_mean: [[l2/epithel_or_cancer_5, mean_ln]]
+
+screens:
+  levels: [l1_cm5_mean, l2_cm5_mean, l3_cm5_mean, l4_cm5_mean, l5_cm5_mean]
+  multilevel: [l2_l3_cm5_mean, l1_l2_cm5_mean]
+  statistics: [l2_cm5_mean_std]
+  masks: [l2_cm9_mean, l2_tissue_mean, l2_epithel_mean, l2_epithel_and_cm5_mean, l2_epithel_or_cm5_mean]
+  learning-curve: [l2_cm5_mean]
