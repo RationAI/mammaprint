@@ -56,6 +56,50 @@ uv run --frozen python -m scripts.ml.compare_ridge_historical_adam compare \
 
 Check the export exit status before renaming the partial file. The local comparison verifies split and checkpoint parity and reproduces the archived validation metrics. Ridge selects alpha by grouped CV within the original training split. Matched Adam takes 2,000 full-batch steps with zero initialization, cosine learning-rate decay from 0.01 to 0.00001, and the same alpha and unpenalized intercept as ridge. Compare the validation metrics and training objectives. Keep the NPZ private and delete incomplete copies after a recoverable failure.
 
+## Run paired single-level ridge and Adam cross-validation
+
+Use `scripts/ml/export_ridge_development.py`, `scripts/ml/run_ridge_adam_comparison.py`, and the verified fixed-split `adam_comparison.json`. Use the same read-only pod and private output directory as for historical verification. The export validates the canonical mapping, cache manifest and each selected development partition. It streams only finite labeled train and validation rows and requested feature columns. Missing feature rows stay marked for the shared complete-case cohort. Keep the NPZ and fold ledger private.
+
+```bash
+umask 077
+RIDGE_SWEEP_CONFIG=configs/sweeps/ridge_screening/screening.yaml
+RIDGE_BLOCK_ARGS=()
+while IFS= read -r block; do
+  RIDGE_BLOCK_ARGS+=(--block "$block")
+done < <(uv run --frozen python -c '
+from pathlib import Path
+from scripts.ml.run_ridge_adam_comparison import candidates, config_from_file
+import sys
+features = candidates(config_from_file(Path(sys.argv[1])))
+for source, stat in sorted({block for feature in features.values() for block in feature.blocks}):
+    print(f"{source}:{stat}")
+' "$RIDGE_SWEEP_CONFIG")
+
+kubectl --context "$RIDGE_CONTEXT" --namespace "$RIDGE_NAMESPACE" \
+  exec -i "$RIDGE_POD" -c "$RIDGE_CONTAINER" -- "$RIDGE_PYTHON" - \
+  --cache /mnt/projects/mammaprint/ridge-screening/ridge-screening/cache \
+  --data-mapping /mnt/projects/mammaprint/data_mapping.csv "${RIDGE_BLOCK_ARGS[@]}" \
+  < scripts/ml/export_ridge_development.py > "$RIDGE_PRIVATE/development.partial.npz" &&
+mv "$RIDGE_PRIVATE/development.partial.npz" "$RIDGE_PRIVATE/development.npz"
+
+uv run --frozen python -m scripts.ml.run_ridge_adam_comparison \
+  --config "$RIDGE_SWEEP_CONFIG" --bundle "$RIDGE_PRIVATE/development.npz" \
+  --reference "$RIDGE_PRIVATE/historical_reference.json" --sanity "$RIDGE_PRIVATE/adam_comparison.json" \
+  --output "$RIDGE_PRIVATE/paired-results" --workers 4
+```
+
+The runner uses all available planned single-level arms and raw L2 cm5 on one common cohort. It applies the configured outer seeds and inner folds, fixes alpha across each ridge/Adam pair after inner MAE selection, and runs the 25/50/75/100% curve for normalized L2 cm5. Each worker uses one BLAS thread. Adam starts at zero and takes up to 2,000 full-batch steps with cosine decay. It checks convergence every 25 steps using only the training objective and a relative gap of `1e-8` from the exact ridge optimum. Retain the step counts and any budget-limited folds.
+
+Inspect `run.json`, `ranking.csv`, `learning_curve.csv`, `fold_metrics.csv`, `fold_ledger.csv`, and `results.json`. The ranking and curve give assessment means and overlap-adjusted standard errors, including the paired **Adam minus ridge** difference. Compare 75% and 100% using the same assessment keys and fold-level changes in `fold_metrics.csv`. The held-out test is a separate workflow.
+
+Resume in the same output directory after the prior process exits. The runner binds the checksummed bundle, reference, settings, runtime packages and code to saved fold rows. Changed inputs or settings require a new output directory. If export or replay fails, inspect the referenced cache and mapping fingerprints before retrying. Keep only the finalized private export and outputs after checking the partial files.
+
+```bash
+uv run --frozen --with pytest==9.2.0 python -m pytest --import-mode=importlib \
+  -o consider_namespace_packages=true -q tests/test_export_ridge_development.py \
+  tests/test_matched_linear_adam.py tests/test_run_ridge_adam_comparison.py
+```
+
 ## Verify locally and render the job
 
 Use synthetic embedding Parquets and a synthetic mapping for local checks. The cache dry-run resolves configured inventory and the screen dry-run shows planned contrasts. Keep the fixture output separate from real artifacts.
