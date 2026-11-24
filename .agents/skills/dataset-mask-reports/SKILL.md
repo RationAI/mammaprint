@@ -68,3 +68,19 @@ kubectl --context kubas-cluster --namespace rationai-jobs-ns \
 The worker runs `scripts/ml/prepare_dataset_mask_previews.py` with managed MLflow credentials and the original slide and mask mounts read-only. It checks the original HTML before and after preparation, publishes only new files under `report_backfills/dataset_masks/previews/$job_name`, and reads them back to verify their hashes. Each successful run stages `layers.json`, `preview.html`, `receipt.json`, and any converted TIFFs under `dataset-mask-assets/`. Keep the staged TIFFs for as long as a published overlay references them. Use the MLflow artifact listing and the receipt to reconcile every selected run before review. If the run failed, inspect the job status and its per-run diagnostics before asking for approval for another submission. The job neither applies nor rolls back a published report. Follow the normal apply flow with the staged layer manifest and approved original and updated hashes.
 
 Verify the renderer and staging behavior locally with `python -m unittest tests.test_render_dataset_mask_preview_job tests.test_prepare_dataset_mask_previews`.
+
+### Reuse a verified preview after a partial job
+
+If a preview job finishes one run before a deadline or another run fails, use the completed run as a donor. The worker rechecks the donor receipt, the layer manifest, the original slide paths, and both saved dataset lineages. It reuses only masks with matching source locations and verified viewer assets. For the target report it records the target dataset and its own selection rules. Keep the donor preview assets available while any report references them.
+
+Prepare a local preview if every eligible layer can be reused. In this example the worker reads MLflow artifacts and writes the preview, layers, and receipt under the target run subdirectory in a private local output directory.
+
+```bash
+python -m scripts.ml.prepare_dataset_mask_previews \
+  --tracking-uri "$tracking_uri" --experiment-id "$experiment_id" \
+  --batch "$batch" --run "$target_run:$original_sha" \
+  --reuse-layer-run "$donor_run" --reuse-layer-batch "$donor_batch" \
+  --output-dir "$local_preview_dir"
+```
+
+If unique masks still need the mounted WSI, pass the same two reuse options to the job renderer and include only the unfinished targets. The worker prepares the outstanding mask assets, stages the complete preview, and checks its hashes. Use a new job name and obtain approval for that exact submission. Confirm all expected types in the receipt before considering an in-place apply.

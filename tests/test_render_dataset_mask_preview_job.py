@@ -36,6 +36,10 @@ class RenderDatasetMaskPreviewJobTest(unittest.TestCase):
                 "mammaprint-mask-preview",
                 "--experiment-id",
                 "3",
+                "--reuse-layer-run",
+                "d" * 32,
+                "--reuse-layer-batch",
+                "verified-preview",
                 "--output",
                 str(output),
             ]
@@ -78,6 +82,11 @@ class RenderDatasetMaskPreviewJobTest(unittest.TestCase):
                 summary["tracking_uri"], env["MLFLOW_TRACKING_URI"]["value"]
             )
             self.assertIn("--stage", container["command"][-1])
+            self.assertIn(
+                f"--reuse-layer-run {'d' * 32} --reuse-layer-batch verified-preview",
+                container["command"][-1],
+            )
+            self.assertEqual(summary["reuse_layer_run"], "d" * 32)
             self.assertTrue(all(run in container["command"][-1] for run in RUNS))
             packed = "".join(
                 env[name]["value"]
@@ -99,6 +108,10 @@ class RenderDatasetMaskPreviewJobTest(unittest.TestCase):
         for runs in (["bad"], [*RUNS, RUNS[0]]):
             with self.assertRaises((ValueError, SystemExit)):
                 renderer.validate_runs(runs)
+
+    def test_incomplete_reuse_target_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "both"):
+            renderer.render("preview", "3", RUNS, reuse_layer_run="d" * 32)
 
 
 if __name__ == "__main__":

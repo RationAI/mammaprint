@@ -28,6 +28,7 @@ NAMESPACE = "rationai-jobs-ns"
 TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
 _TEMPLATE = "2c7a34b549da9a25cdc94178b82d6cfe5de9907b:third_party/rationai-report-worker/pod-template.json"
 CHUNK_PREFIX = "MAMMAPRINT_MASK_SOURCE_"
+_JOB_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?")
 SOURCES = (
     "ml/__init__.py",
     "ml/explainability/dataset_mask_assets.py",
@@ -99,7 +100,12 @@ def _pod_template() -> dict[str, Any]:
 
 
 def _worker_command(
-    job: str, experiment: str, runs: Sequence[str], digest: str, chunks: list[str]
+    job: str,
+    experiment: str,
+    runs: Sequence[str],
+    digest: str,
+    chunks: list[str],
+    reuse: tuple[str, str] | None,
 ) -> list[str]:
     decoder = (
         "import base64,hashlib,io,os,tarfile;"
@@ -125,6 +131,8 @@ def _worker_command(
     )
     for run in runs:
         command.extend(["--run", run])
+    if reuse is not None:
+        command.extend(["--reuse-layer-run", reuse[0], "--reuse-layer-batch", reuse[1]])
     return [
         "/bin/bash",
         "-c",
@@ -147,15 +155,33 @@ def _worker_command(
 
 
 def render(
-    job: str, experiment: str, runs: Sequence[str]
+    job: str,
+    experiment: str,
+    runs: Sequence[str],
+    *,
+    reuse_layer_run: str | None = None,
+    reuse_layer_batch: str | None = None,
 ) -> tuple[dict[str, Any], str]:
-    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?", job):
+    if not _JOB_NAME.fullmatch(job):
         raise ValueError(
             "Expected a Kubernetes DNS-label job name of at most 50 characters."
         )
     if not re.fullmatch(r"0|[1-9][0-9]*", experiment):
         raise ValueError("Expected a numeric MLflow experiment ID.")
     validate_runs(runs)
+    if (reuse_layer_run is None) != (reuse_layer_batch is None):
+        raise ValueError("Provide both a verified donor run and its preview batch.")
+    reuse = None
+    if reuse_layer_run is not None and reuse_layer_batch is not None:
+        if (
+            not re.fullmatch(r"[a-f0-9]{32}", reuse_layer_run)
+            or not _JOB_NAME.fullmatch(reuse_layer_batch)
+            or reuse_layer_run in {value.split(":", 1)[0] for value in runs}
+        ):
+            raise ValueError(
+                "Expected a separate, exact donor run and valid preview batch."
+            )
+        reuse = reuse_layer_run, reuse_layer_batch
     blob = _pack_sources()
     digest = hashlib.sha256(blob).hexdigest()
     encoded = base64.b64encode(blob).decode()
@@ -178,7 +204,7 @@ def render(
         + env_chunks
     )
     container["command"] = _worker_command(
-        job, experiment, runs, digest, [entry["name"] for entry in env_chunks]
+        job, experiment, runs, digest, [entry["name"] for entry in env_chunks], reuse
     )
     container["resources"] = {
         "requests": dict(_RESOURCES),
@@ -212,10 +238,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--job-name", required=True)
     parser.add_argument("--experiment-id", required=True)
     parser.add_argument("--run", action="append", required=True)
+    parser.add_argument("--reuse-layer-run")
+    parser.add_argument("--reuse-layer-batch")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        job, payload_digest = render(args.job_name, args.experiment_id, args.run)
+        job, payload_digest = render(
+            args.job_name,
+            args.experiment_id,
+            args.run,
+            reuse_layer_run=args.reuse_layer_run,
+            reuse_layer_batch=args.reuse_layer_batch,
+        )
         manifest = (json.dumps(job, indent=2, sort_keys=True) + "\n").encode()
         with os.fdopen(
             os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "wb"
@@ -232,6 +266,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "experiment_id": args.experiment_id,
                 "tracking_uri": TRACKING_URI,
                 "run_ids": [run.split(":", 1)[0] for run in args.run],
+                "reuse_layer_run": args.reuse_layer_run,
+                "reuse_layer_batch": args.reuse_layer_batch,
                 "payload_sha256": payload_digest,
                 "manifest_sha256": hashlib.sha256(manifest).hexdigest(),
                 "output": str(args.output),
