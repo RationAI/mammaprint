@@ -1,11 +1,11 @@
 ---
 name: shared-gpu-training
-description: Use when packing independent MammaPrint fits onto one NVIDIA GPU or MIG instance, comparing seed concurrency, or recovering a partially failed training batch.
+description: Use when packing independent MammaPrint fits onto one GPU or MIG instance, sizing VRAM for linear, MLP or gated-attention embedding runs, comparing seed concurrency, or recovering a partially failed training batch.
 ---
 
 # Shared-GPU training
 
-Run one process per training command with `scripts/ml/run_training_batch.py`. Each process inherits the allocated device. Use `scripts/ml/render_training_batch_job.py` to convert a MammaPrint experiment and explicit seeds into one Kubernetes Job. Each fit gets its own output, MLflow run, and seed. Run with concurrency one for a new workload and GPU profile, then measure two before raising the cap.
+Run one process per training command with `scripts/ml/run_training_batch.py`. Each process inherits the allocated device. Use `scripts/ml/render_training_batch_job.py` to convert a MammaPrint experiment and explicit seeds into one Kubernetes Job. Each fit gets its own output, MLflow run, and seed. Use measured concurrency for a matching recipe and allocation. For a new combination, size from the reference and measure before raising the cap.
 
 ## Prerequisites and target checks
 
@@ -13,6 +13,13 @@ Run one process per training command with `scripts/ml/run_training_batch.py`. Ea
 - Confirm the intended Kubernetes context and namespace using your configured credentials. For the private cluster they are `kubas-cluster` and `rationai-jobs-ns`. Verify the data and project PVCs are bound and pick a writable output subdirectory of `/mnt/projects`. The rendered Job uses the cluster-managed GitLab deploy Secret and internal MLflow tracking. Supply no credentials in overrides or manifests.
 - Use a published Git commit for `--source-commit`. An unpublished launcher can be rendered by pairing its committed SHA with `--overlay-base PUBLISHED_SHA`. The renderer embeds the committed runner and resource probe from the local SHA. Pass `--overlay-embedding-loader` with `--overlay-base` to also include the audited MLflow download helper when retrying from a published recipe that predates the fix. The training recipe and dependencies come from the published base. Verify the base has the desired recipe and data card. MLflow tags identify both commits.
 - Render and inspect the exact Job name, target, resource request, image, helper and recipe revisions, seed list, and output path. Obtain explicit approval after showing that scope before every cluster submission, including retry or diagnostic Jobs.
+
+## Choose the GPU and concurrency
+
+1. Open the [GPU memory reference](../../../scripts/ml/training_batch_memory.md) for the frozen-embedding recipe. It has typical and planning GiB for L1–L5 mean/max plus linear or MLP, gated attention with either head, and both ABMIL presets. The checked-in estimator supports the recorded L2–L5 masks, actual train and evaluation batch sizes, training tile caps, and enabled stages.
+2. Use the **planning** value. Sum the budgets for the fits running at the same time and keep the total within 80% of the actual visible VRAM. Treat the calculated ceiling as a screening limit. Use the measured concurrency for a matching recipe and device. The L2 cancer-mask-5 ABMIL mean pilot ran two fits together on an A100 MIG device with 9.50 GiB visible and peaked at 2.45 GiB combined. For an unprofiled recipe and device, start with one fit, then measure two together if the planning budget allows it.
+3. Check CPU, host RAM, and scratch separately. Use the number of active fits for those calculations. More queued seeds extend the Job without increasing the number of live GPU processes.
+4. Provide one `--experiment` and its `--seeds` to the Job renderer. Use `--max-parallel` for the live process limit. For different commands or another trainer, pass a trusted JSON spec to the generic runner in an existing one-device allocation.
 
 ## Render a seed batch locally
 
@@ -33,7 +40,7 @@ uv run --no-sync python -m scripts.ml.render_training_batch_job \
 
 `--override` accepts single Hydra configuration overrides. Use absolute paths for dataset or checkpoint inputs. The renderer sets the seed, CUDA accelerator and device count, per-run paths, MLflow identity, and tracking provenance. The example runs validation only. The experiment controls its usual evaluation behavior when `test_after_fit` is omitted.
 
-Size `--scratch-size` for pinned train and validation artifact bytes times active fits, plus the checkout, dependencies, and working-space margin. `--ephemeral-storage` reserves and caps local disk for the pod. Leave room above the scratch limit for container logs and writes. The cancer-mask-5 L2 train and validation files total about 132.25 GiB per fit. Under this recipe a 128 GiB `emptyDir` caused eviction before the first fit completed.
+Size `--scratch-size` for pinned artifact bytes of all enabled splits per active fit, plus the checkout, dependencies, and working-space margin. Include test when `test_after_fit` is enabled. `--ephemeral-storage` reserves and caps local disk for the pod. Leave room above the scratch limit for container logs and writes. The cancer-mask-5 L2 train and validation files total about 132.25 GiB per fit. Under this recipe a 128 GiB `emptyDir` caused eviction before the first fit completed.
 
 The renderer performs only local actions. Check `spec.template.spec.containers[0].resources` for exactly one NVIDIA resource. The Job metadata pins the target context and source commit. The bootstrap arguments include the literal seed commands. The Kubernetes escaping `$$` is decoded when the pod starts.
 
