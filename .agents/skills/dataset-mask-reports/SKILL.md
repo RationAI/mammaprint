@@ -42,3 +42,29 @@ For a local report use `--report "$html" --report-manifest "$manifest" --report-
 Check `gallery_slides`, `slides_with_masks`, `layers_by_type`, and `missing_masks` in the preview receipt and inspect the per-slide reasons in the layer manifest. Open both links for a representative slide in xOpat. Toggle each layer and check known tissue landmarks at two zooms. Verify the prediction and original shaders. For a missing layer, confirm the recorded source and artifact mount, TIFF readability and registration, and the saved tiling or filter provenance. Obtain approval for the specific published report path and both hashes before overwriting it. Apply using one writer per artifact. A verified receipt records the backup and read-back hash. Keep the receipt and TIFFs used by any published report. Obtain separate explicit approval for every cluster submission.
 
 To restore, use the same target with `--rollback "$receipt_artifact"`, preview the restore, and repeat with `--apply` after approval. For a local restore only the HTML target and receipt are needed. Re-download the restored published HTML and compare its digest with the receipt. An unexpected current hash means a later edit needs reconciliation before restoring.
+
+## Preview from protected cluster mounts
+
+When the local host cannot read the original slides, render a candidate job with `scripts/ml/render_dataset_mask_preview_job.py`. Use the original published report SHA-256 downloaded directly from exact run and path. Repeat `--run` for the reviewed scope.
+
+```bash
+python -m scripts.ml.render_dataset_mask_preview_job \
+  --context kubas-cluster --namespace rationai-jobs-ns \
+  --job-name "$job_name" --experiment-id "$experiment_id" \
+  --run "$explanation_run_id:$original_sha" --output "$job_manifest"
+```
+
+The renderer packages the current source for the preview worker. The preview renderer pins the same internal S3-backed MLflow service used by the original report jobs, `http://mlflow-s3.rationai-mlflow`. The namespace's default MLflow ConfigMap points at a different backend and will return `RESOURCE_DOES_NOT_EXIST` for these reports. Inspect the target, run IDs and original hashes, mounts, CPU and memory requests, and manifest and payload digests. The renderer makes no cluster request. Once the user explicitly approves the exact submission, confirm the local context, check that the named job does not exist in the target namespace, and create the reviewed manifest once.
+
+```bash
+kubectl --context kubas-cluster --namespace rationai-jobs-ns \
+  get job "$job_name" --ignore-not-found
+kubectl --context kubas-cluster --namespace rationai-jobs-ns \
+  create -f "$job_manifest"
+kubectl --context kubas-cluster --namespace rationai-jobs-ns \
+  logs -f "job/$job_name"
+```
+
+The worker runs `scripts/ml/prepare_dataset_mask_previews.py` with managed MLflow credentials and the original slide and mask mounts read-only. It checks the original HTML before and after preparation, publishes only new files under `report_backfills/dataset_masks/previews/$job_name`, and reads them back to verify their hashes. Each successful run stages `layers.json`, `preview.html`, `receipt.json`, and any converted TIFFs under `dataset-mask-assets/`. Keep the staged TIFFs for as long as a published overlay references them. Use the MLflow artifact listing and the receipt to reconcile every selected run before review. If the run failed, inspect the job status and its per-run diagnostics before asking for approval for another submission. The job neither applies nor rolls back a published report. Follow the normal apply flow with the staged layer manifest and approved original and updated hashes.
+
+Verify the renderer and staging behavior locally with `python -m unittest tests.test_render_dataset_mask_preview_job tests.test_prepare_dataset_mask_previews`.
