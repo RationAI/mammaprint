@@ -29,6 +29,7 @@ OVERLAY_PATHS = (
     "scripts/ml/run_training_batch.py",
     "scripts/ml/training_batch_resources.py",
 )
+EMBEDDING_LOADER_PATH = "ml/data/datasets/_sources.py"
 ANNOTATION = "mammaprint.rationai.org/"
 TAGS = ("batch", "run", "attempt", "execution")
 OWNED_KEYS = (
@@ -160,9 +161,16 @@ def seed_spec(args: argparse.Namespace) -> BatchSpec:
     )
 
 
-def committed_overlay(base: str, source: str) -> str:
+def committed_overlay(
+    base: str, source: str, *, include_embedding_loader: bool = False
+) -> str:
     subprocess.run(
         ["git", "merge-base", "--is-ancestor", base, source], cwd=ROOT, check=True
+    )
+    paths = (
+        (*OVERLAY_PATHS, EMBEDDING_LOADER_PATH)
+        if include_embedding_loader
+        else OVERLAY_PATHS
     )
     patch = subprocess.check_output(
         [
@@ -173,12 +181,12 @@ def committed_overlay(base: str, source: str) -> str:
             base,
             source,
             "--",
-            *OVERLAY_PATHS,
+            *paths,
         ],
         cwd=ROOT,
     )
     if not patch:
-        raise ValueError("The source and overlay base contain no launcher changes")
+        raise ValueError("The source and overlay base contain no selected changes")
     return base64.b64encode(gzip.compress(patch, mtime=0)).decode("ascii")
 
 
@@ -190,6 +198,8 @@ def secret(name: str, key: str) -> dict[str, Any]:
 
 
 def render_job(args: argparse.Namespace) -> dict[str, Any]:
+    if args.overlay_embedding_loader and not args.overlay_base:
+        raise ValueError("--overlay-embedding-loader requires --overlay-base")
     spec = seed_spec(args)
     gpu = resolve_gpu(args.gpu)
     mounts, volumes = resolve_storage([storage.secure.DATA, storage.secure.PROJECTS])
@@ -201,7 +211,13 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
     overlay = ""
     if args.overlay_base:
         annotations[ANNOTATION + "overlay-base"] = args.overlay_base
-        overlay = committed_overlay(args.overlay_base, args.source_commit)
+        overlay = committed_overlay(
+            args.overlay_base,
+            args.source_commit,
+            include_embedding_loader=args.overlay_embedding_loader,
+        )
+        if args.overlay_embedding_loader:
+            annotations[ANNOTATION + "overlay-embedding-loader"] = "true"
 
     worker_args = [
         BOOTSTRAP,
@@ -340,6 +356,11 @@ def main(argv: list[str] | None = None) -> None:
         "--overlay-base",
         type=git_sha,
         help="Published training recipe with a local launcher overlay",
+    )
+    parser.add_argument(
+        "--overlay-embedding-loader",
+        action="store_true",
+        help="Include committed MLflow download helper changes with the overlay",
     )
     parser.add_argument("--image", required=True)
     parser.add_argument("--gpu", required=True, choices=get_args(JobGPUType.__value__))

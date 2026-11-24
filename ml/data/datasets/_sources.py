@@ -22,11 +22,10 @@ import pandas as pd
 from mlflow.artifacts import (
     download_artifacts as _download_artifacts,
 )
-from mlflow.artifacts import (
-    list_artifacts as _list_artifacts,
-)
 from mlflow.entities import FileInfo
 from mlflow.exceptions import MlflowException
+from mlflow.store.artifact.artifact_repo import ArtifactRepository
+from mlflow.store.artifact.artifact_repository_registry import get_artifact_repository
 from mlflow.tracking.artifact_utils import _get_root_uri_and_artifact_path
 from mlflow.utils.uri import append_to_uri_path
 
@@ -39,14 +38,14 @@ MLFLOW_DOWNLOAD_MAX_RETRIES = 3
 MLFLOW_DOWNLOAD_INITIAL_BACKOFF_SECONDS = 1.0
 
 
-def _artifact_files(root_uri: str, artifact_path: str) -> list[FileInfo]:
+def _artifact_files(
+    repository: ArtifactRepository, artifact_path: str
+) -> list[FileInfo]:
     """Return every file below an artifact directory using metadata only."""
     files: list[FileInfo] = []
     pending = [artifact_path]
     while pending:
-        current_path = pending.pop()
-        current_uri = append_to_uri_path(root_uri, current_path)
-        for item in _list_artifacts(artifact_uri=current_uri):
+        for item in repository.list_artifacts(pending.pop()):
             if item.is_dir:
                 pending.append(item.path)
             else:
@@ -54,8 +53,7 @@ def _artifact_files(root_uri: str, artifact_path: str) -> list[FileInfo]:
     return files
 
 
-def _is_complete_download(file_info: FileInfo, destination: Path) -> bool:
-    local_path = destination / file_info.path
+def _is_complete_download(file_info: FileInfo, local_path: Path) -> bool:
     if not local_path.is_file():
         return False
     return (
@@ -68,7 +66,8 @@ def _download_incomplete_artifacts(
     artifact_path: str,
     destination: Path,
 ) -> Path:
-    remote_files = _artifact_files(root_uri, artifact_path)
+    repository = get_artifact_repository(root_uri)
+    remote_files = _artifact_files(repository, artifact_path)
     if not remote_files:
         # The URI may point to a single file rather than a directory.
         uri = append_to_uri_path(root_uri, artifact_path)
@@ -77,7 +76,7 @@ def _download_incomplete_artifacts(
     incomplete = [
         file_info
         for file_info in remote_files
-        if not _is_complete_download(file_info, destination)
+        if not _is_complete_download(file_info, destination / file_info.path)
     ]
     logger.info(
         "Retrying %d incomplete MLflow artifact(s); keeping %d already downloaded.",
@@ -85,8 +84,19 @@ def _download_incomplete_artifacts(
         len(remote_files) - len(incomplete),
     )
     for file_info in incomplete:
-        file_uri = append_to_uri_path(root_uri, file_info.path)
-        _download_artifacts(artifact_uri=file_uri, dst_path=str(destination))
+        # Keep the original root and path. Reparsing a file URI drops the
+        # directory prefix used by the initial directory download.
+        with tempfile.TemporaryDirectory(dir=destination) as staging:
+            downloaded = Path(
+                repository.download_artifacts(file_info.path, dst_path=staging)
+            )
+            if not _is_complete_download(file_info, downloaded):
+                raise MlflowException(
+                    f"Incomplete MLflow artifact after retry: {file_info.path}"
+                )
+            local_path = destination / file_info.path
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            downloaded.replace(local_path)
 
     return destination / artifact_path
 

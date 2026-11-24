@@ -126,6 +126,37 @@ def test_reserves_local_storage_independently_of_the_scratch_volume(capsys):
     assert result.value.code == 2
 
 
+def test_overlay_embedding_loader_requires_pinned_base():
+    with pytest.raises(SystemExit) as result:
+        renderer.main(arguments("--overlay-embedding-loader"))
+    assert result.value.code == 2
+
+
+def test_overlay_embedding_loader_is_explicit(monkeypatch, capsys):
+    command = []
+    monkeypatch.setattr(renderer.subprocess, "run", lambda *_args, **_kwargs: None)
+
+    def diff(args, **_kwargs):
+        command[:] = args
+        return b"committed source patch"
+
+    monkeypatch.setattr(renderer.subprocess, "check_output", diff)
+    args = arguments("--overlay-base", "a" * 40)
+    renderer.main(args)
+    capsys.readouterr()
+    assert renderer.EMBEDDING_LOADER_PATH not in command
+
+    renderer.main([*args, "--overlay-embedding-loader"])
+    rendered = json.loads(capsys.readouterr().out)
+    assert renderer.EMBEDDING_LOADER_PATH in command
+    assert (
+        rendered["metadata"]["annotations"][
+            renderer.ANNOTATION + "overlay-embedding-loader"
+        ]
+        == "true"
+    )
+
+
 @pytest.mark.parametrize(
     "override",
     [
