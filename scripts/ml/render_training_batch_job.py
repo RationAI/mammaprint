@@ -16,6 +16,7 @@ from kube_jobs.constants import HTTPS_PROXY, NO_PROXY, TTL_SECONDS_AFTER_FINISHE
 from kube_jobs.resolve_gpu import JobGPUType, resolve_gpu
 from kube_jobs.resolve_storage import resolve_storage
 from kubernetes import client
+from kubernetes.utils.quantity import parse_quantity
 
 from scripts.ml.run_training_batch import BatchSpec, identifier, validate_spec
 
@@ -219,6 +220,19 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     resources = {"cpu": args.cpu, "memory": args.memory, **gpu.limits}
+    if args.ephemeral_storage is not None:
+        scratch_size = parse_quantity(args.scratch_size)
+        ephemeral_storage = parse_quantity(args.ephemeral_storage)
+        if (
+            not scratch_size.is_finite()
+            or not ephemeral_storage.is_finite()
+            or scratch_size <= 0
+            or ephemeral_storage < scratch_size
+        ):
+            raise ValueError(
+                "Ephemeral storage must cover the positive scratch volume size"
+            )
+        resources["ephemeral-storage"] = args.ephemeral_storage
     environment = {
         "MLFLOW_TRACKING_URI": "http://mlflow-s3.rationai-mlflow",
         "MLFLOW_TRACKING_USERNAME": args.username,
@@ -333,6 +347,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--memory", required=True)
     parser.add_argument("--shm", required=True)
     parser.add_argument("--scratch-size", default="128Gi")
+    parser.add_argument("--ephemeral-storage", help="Pod local disk request and limit")
     parser.add_argument("--output-root", required=True, type=projects_path)
     parser.add_argument("--username", default="kissmi")
     parser.add_argument("--experiment", required=True)

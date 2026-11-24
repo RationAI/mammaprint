@@ -110,6 +110,22 @@ def test_renders_full_gpu_resource(capsys):
     assert json.loads(unescape(container["args"][3]))["max_parallel"] == 1
 
 
+def test_reserves_local_storage_independently_of_the_scratch_volume(capsys):
+    renderer.main(arguments("--scratch-size", "320Gi", "--ephemeral-storage", "336Gi"))
+    pod = json.loads(capsys.readouterr().out)["spec"]["template"]["spec"]
+    (container,) = pod["containers"]
+    resources = container["resources"]
+    assert resources["requests"]["ephemeral-storage"] == "336Gi"
+    assert resources["limits"]["ephemeral-storage"] == "336Gi"
+    scratch = next(volume for volume in pod["volumes"] if volume["name"] == "scratch")
+    assert scratch["emptyDir"]["sizeLimit"] == "320Gi"
+    with pytest.raises(SystemExit) as result:
+        renderer.main(
+            arguments("--scratch-size", "320Gi", "--ephemeral-storage", "256Gi")
+        )
+    assert result.value.code == 2
+
+
 @pytest.mark.parametrize(
     "override",
     [

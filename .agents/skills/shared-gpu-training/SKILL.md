@@ -21,7 +21,8 @@ uv run --no-sync python -m scripts.ml.render_training_batch_job \
   --context "$TRAIN_CONTEXT" --namespace "$TRAIN_NAMESPACE" \
   --job-name "$TRAIN_JOB" --batch-id "$TRAIN_BATCH" \
   --source-commit "$TRAIN_SOURCE_COMMIT" --image cerit.io/rationai/base:2.0.6 \
-  --gpu mig-1g.10gb --cpu 16 --memory 48Gi --shm 8Gi --scratch-size 128Gi \
+  --gpu mig-1g.10gb --cpu 16 --memory 48Gi --shm 8Gi --scratch-size 320Gi \
+  --ephemeral-storage 336Gi \
   --threads-per-fit 2 --active-deadline-seconds 21600 \
   --output-root /mnt/projects/mammaprint/training-batches \
   --experiment ml/train_mil_embeddings_abmil_mean_regression \
@@ -31,6 +32,8 @@ uv run --no-sync python -m scripts.ml.render_training_batch_job \
 ```
 
 `--override` accepts single Hydra configuration overrides. Use absolute paths for dataset or checkpoint inputs. The renderer sets the seed, CUDA accelerator and device count, per-run paths, MLflow identity, and tracking provenance. The example runs validation only. The experiment controls its usual evaluation behavior when `test_after_fit` is omitted.
+
+Size `--scratch-size` for pinned train and validation artifact bytes times active fits, plus the checkout, dependencies, and working-space margin. `--ephemeral-storage` reserves and caps local disk for the pod. Leave room above the scratch limit for container logs and writes. The cancer-mask-5 L2 train and validation files total about 132.25 GiB per fit. Under this recipe a 128 GiB `emptyDir` caused eviction before the first fit completed.
 
 The renderer performs only local actions. Check `spec.template.spec.containers[0].resources` for exactly one NVIDIA resource. The Job metadata pins the target context and source commit. The bootstrap arguments include the literal seed commands. The Kubernetes escaping `$$` is decoded when the pod starts.
 
