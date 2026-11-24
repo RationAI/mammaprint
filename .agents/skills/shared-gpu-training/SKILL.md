@@ -44,6 +44,15 @@ For a pilot, run the same seeds, recipe, epoch cap and host resources with concu
 
 Check MLflow for `training_batch_id`, `training_run_id`, `training_attempt_id`, `training_execution_id`, `training_source_commit`, and `training_recipe_commit`. Success includes distinct completed MLflow runs with expected validation metrics and checkpoints. Inspect per-fit logs for source-download times. Remote embedding loading downloads a copy per fit, so disk, host memory, or I/O can dominate. Filesystem free space is a scratch-pressure signal from the underlying filesystem, and `resources.jsonl` identifies samples where host counters were unavailable.
 
+If NVML reports a permission error on a `GPU-` UUID while CUDA shows a MIG profile, check `nvidia-smi -L` in the running pod. Some CUDA builds identify the parent GPU. The sampler uses an explicit MIG UUID or the unique visible MIG child of that parent. An ambiguous listing leaves memory headroom unknown. To sample an already-running pod with the current resource helper, stream the script to a read-only process using its existing CUDA probe. Stop the sampler with Ctrl-C or when the pod exits.
+
+```bash
+kubectl --context "$TRAIN_CONTEXT" --namespace "$TRAIN_NAMESPACE" \
+  exec -i job/"$TRAIN_JOB" -- /training-scratch/repo/.venv/bin/python -u - \
+  --sample-memory /training-scratch/gpu.json \
+  < scripts/ml/training_batch_resources.py
+```
+
 ## Recover or clean up
 
 - `failed` means the process failed or could not start. Inspect the error field and console log. If all children fail at startup, inspect the pod logs for clone, environment, GPU probe, and mount errors. If the Job is pending, check events for insufficient `nvidia.com/mig-1g.10gb`, CPU, or RAM.

@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -210,6 +211,51 @@ def test_resource_summary_reports_mig_sampling_errors(tmp_path, monkeypatch):
     summary = sampler.summary()
     assert summary["samples"] == 1 and summary["cuda_samples"] == 0
     assert summary["cuda_error"] == "NVML test error"
+
+
+def test_resource_sampler_resolves_mig_under_the_cuda_parent(monkeypatch):
+    raw_uuid = "00000000-0000-0000-0000-000000000001"
+    mig_uuid = "MIG-00000000-0000-0000-0000-000000000002"
+    other_parent = "GPU-00000000-0000-0000-0000-000000000003"
+    other_mig = "MIG-00000000-0000-0000-0000-000000000004"
+    listing = (
+        f"GPU 0: NVIDIA A100 80GB PCIe (UUID: GPU-{raw_uuid})\n"
+        f"  MIG 1g.10gb     Device  0: (UUID: {mig_uuid})\n"
+        f"GPU 1: NVIDIA A100 80GB PCIe (UUID: {other_parent})\n"
+        f"  MIG 1g.10gb     Device  0: (UUID: {other_mig})\n"
+    )
+    monkeypatch.setattr(subprocess, "check_output", lambda *_args, **_kwargs: listing)
+    requested = []
+
+    def get_handle(uuid, _handle):
+        requested.append(uuid.decode())
+        return 0 if uuid.decode() in (f"GPU-{raw_uuid}", mig_uuid) else 6
+
+    library = SimpleNamespace(
+        nvmlInit_v2=lambda: 0,
+        nvmlDeviceGetHandleByUUID=get_handle,
+        nvmlShutdown=lambda: 0,
+    )
+    monkeypatch.setattr(resources.ctypes, "CDLL", lambda _name: library)
+    info = {
+        "cuda_uuid": raw_uuid,
+        "cuda_visible_devices": "",
+        "nvidia_visible_devices": "void",
+        "name": "NVIDIA A100 80GB PCIe MIG 1g.10gb",
+    }
+    device = resources.DeviceMemory(info)
+    assert device.uuid == mig_uuid
+    assert requested == [f"MIG-{raw_uuid}", mig_uuid]
+
+
+def test_mig_child_requires_a_unique_match_on_the_cuda_parent():
+    parent = "GPU-00000000-0000-0000-0000-000000000001"
+    listing = (
+        f"GPU 0: NVIDIA A100 80GB PCIe (UUID: {parent})\n"
+        "  MIG 1g.10gb Device 0: (UUID: MIG-first)\n"
+        "  MIG 1g.10gb Device 1: (UUID: MIG-second)\n"
+    )
+    assert resources.mig_child_uuid(listing, parent) is None
 
 
 def test_term_stops_queue_and_kills_a_stubborn_grandchild(tmp_path):

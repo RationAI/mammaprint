@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,22 +38,39 @@ def device_uuids(info: dict[str, object]) -> list[str]:
     visible = [
         str(info[key]) for key in ("cuda_visible_devices", "nvidia_visible_devices")
     ]
-    # Prefer the exact CUDA UUID. It can be unprefixed or reported as GPU- by CUDA
-    # even when NVML calls the same UUID a MIG instance.
+    # An explicit MIG assignment identifies the instance even when CUDA reports
+    # the parent GPU's UUID on a MIG-enabled device.
+    explicit = [
+        value for value in visible if value.startswith("MIG-") and "," not in value
+    ]
     match = re.fullmatch(r"(?:GPU-|MIG-)?([0-9a-f]{8}(?:-[0-9a-f]+){4})", uuid, re.I)
     if match:
         prefixes = (
             ("MIG-", "GPU-")
-            if "MIG" in str(info["name"])
-            or any(value.startswith("MIG-") for value in visible)
+            if "MIG" in str(info["name"]) or explicit
             else ("GPU-", "MIG-")
         )
-        return [prefix + match[1] for prefix in prefixes]
+        return list(
+            dict.fromkeys([*explicit, *(prefix + match[1] for prefix in prefixes)])
+        )
     return [
         value
         for value in visible
         if value.startswith(("MIG-", "GPU-")) and "," not in value
     ]
+
+
+def mig_child_uuid(listing: str, parent_uuid: str) -> str | None:
+    children = []
+    under_parent = False
+    for line in listing.splitlines():
+        if line.startswith("GPU "):
+            under_parent = line.rstrip().endswith(f"(UUID: {parent_uuid})")
+        elif under_parent and line.lstrip().startswith("MIG "):
+            match = re.search(r"\(UUID: (MIG-[^()\s]+)\)\s*$", line)
+            if match:
+                children.append(match[1])
+    return children[0] if len(children) == 1 else None
 
 
 class DeviceMemory:
@@ -62,17 +80,38 @@ class DeviceMemory:
         self.uuid = ""
         if self.library.nvmlInit_v2() != 0:
             raise RuntimeError("NVML initialization failed")
-        for uuid in device_uuids(info):
-            if (
-                self.library.nvmlDeviceGetHandleByUUID(
-                    uuid.encode(), ctypes.byref(self.handle)
-                )
-                == 0
-            ):
-                self.uuid = uuid
-                return
-        self.close()
-        raise RuntimeError("NVML could not address the allocated CUDA device by UUID")
+        candidates = device_uuids(info)
+        mig = "MIG" in str(info["name"]) or any(
+            str(info[key]).startswith("MIG-")
+            for key in ("cuda_visible_devices", "nvidia_visible_devices")
+        )
+        try:
+            for candidate in candidates:
+                uuid = candidate
+                if mig and candidate.startswith("GPU-"):
+                    listing = subprocess.check_output(
+                        ["nvidia-smi", "-L"],
+                        text=True,
+                        timeout=5,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    uuid = mig_child_uuid(listing, candidate)
+                    if uuid is None:
+                        continue
+                if (
+                    self.library.nvmlDeviceGetHandleByUUID(
+                        uuid.encode(), ctypes.byref(self.handle)
+                    )
+                    == 0
+                ):
+                    self.uuid = uuid
+                    return
+            raise RuntimeError(
+                "NVML could not address the allocated CUDA device by UUID"
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            self.close()
+            raise RuntimeError(str(error)) from error
 
     def read(self) -> MemoryInfo:
         info = MemoryInfo()
@@ -209,6 +248,28 @@ class ResourceSampler:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--probe", action="store_true", required=True)
-    parser.parse_args()
-    print(json.dumps(probe_cuda()))
+    operation = parser.add_mutually_exclusive_group(required=True)
+    operation.add_argument("--probe", action="store_true")
+    operation.add_argument(
+        "--sample-memory", type=Path, help="CUDA probe JSON from a running batch"
+    )
+    args = parser.parse_args()
+    if args.probe:
+        print(json.dumps(probe_cuda()))
+    else:
+        device = DeviceMemory(
+            json.loads(args.sample_memory.read_text(encoding="utf-8"))
+        )
+        try:
+            while True:
+                memory = device.read()
+                sample = {
+                    "at": datetime.now(UTC).isoformat(),
+                    "uuid": device.uuid,
+                    "used_bytes": memory.used,
+                    "total_bytes": memory.total,
+                }
+                print(json.dumps(sample), flush=True)
+                time.sleep(2.0)
+        finally:
+            device.close()
