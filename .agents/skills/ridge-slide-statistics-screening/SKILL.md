@@ -15,6 +15,26 @@ Set absolute `cache_dir`, `sanity_dir`, `screen_dir`, `lock_dir`, and `historica
 
 The `historical_reference` JSON pins `source_uri`, `train_uri`, `val_uri`, actual eligible `train_slides` and `val_slides`, and `transform` (`raw` or `ln`). In `runs`, record each `run_id`, `seed`, `code_revision`, `config`, `checkpoint`, `checkpoint_selection`, `f1`, and `mae`. Supply the verified scalar linear head and matching archived validation predictions in `parity` as `weights`, `intercept`, and `predictions` keyed by slide ID. Use `resolution` only to document an investigated performance gap after prediction parity passes. Freeze the reference before scoring ridge.
 
+## Build the historical reference
+
+Use the repository's `scripts/ml/build_ridge_historical_reference.py` against the completed cache. It checks the original resolved configs, split filenames and sizes, the development cache and coverage digests, and minimum-loss checkpoint metadata. It recomputes validation metrics from cached raw means and compares five original validation bags to cached predictions. The verifier accesses development labels and validation bags only.
+
+Use an approved environment with access to the projects volume and MLflow. Use `MLFLOW_TRACKING_URI` and existing credentials from that environment. For read-only checking through an existing approved pod, confirm the cluster, namespace, pod ownership, and mount paths. Save the reference privately on the workstation with `--output -` and a restricted file mode.
+
+```bash
+umask 077
+kubectl --context "$RIDGE_CONTEXT" --namespace "$RIDGE_NAMESPACE" \
+  exec -i "$RIDGE_POD" -c "$RIDGE_CONTAINER" -- "$RIDGE_PYTHON" - \
+  --cache /mnt/projects/mammaprint/ridge-screening/ridge-screening/cache \
+  --data-mapping /mnt/projects/mammaprint/data_mapping.csv --scratch /scratch \
+  --run-id a32bb927706b41afa70d17c4fcaa8573 \
+  --run-id ef2eff36d88b4325b14f0acf67a681d0 \
+  --run-id e664b64394974080b541e985a7fe5965 --output - \
+  < scripts/ml/build_ridge_historical_reference.py > historical_reference.partial.json
+```
+
+Check the command exit status and JSON before renaming the partial file. At least one checkpoint must reproduce its logged validation metrics and pass the raw-bag probes. An epoch-zero archive with a different logged best step is excluded and recorded. Investigate split byte-size or cache-coverage mismatches before using the reference. Keep the JSON outside Git because it contains slide identifiers and predictions. Point `historical_reference` at its protected location in the sanity worker. Remove incomplete private copies after a recoverable failure.
+
 ## Verify locally and render the job
 
 Use synthetic embedding Parquets and a synthetic mapping for local checks. The cache dry-run resolves configured inventory and the screen dry-run shows planned contrasts. Keep the fixture output separate from real artifacts.
