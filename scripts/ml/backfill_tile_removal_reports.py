@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 
 _RECEIPT_VERSION = 1
+_TILE_REMOVAL = "targeted_tile_removal"
 
 
 class ReportStore(Protocol):
@@ -210,9 +211,9 @@ def _check_readback(store: ReportStore, artifact: str, data: bytes) -> None:
         raise RuntimeError(f"Read-back verification failed for {artifact}.")
 
 
-def _archive_root(store: ReportStore, updated_sha256: str) -> str:
+def _archive_root(store: ReportStore, updated_sha256: str, kind: str) -> str:
     target_id = sha256(store.target.encode())[:16]
-    return f"report_backfills/targeted_tile_removal/{target_id}/{updated_sha256}"
+    return f"report_backfills/{kind}/{target_id}/{updated_sha256}"
 
 
 def _recover_verified_receipt(
@@ -221,8 +222,9 @@ def _recover_verified_receipt(
     expected: dict[str, Any],
     *,
     apply: bool,
+    kind: str,
 ) -> dict[str, Any]:
-    archive = _archive_root(store, expected["updated_sha256"])
+    archive = _archive_root(store, expected["updated_sha256"], kind)
     for folder in sorted(store.list(archive), reverse=True):
         journal = f"{folder}/receipt.json"
         if journal not in store.list(folder):
@@ -264,12 +266,16 @@ def _recover_verified_receipt(
 
 
 def _apply_update(
-    store: ReportStore, original: bytes, update: bytes, receipt: dict[str, Any]
+    store: ReportStore,
+    original: bytes,
+    update: bytes,
+    receipt: dict[str, Any],
+    kind: str,
 ) -> dict[str, Any]:
     if store.read(store.artifact) != original:
         raise ValueError("The report changed after preview. Run the preview again.")
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    archive = _archive_root(store, receipt["updated_sha256"])
+    archive = _archive_root(store, receipt["updated_sha256"], kind)
     archive += f"/{stamp}-{receipt['original_sha256'][:12]}"
     backup = f"{archive}/original.html"
     journal = f"{archive}/receipt.json"
@@ -340,6 +346,31 @@ def backfill_report(
     }
     if review_findings is not None:
         receipt["review_findings_sha256"] = sha256(review_findings.encode("utf-8"))
+    return finish_report_update(
+        store,
+        original,
+        update,
+        receipt,
+        kind=_TILE_REMOVAL,
+        preview=preview,
+        apply=apply,
+        expected_original=expected_original,
+        expected_updated=expected_updated,
+    )
+
+
+def finish_report_update(
+    store: ReportStore,
+    original: bytes,
+    update: bytes,
+    receipt: dict[str, Any],
+    *,
+    kind: str,
+    preview: Path | None,
+    apply: bool,
+    expected_original: str | None,
+    expected_updated: str | None,
+) -> dict[str, Any]:
     if preview is not None:
         with os.fdopen(
             os.open(preview, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "wb"
@@ -355,7 +386,9 @@ def backfill_report(
         with (
             store.lock() if apply and isinstance(store, LocalReport) else nullcontext()
         ):
-            return _recover_verified_receipt(store, original, receipt, apply=apply)
+            return _recover_verified_receipt(
+                store, original, receipt, apply=apply, kind=kind
+            )
     if not apply:
         return {**receipt, "status": "preview"}
     if (
@@ -365,17 +398,21 @@ def backfill_report(
         raise ValueError("The original report differs from the approved preview.")
 
     with store.lock() if isinstance(store, LocalReport) else nullcontext():
-        return _apply_update(store, original, update, receipt)
+        return _apply_update(store, original, update, receipt, kind)
 
 
 def rollback_report(
-    store: ReportStore, receipt_artifact: str, *, apply: bool = False
+    store: ReportStore,
+    receipt_artifact: str,
+    *,
+    apply: bool = False,
+    kind: str = _TILE_REMOVAL,
 ) -> dict[str, Any]:
     path = _artifact(receipt_artifact)
     receipt = json.loads(store.read(receipt_artifact))
     expected_backup = (path.parent / "original.html").as_posix()
     if (
-        not path.is_relative_to("report_backfills/targeted_tile_removal")
+        not path.is_relative_to(f"report_backfills/{kind}")
         or path.name != "receipt.json"
         or receipt.get("version") != _RECEIPT_VERSION
         or receipt.get("receipt_artifact") != receipt_artifact
