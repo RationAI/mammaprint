@@ -23,6 +23,7 @@ OVERLAY_PATHS = (
     "configs/data/embedded",
     "configs/sweeps/ridge_screening",
     "ml/ridge_experiment.py",
+    "ml/ridge_fit.py",
     "ml/ridge_report.py",
     "ml/ridge_screening.py",
     "preprocessing/slide_statistics.py",
