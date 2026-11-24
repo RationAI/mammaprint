@@ -21,7 +21,11 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from ml.data.datasets._sources import load_labeled_slides, split_uri
+from ml.data.datasets._sources import (
+    download_artifacts_with_retries,
+    load_labeled_slides,
+    split_uri,
+)
 from ml.data.datasets.labels import LabelMode, get_label
 from ml.typing import LevelSpec, MILSample, SlideMetadata
 
@@ -66,8 +70,6 @@ class RawTileSlideDataset(Dataset[MILSample]):
                 "RawTileSlideDataset is single-scale: pass exactly one level."
             )
 
-        from mlflow.artifacts import download_artifacts
-
         from ml.data.datasets import SlideDataset  # lazy: pulls OpenSlide
 
         self.label_mode = LabelMode(label_mode)
@@ -76,7 +78,7 @@ class RawTileSlideDataset(Dataset[MILSample]):
 
         (card,) = levels.values()
         uri = split_uri(dict(card), "raw_uris", split, 0)
-        local_dir = Path(download_artifacts(artifact_uri=uri))
+        local_dir = download_artifacts_with_retries(uri)
 
         transform = _normalize_transform()
         slide_dataset = SlideDataset(paths=[local_dir], transforms=transform)

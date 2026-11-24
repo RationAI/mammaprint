@@ -19,7 +19,6 @@ defaults:
       - binary_precision
       - binary_recall
       - binary_specificity
-      - binary_cohen_kappa
   - /trainer: default
   - /data: _template
   - optional /data/embedded: null

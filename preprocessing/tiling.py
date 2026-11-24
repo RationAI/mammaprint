@@ -63,7 +63,9 @@ def _ray_init_kwargs() -> dict[str, Any]:
     if memory_bytes:
         # Fraction of pod memory for the object store. The rest is left for Ray's heap and
         # the Python worker processes. Capped by /dev/shm at the pod level (see run_tiling.py).
-        kwargs["object_store_memory"] = int(float(memory_bytes) * RAY_OBJECT_STORE_FRACTION)
+        kwargs["object_store_memory"] = int(
+            float(memory_bytes) * RAY_OBJECT_STORE_FRACTION
+        )
 
     return kwargs
 
@@ -241,14 +243,23 @@ def log_drop_funnel(
     print(f"  survived tissue gate:                {n_tissue:,}")
     print("  independent drops (each gate alone; QC gates among tissue survivors):")
     for k in ("tissue", "blur", "folding", "residual"):
-        print(f"    {k:9} {independent[k]:>12,}  ({pct(independent[k]):5.2f}% of candidates)")
+        print(
+            f"    {k:9} {independent[k]:>12,}  ({pct(independent[k]):5.2f}% of candidates)"
+        )
     print("  sequential drops (pipeline order; mutually exclusive):")
     for k in ("tissue", "blur", "folding", "residual"):
-        print(f"    {k:9} {sequential[k]:>12,}  ({pct(sequential[k]):5.2f}% of candidates)")
-    print(f"  kept (survived all gates):           {kept_final:,}  ({pct(kept_final):5.2f}%)")
+        print(
+            f"    {k:9} {sequential[k]:>12,}  ({pct(sequential[k]):5.2f}% of candidates)"
+        )
+    print(
+        f"  kept (survived all gates):           {kept_final:,}  ({pct(kept_final):5.2f}%)"
+    )
 
-    metrics = {"diag_candidate_tiles": n_candidates, "diag_tissue_survivors": n_tissue,
-               "diag_kept_final": kept_final}
+    metrics = {
+        "diag_candidate_tiles": n_candidates,
+        "diag_tissue_survivors": n_tissue,
+        "diag_kept_final": kept_final,
+    }
     for k in ("tissue", "blur", "folding", "residual"):
         metrics[f"diag_independent_drop_{k}"] = independent[k]
         metrics[f"diag_sequential_drop_{k}"] = sequential[k]
@@ -333,11 +344,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         if config.dataset.mlflow_uris.tissue_masks is None
         else download_artifacts(config.dataset.mlflow_uris.tissue_masks)
     )
-    epithelium_masks_path = (
-        None
-        if config.dataset.mlflow_uris.epithelium_masks is None
-        else download_artifacts(config.dataset.mlflow_uris.epithelium_masks)
-    )
+    # Epithelium masks are generated into persistent project storage, so use them in
+    # place just like the QC masks rather than trying to download an MLflow artifact.
+    epithelium_masks_path = config.dataset.paths.get("epithelium_masks") or None
     cancer_masks_uri = config.dataset.mlflow_uris.get("cancer_masks")
     cancer_masks_path = (
         None if cancer_masks_uri is None else download_artifacts(cancer_masks_uri)
@@ -469,8 +478,9 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
         )
         tiles = tiles.filter(expr=col("residual_overlap") > config.residual_threshold)
 
-    # Epithelium is computed but NOT filtered here (that mask is not always populated; add a cutoff
-    # once it is, by desired tumor purity). Computed last so it only runs on the surviving tiles.
+    # Epithelium is computed last so it only runs on tissue/QC survivors. Discovery runs leave the
+    # threshold unset to preserve the complete score distribution; production runs can set a
+    # tile-level coverage cutoff once the desired epithelial purity has been selected.
     if epithelium_masks_path:
         print("[INFO] Computing overlap: epithelium_overlap from epithelium_mask_path")
         tiles = add_tile_overlap(
@@ -480,10 +490,19 @@ def main(config: DictConfig, logger: MLFlowLogger) -> None:
             "epithelium_overlap",
             keep="nonzero",
         )
+        epithelium_threshold = config.get("epithelium_threshold")
+        if epithelium_threshold is None:
+            print(
+                "[INFO] Epithelium threshold is unset; recording overlap without "
+                "filtering"
+            )
+        else:
+            print(f"[INFO] Filtering epithelium_overlap > {epithelium_threshold}")
+            tiles = tiles.filter(expr=col("epithelium_overlap") > epithelium_threshold)
     else:
         print(
             "[INFO] Skipping epithelium overlap: "
-            "dataset.mlflow_uris.epithelium_masks is not set"
+            "dataset.paths.epithelium_masks is not set"
         )
         tiles = tiles.with_column("epithelium_overlap", lit(float("nan")))
 

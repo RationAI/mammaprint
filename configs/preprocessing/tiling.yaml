@@ -11,6 +11,7 @@ tissue_threshold: ???
 blur_threshold: ???
 folding_threshold: ???
 residual_threshold: ???
+epithelium_threshold: ???
 cancer_threshold: ???
 
 diagnostics: false
@@ -24,7 +25,7 @@ metadata:
     * assigns tissue/epithelium/QC mask paths and computes overlap scores
     * keeps tiles with tissue in the centered 50% ROI
     * computes full-tile overlaps for epithelium, cancer, blur, folding, and residual masks
-    * filters tiles by the per-mask coverage thresholds
+    * optionally filters tiles by the per-mask coverage thresholds
     * saves slide and tile datasets via MLflow
   hyperparams:
     mpp: ${mpp}
@@ -35,4 +36,5 @@ metadata:
     blur_threshold: ${blur_threshold}
     folding_threshold: ${folding_threshold}
     residual_threshold: ${residual_threshold}
+    epithelium_threshold: ${epithelium_threshold}
     cancer_threshold: ${cancer_threshold}

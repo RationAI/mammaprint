@@ -10,8 +10,7 @@ SHM = "32Gi"
 
 USERNAME = "kissmi"
 GIT_BRANCH = "feat/tiling-values"
-EXPERIMENT = "preprocessing/tiling/cancer_mask/mou_3_224"
-DATA_NAME = "mou_3_224_cancer_probability_threshold_scan"
+EXPERIMENT = "preprocessing/tiling/threshold_scan/mou_3_224"
 
 # Ray's auto-detection is unreliable on this cluster (it over-detects CPUs from the node and
 # under-sizes the object store), so we hand it the pod's real numbers. tiling.py reads these
@@ -22,7 +21,7 @@ ray_env = [
 ]
 
 submit_job(
-    job_name="mammaprint-tiling-cancer-probability-l3-threshold-diagnostics",
+    job_name="mammaprint-tiling-all-masks-l3-threshold-scan",
     username=USERNAME,
     image="cerit.io/rationai/base:2.0.6",
     cpu=CPU,
@@ -37,11 +36,7 @@ submit_job(
         "export MLFLOW_TRACKING_URI=http://mlflow-s3.rationai-mlflow",
         *ray_env,
         "uv sync --frozen",
-        (
-            f"uv run -m preprocessing.tiling +experiment={EXPERIMENT} "
-            "cancer_threshold=null diagnostics=true "
-            f"data_name={DATA_NAME}"
-        ),
+        f"uv run -m preprocessing.tiling +experiment={EXPERIMENT}",
     ],
     storage=[storage.secure.DATA, storage.secure.PROJECTS],
 )

@@ -1,0 +1,16 @@
+# @package _global_
+# Full-cohort level-3 threshold-discovery run with every available mask attached.
+#
+# The established tissue/QC cutoffs remain active so the persisted dataset contains the same
+# production-eligible tile population. diagnostics=true additionally logs the tissue/QC drop
+# funnel before those filters are applied. Epithelium and cancer filtering stay disabled so their
+# complete score distributions on the surviving tiles can be inspected in the threshold notebook.
+defaults:
+  - /data/levels/l3@_global_
+  - /experiment/preprocessing/tiling/_thresholds
+  - _self_
+
+data_name: mou_3_224_all_masks_threshold_scan
+epithelium_threshold: null
+cancer_threshold: null
+diagnostics: true

@@ -9,6 +9,6 @@ defaults:
 name: l5_cancer_mask_9_embed
 uris:
   all: "mlflow-artifacts:/3/3bdfcabbdf884380b3ece1e0f37bf3b7/artifacts/embeddings"
-  train: "mlflow-artifacts:/3/<run_id>/artifacts/l5_cancer_mask_9_embed_train"
-  val: "mlflow-artifacts:/3/<run_id>/artifacts/l5_cancer_mask_9_embed_val"
-  test: "mlflow-artifacts:/3/<run_id>/artifacts/l5_cancer_mask_9_embed_test"
+  train: "mlflow-artifacts:/3/146e36cdab604071a47e25a2d2720b36/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/b4305a97ff34482b8210b31108c99f31/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/d89478ba8003457080794fe147b4f6f0/artifacts/embeddings_test"

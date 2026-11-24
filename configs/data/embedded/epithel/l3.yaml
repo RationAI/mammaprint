@@ -1,0 +1,13 @@
+# @package dataset.levels.3
+# Level-3 Virchow2 embeddings retained when epithelium overlap is greater than 0.25.
+# The whole dataset and all three predefined splits are stored in one MLflow run.
+defaults:
+  - /data/levels/l3@_here_
+  - _self_
+
+name: l3_epithel_025_embed
+uris:
+  all: "mlflow-artifacts:/3/7e30eeb156de459b8d666f0468e23ccc/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/7e30eeb156de459b8d666f0468e23ccc/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/7e30eeb156de459b8d666f0468e23ccc/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/7e30eeb156de459b8d666f0468e23ccc/artifacts/embeddings_test"
