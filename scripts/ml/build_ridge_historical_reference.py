@@ -447,6 +447,7 @@ def build(
             "val_records": len(groups["val"]),
             "train_val_record_overlap": len(groups["train"] & groups["val"]),
             "mapping_sha256": sha(mapping),
+            "development_stats_sha256": source["files"][f"stats/dev/{SOURCE}.parquet"],
         },
     }
 

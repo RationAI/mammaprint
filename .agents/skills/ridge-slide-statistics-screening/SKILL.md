@@ -35,6 +35,27 @@ kubectl --context "$RIDGE_CONTEXT" --namespace "$RIDGE_NAMESPACE" \
 
 Check the command exit status and JSON before renaming the partial file. At least one checkpoint must reproduce its logged validation metrics and pass the raw-bag probes. An epoch-zero archive with a different logged best step is excluded and recorded. Investigate split byte-size or cache-coverage mismatches before using the reference. Keep the JSON outside Git because it contains slide identifiers and predictions. Point `historical_reference` at its protected location in the sanity worker. Remove incomplete private copies after a recoverable failure.
 
+## Compare ridge with Adam on the historical split
+
+Use `scripts/ml/compare_ridge_historical_adam.py` to compare the archived Adam checkpoint, closed-form ridge, and Adam trained on the same ridge objective. First rebuild any older historical reference that lacks the verified development statistics checksum. Use the same read-only pod and private output directory as for the historical verifier. The export validates the cache and mapping, then copies only L2 cm5 raw means and train/validation records and labels. It does not open test feature files or export test targets.
+
+```bash
+umask 077
+kubectl --context "$RIDGE_CONTEXT" --namespace "$RIDGE_NAMESPACE" \
+  exec -i "$RIDGE_POD" -c "$RIDGE_CONTAINER" -- "$RIDGE_PYTHON" - export \
+  --cache /mnt/projects/mammaprint/ridge-screening/ridge-screening/cache \
+  --data-mapping /mnt/projects/mammaprint/data_mapping.csv \
+  < scripts/ml/compare_ridge_historical_adam.py > "$RIDGE_PRIVATE/development_raw_means.partial.npz"
+mv "$RIDGE_PRIVATE/development_raw_means.partial.npz" "$RIDGE_PRIVATE/development_raw_means.npz"
+
+uv run --frozen python -m scripts.ml.compare_ridge_historical_adam compare \
+  --reference "$RIDGE_PRIVATE/historical_reference.json" \
+  --bundle "$RIDGE_PRIVATE/development_raw_means.npz" \
+  > "$RIDGE_PRIVATE/adam_comparison.json"
+```
+
+Check the export exit status before renaming the partial file. The local comparison verifies split and checkpoint parity and reproduces the archived validation metrics. Ridge selects alpha by grouped CV within the original training split. Matched Adam takes 2,000 full-batch steps with zero initialization, cosine learning-rate decay from 0.01 to 0.00001, and the same alpha and unpenalized intercept as ridge. Compare the validation metrics and training objectives. Keep the NPZ private and delete incomplete copies after a recoverable failure.
+
 ## Verify locally and render the job
 
 Use synthetic embedding Parquets and a synthetic mapping for local checks. The cache dry-run resolves configured inventory and the screen dry-run shows planned contrasts. Keep the fixture output separate from real artifacts.
