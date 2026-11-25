@@ -21,6 +21,23 @@ uv run --frozen python -m scripts.preprocessing.run_l1_dataset_a40 \
 
 After explicit approval, add `--submit` to create the job. Inspect its pod logs for the MLflow run ID. Expect `selection/manifest.json`, `selection/frozen.tar.gz`, `embeddings/`, `complete/`, and `metadata/l1_inventory.json`. Inspect the attempt report and missing-slide inventory if the run fails. To resume, confirm the prior pod stopped, retain the source commit, pass the recorded `--run-id` with a distinct job name, and obtain approval for the new submission. The worker restores the exact frozen selection and uses completed upload receipts to skip saved slides. Duplicate concurrent writers to the same run are unsupported.
 
+## Publish the three cancer-gated L1 cards
+
+Use the existing mask filter in its L1 saved-score mode to publish the complete cancer `> 0.5` parent splits, cancer `> 0.9`, and epithelium `> 0.25` AND cancer `> 0.5`. It reads each source Parquet once, uses the frozen split assignments, and publishes to MLflow with pod-local scratch. Use the completed L1 run and a pinned local commit containing the publisher.
+
+```bash
+SOURCE_RUN=6d2c5bc4b2de4f2b9ef5987a163f2518
+CODE="$(git rev-parse HEAD)"
+uv run --frozen python -m scripts.preprocessing.run_filter_embeddings \
+  --level 1 --l1-source-run-id "$SOURCE_RUN" --source-commit "$CODE" \
+  --context kubas-cluster --namespace rationai-jobs-ns \
+  --job-name mammaprint-l1-publish-cancer-splits > l1-publication-job.json
+```
+
+Review the rendered CPU job and obtain explicit submission approval before creating it. The published layout adds about 241 GiB of MLflow artifacts. Read the publication run ID from the job log. A finished run has `metadata/l1_dataset_cards.json` with verified URIs and counts. Check all split inventories against the [publication plan](../../../docs/superpowers/plans/2026-11-24-l1-dataset-publication.md) before committing the Hydra cards. The source run already holds the parent whole-dataset artifact.
+
+For an interrupted publication, verify the previous pod stopped and render a distinct job name with the original code and `--publication-run-id <id>`. Obtain approval for the new submission. The worker verifies the source selection, assignments and parent SHA-256 on reads. It skips destinations with matching completion receipts and recorded file sizes. A new job can repair interrupted copies without regenerating embeddings.
+
 ## Prepare immutable input manifests
 
 Run on a CPU allocation with enough local scratch for the projected tile metadata and shared space for manifests and selected L2 embeddings. Use the existing artifacts listed in the corresponding raw and embedded Hydra cards. Match the encoder SHA to the historical L2 artifact and record any provenance gap before interpreting the result. Use a pinned epithelium mask snapshot if available.

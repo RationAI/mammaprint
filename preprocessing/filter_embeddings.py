@@ -85,13 +85,17 @@ def _selection_masks(
     epithelium_threshold: float,
     cancer_threshold: float,
 ) -> dict[str, np.ndarray]:
-    epithelium = scores["epithelium_overlap"].to_numpy() > epithelium_threshold
-    cancer = scores["cancer_overlap"].to_numpy() > cancer_threshold
+    epithelium = _threshold_mask(scores, "epithelium_overlap", epithelium_threshold)
+    cancer = _threshold_mask(scores, "cancer_overlap", cancer_threshold)
     return {
         "epithelium_only": epithelium,
         "or": epithelium | cancer,
         "and": epithelium & cancer,
     }
+
+
+def _threshold_mask(scores: pd.DataFrame, column: str, threshold: float) -> np.ndarray:
+    return scores[column].to_numpy() > threshold
 
 
 def _require_columns(
@@ -457,7 +461,9 @@ def _load_filter_state(
         if state.get(key) != expected_value
     }
     if mismatches:
-        raise ValueError(f"Saved filter state does not match this command: {mismatches}")
+        raise ValueError(
+            f"Saved filter state does not match this command: {mismatches}"
+        )
     requested_strategies = {strategy.logic for strategy in strategies}
     saved_strategies = set(state.get("strategies", []))
     missing_strategies = sorted(requested_strategies - saved_strategies)
@@ -470,9 +476,7 @@ def _load_filter_state(
 
 def _validate_output_dirs(output_dirs: dict[str, dict[str, Path]]) -> None:
     for logic, directories in output_dirs.items():
-        all_files = {
-            path.name: path for path in directories["all"].glob("*.parquet")
-        }
+        all_files = {path.name: path for path in directories["all"].glob("*.parquet")}
         if not all_files:
             raise ValueError(f"No filtered Parquet files found for strategy {logic}")
 
@@ -510,8 +514,15 @@ def _parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--level", type=int, required=True)
-    parser.add_argument("--tiling-uri", required=True)
-    parser.add_argument("--embeddings-uri", required=True)
+    parser.add_argument("--tiling-uri")
+    parser.add_argument("--embeddings-uri")
+    parser.add_argument(
+        "--l1-source-run-id",
+        help="Publish masks using the saved scores in a finished L1 run",
+    )
+    parser.add_argument(
+        "--publication-run-id", help="Resume an interrupted L1 publication"
+    )
     parser.add_argument(
         "--embeddings-path",
         help="Existing mounted embedding directory; falls back to --embeddings-uri if absent.",
@@ -526,7 +537,7 @@ def _parse_args() -> argparse.Namespace:
         help="Strategies to materialise; defaults to all three.",
     )
     parser.add_argument("--data-mapping", default=DEFAULT_DATA_MAPPING)
-    parser.add_argument("--work-dir", default="/mnt/projects/mammaprint")
+    parser.add_argument("--work-dir")
     parser.add_argument(
         "--output-dir",
         help=(
@@ -544,11 +555,51 @@ def _parse_args() -> argparse.Namespace:
         "--tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI)
     )
     parser.add_argument("--experiment-name", default=DEFAULT_EXPERIMENT)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.l1_source_run_id:
+        if (
+            args.level != 1
+            or not args.work_dir
+            or any(
+                (
+                    args.tiling_uri,
+                    args.embeddings_uri,
+                    args.embeddings_path,
+                    args.output_dir,
+                    args.upload_only,
+                )
+            )
+        ):
+            parser.error("--l1-source-run-id requires level 1 and pod-local --work-dir")
+        if (
+            args.epithelium_threshold,
+            args.cancer_threshold,
+            tuple(args.strategies),
+        ) != (0.25, 0.5, STRATEGY_LOGICS):
+            parser.error(
+                "L1 publication uses the fixed cancer 0.5, cancer 0.9 and epithelial AND cancer masks"
+            )
+    elif not args.tiling_uri or not args.embeddings_uri or args.publication_run_id:
+        parser.error("Specify --tiling-uri and --embeddings-uri, or --l1-source-run-id")
+    else:
+        args.work_dir = args.work_dir or "/mnt/projects/mammaprint"
+    return args
 
 
 def main() -> None:
     args = _parse_args()
+    if args.l1_source_run_id:
+        from preprocessing.embedded_mask_publication import publish_l1
+
+        publish_l1(
+            mlflow.MlflowClient(tracking_uri=args.tracking_uri),
+            args.l1_source_run_id,
+            args.publication_run_id,
+            Path(args.data_mapping),
+            Path(args.work_dir),
+            args.experiment_name,
+        )
+        return
     if args.upload_max_retries < 0:
         raise ValueError("--upload-max-retries must be non-negative")
     if args.upload_only and args.output_dir is None:
