@@ -1,0 +1,13 @@
+# @package dataset.levels.2
+# CM5 Virchow2 embeddings restricted to tiles with > 0.90 clean area for
+# each of blur, folding, and residual artifacts. Uses the existing CM5 slide splits.
+defaults:
+  - /data/levels/l2@_here_
+  - _self_
+
+name: l2_qc_only_blur09_folding09_residual09_embed
+uris:
+  all: "mlflow-artifacts:/3/d77597fe6591402088b488c41380fb6d/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/d77597fe6591402088b488c41380fb6d/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/d77597fe6591402088b488c41380fb6d/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/d77597fe6591402088b488c41380fb6d/artifacts/embeddings_test"
