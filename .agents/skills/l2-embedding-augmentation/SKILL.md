@@ -5,7 +5,9 @@ description: Use when preparing, profiling, running, or validating MammaPrint L2
 
 # L2 embedding augmentation
 
-Run on the pinned project checkout with the native OpenSlide library, `uv sync --frozen`, the authorized MLflow endpoint, and the secure DATA and PROJECTS mounts. Use the cluster-managed Hugging Face and GitLab credentials. The examples use one full A40 on `kubas-cluster` in `rationai-jobs-ns`. Confirm the actual target and present each exact rendered manifest for explicit approval before submission.
+Use the existing cluster-launch environment with `kube_jobs` and `kubernetes` for offline rendering; preserve those packages with `uv sync --frozen --inexact` and render with `uv run --no-sync`. Run workers on the pinned project checkout with the native OpenSlide library, `uv sync --frozen`, the authorized MLflow endpoint, and the secure DATA and PROJECTS mounts. Use the cluster-managed Hugging Face and GitLab credentials. The examples use one full A40 on `kubas-cluster` in `rationai-jobs-ns`. Confirm the actual target and present each exact rendered manifest for explicit approval before submission.
+
+Use the [complete dataset creation commands](../../../docs/l2-augmentation-dataset-creation.md) to render CPU preparation and card-verification Jobs with `scripts.preprocessing.run_l2_augmentation_cpu`. The stages below can also run within an existing authorized allocation. Preparation writes `summary.json` with counts, feature bytes per view and suggested pilot slide IDs.
 
 ## Freeze inputs on CPU
 

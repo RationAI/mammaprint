@@ -122,6 +122,11 @@ def test_prepare_embed_and_verified_card(tmp_path):
     (slide,) = manifest["slides"]
     assert slide["level"] == 1
     assert slide["tile_count"] == 2
+    import json
+
+    summary = json.loads((args.output / "summary.json").read_text())
+    assert summary["pilot_slides"] == ["slide"]
+    assert summary["feature_bytes_per_view"] == 2 * FEATURES * 4
     view = TileView("rotation", 42, "train")
     output = tmp_path / "view" / "production"
 

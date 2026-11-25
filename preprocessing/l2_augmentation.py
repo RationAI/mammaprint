@@ -222,17 +222,25 @@ def prepare(args: argparse.Namespace) -> None:
         encoded = json.dumps(manifest, sort_keys=True, allow_nan=False).encode()
         manifest["digest"] = hashlib.sha256(encoded).hexdigest()
         write_json(work / "manifest.json", manifest)
-        os.rename(work, args.output)
-        print(
-            json.dumps(
-                {
-                    "manifest": str(args.output / "manifest.json"),
-                    "slides": len(selected),
-                    "tiles": sum(slide["tile_count"] for slide in selected),
-                    "empty": len(empty),
-                }
-            )
+        ordered = sorted(
+            selected, key=lambda slide: (slide["tile_count"], slide["slide_id"])
         )
+        pilot_indices = sorted(
+            set(np.linspace(0, len(ordered) - 1, min(4, len(ordered)), dtype=int))
+        )
+        summary = {
+            "manifest": str(args.output / "manifest.json"),
+            "slides": len(selected),
+            "tiles": sum(slide["tile_count"] for slide in selected),
+            "empty": len(empty),
+            "feature_bytes_per_view": sum(slide["tile_count"] for slide in selected)
+            * FEATURES
+            * 4,
+            "pilot_slides": [ordered[index]["slide_id"] for index in pilot_indices],
+        }
+        write_json(work / "summary.json", summary)
+        os.rename(work, args.output)
+        print(json.dumps(summary))
     finally:
         if work.exists():
             shutil.rmtree(work)
