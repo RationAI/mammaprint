@@ -83,7 +83,9 @@ def cache_inputs(
     return source, cache / path, coverage
 
 
-def model_and_uris(config: Mapping[str, Any], mapping: Path) -> dict[str, str]:
+def model_and_uris(
+    config: Mapping[str, Any], mapping: Path, *, include_all: bool = True
+) -> dict[str, str]:
     targets = {
         "encoder": "ml.models.encoders.IdentityEncoder",
         "aggregator": "ml.models.aggregators.MeanPool",
@@ -120,7 +122,8 @@ def model_and_uris(config: Mapping[str, Any], mapping: Path) -> dict[str, str]:
     require(len(levels) == 1, "Expected one embedding level")
     level = levels.get("2", levels.get(2))
     require(level is not None, "Expected level 2")
-    uris = {key: level["uris"][key] for key in ("all", *SPLITS)}
+    sources = ("all", *SPLITS) if include_all else SPLITS
+    uris = {key: level["uris"][key] for key in sources}
     for split in SPLITS:
         dataset = config["datamodule"][split]
         embedded = dataset["levels"]

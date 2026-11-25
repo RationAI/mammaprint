@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 
     from ratiopath.openslide import OpenSlide
 
+    from preprocessing.tile_augmentation import TileView
+
 
 FEATURES = 2560
 type TileRead = tuple[NDArray[np.uint8] | None, int, int, str | None, float]
@@ -101,6 +103,13 @@ def _selection(root: Path, slide: dict[str, Any]) -> pa.Table:
     return table
 
 
+def _check_wsi_source(slide: dict[str, Any]) -> None:
+    if expected := slide.get("source_stat"):
+        stat = Path(slide["path"]).stat()
+        if [stat.st_size, stat.st_mtime_ns] != expected:
+            raise ValueError(f"Source WSI changed for {slide['slide_id']}")
+
+
 class ResolutionTiles(Dataset[TileRead]):
     """Read spatially ordered tiles with one reusable WSI handle per worker."""
 
@@ -130,6 +139,7 @@ class ResolutionTiles(Dataset[TileRead]):
         self.current, self.error = index, None
         slide = self.slides[index]
         try:
+            _check_wsi_source(slide)
             table = _selection(self.selection, slide)
             if selection_digest(table) != slide["selection_digest"]:
                 raise ValueError(f"Selection digest changed for {slide['slide_id']}")
@@ -293,6 +303,7 @@ def _infer(
     model: torch.nn.Module,
     staged: dict[str, str],
     artifacts: EmbeddingArtifacts | None = None,
+    view: TileView | None = None,
 ) -> None:
     dataset = ResolutionTiles(selection, slides, staged)
     multiprocessing = (
@@ -316,6 +327,11 @@ def _infer(
     )
     mean = torch.tensor([0.485, 0.456, 0.406], device=device) * 255
     scale = (torch.tensor([0.229, 0.224, 0.225], device=device) * 255).reciprocal()
+    view_parameters = (
+        [view.parameters(slide["slide_id"], device) for slide in slides]
+        if view is not None and view.kind != "clean"
+        else None
+    )
     events = (
         tuple(torch.cuda.Event(enable_timing=True) for _ in range(4)) if cuda else ()
     )
@@ -359,6 +375,14 @@ def _infer(
                     else nullcontext()
                 )
                 with precision:
+                    if view_parameters is not None:
+                        from preprocessing.tile_augmentation import transform_batch
+
+                        transform_batch(
+                            images,
+                            (group for group, _, problem in keys if problem is None),
+                            view_parameters,
+                        )
                     encoded = model(_normalize(images, mean, scale))
                 if events:
                     inference_end.record()
@@ -413,9 +437,20 @@ def _infer(
             finish_write()
 
 
-def _run(args: argparse.Namespace) -> int:
+def _run(args: argparse.Namespace, *, view: TileView | None = None) -> int:
     selection = args.manifest.resolve().parent
-    manifest = _manifest(args.manifest)
+    if view is None:
+        manifest = _manifest(args.manifest)
+    else:
+        manifest = load_selection_manifest(args.manifest)
+        if (
+            manifest.get("workflow") != "l2-augmentation-v1"
+            or manifest.get("level") != 2
+            or manifest.get("split") != view.split
+        ):
+            raise ValueError(
+                "The augmentation metadata does not match the L2 selection"
+            )
     if args.mlflow_run_id and (args.pilot is not None or manifest["shards"] != 1):
         raise ValueError("Direct MLflow storage requires a single production shard")
     if args.pilot is not None:
@@ -456,6 +491,7 @@ def _run(args: argparse.Namespace) -> int:
                     "prefetch": args.prefetch,
                     "loader_timeout": args.loader_timeout,
                     "precision": args.precision,
+                    **({"tile_view": view.provenance()} if view else {}),
                 },
                 indent=2,
             )
@@ -479,7 +515,12 @@ def _run(args: argparse.Namespace) -> int:
 
     begin = time.perf_counter()
     with lock(output / "locks" / f"{job}.lock"):
+        if view is not None:
+            for slide in items:
+                _check_wsi_source(slide)
         config = {**_environment(args, device), "manifest_digest": manifest["digest"]}
+        if view is not None:
+            config["tile_view"] = view.provenance()
         if args.pilot is not None:
             config.update(
                 pilot_slides=sorted(requested),
@@ -567,6 +608,7 @@ def _run(args: argparse.Namespace) -> int:
                         model,
                         staged,
                         artifacts,
+                        view,
                     )
         except Exception as exc:
             summary["fatal"] = f"{type(exc).__name__}: {exc}"
@@ -592,7 +634,10 @@ def _run(args: argparse.Namespace) -> int:
                 artifacts.client.log_artifact(
                     artifacts.run_id, str(report), artifact_path="attempts"
                 )
-                inventory_ok = artifacts.report(output / "l1_inventory.json", items)
+                inventory = (
+                    "l2_augmentation_inventory.json" if view else "l1_inventory.json"
+                )
+                inventory_ok = artifacts.report(output / inventory, items)
             else:
                 inventory_ok = True
         return int(bool(summary["failures"]) or not inventory_ok)

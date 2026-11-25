@@ -166,7 +166,11 @@ def _load_slides(
 
 
 def _tile_partitions(
-    source: Path, bucket_by_id: Mapping[str, int], scratch: Path
+    source: Path,
+    bucket_by_id: Mapping[str, int],
+    scratch: Path,
+    *,
+    selected_ids: set[str] | None = None,
 ) -> list[str]:
     """Bound input memory and open files by partitioning projected rows into buckets."""
     parquet = pq.ParquetFile(source)
@@ -193,6 +197,9 @@ def _tile_partitions(
                 raise ValueError(
                     f"{source} references unknown source slide IDs {unknown[:10]}"
                 )
+            if selected_ids is not None:
+                keep = frame["slide_id"].isin(selected_ids)
+                frame, buckets = frame.loc[keep], buckets.loc[keep]
             for bucket, rows in frame.groupby(buckets):
                 table = pa.Table.from_pandas(rows, preserve_index=False)
                 if bucket not in writers:

@@ -108,21 +108,28 @@ class DataModule(pl.LightningDataModule):
         return self._datasets["train"]
 
     def state_dict(self) -> dict[str, Any]:
-        if self._train_generator is None:
-            return {}
-        state: dict[str, Any] = {"train_generator": self._train_generator.get_state()}
+        state: dict[str, Any] = {}
+        if self._train_generator is not None:
+            state["train_generator"] = self._train_generator.get_state()
         dataset = self._datasets.get("train")
         if self.num_workers == 0 and isinstance(dataset, SingleScaleDataset):
-            state["tile_sampler"] = dataset.tile_sampler_state()
+            view_state = dataset.view_sampler_state()
+            if view_state is not None:
+                state["view_sampler"] = view_state
+            if self._train_generator is not None or view_state is not None:
+                state["tile_sampler"] = dataset.tile_sampler_state()
         return state
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
-        if self._train_generator is None or "train_generator" not in state_dict:
-            return
-        self._train_generator.set_state(state_dict["train_generator"].cpu())
+        if self._train_generator is not None and "train_generator" in state_dict:
+            self._train_generator.set_state(state_dict["train_generator"].cpu())
         dataset = self._datasets.get("train")
         if self.num_workers == 0 and isinstance(dataset, SingleScaleDataset):
-            dataset.restore_tile_sampler(state_dict.get("tile_sampler"))
+            if "view_sampler" in state_dict or (
+                self._train_generator is not None and "train_generator" in state_dict
+            ):
+                dataset.restore_tile_sampler(state_dict.get("tile_sampler"))
+            dataset.restore_view_sampler(state_dict.get("view_sampler"))
 
     def train_dataloader(self) -> DataLoader[Sample]:
         return self._dataloader("train", shuffle=True)

@@ -1,0 +1,27 @@
+# @package _global_
+defaults:
+  - /experiment/ml/train_mil_embeddings_regression
+  - override /data/embedded: cancer_mask_5/l2
+  - _self_
+
+test_after_fit: false
+
+datamodule:
+  train:
+    view_seed: ${seed}
+    validate_index_split: true
+  val:
+    validate_index_split: true
+  test:
+    validate_index_split: true
+
+ml:
+  metrics:
+    spearman:
+      _target_: ml.metrics.regression.IndexSpearman
+    sign_auroc:
+      _target_: ml.metrics.regression.IndexSignAUROC
+
+metadata:
+  run_name: L2 mean-linear augmentation comparison, seed ${seed}
+  description: Validation-only regression with full L2 bags and optional train view mixing.
