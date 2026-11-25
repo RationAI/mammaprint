@@ -1,6 +1,6 @@
 # @package dataset.levels.1
-# preprocessing.resolution_data writes the verified values in l1_data_card.json.
-# Source tiling stride is 112; the retained grid has a nominal stride of 224.
+# Virchow2 embeddings of the cancer > 0.5 sample on the non-overlapping L1 grid.
+# Selection used a cap of 3,000 tiles per slide and seed 42.
 defaults:
   - /data/levels/l1@_here_
   - _self_
@@ -8,7 +8,7 @@ defaults:
 name: l1_cancer_mask_5_embed
 stride: 224
 uris:
-  all: ${oc.env:MAMMAPRINT_L1_ALL_URI}
-  train: ${oc.env:MAMMAPRINT_L1_TRAIN_URI}
-  val: ${oc.env:MAMMAPRINT_L1_VAL_URI}
-  test: ${oc.env:MAMMAPRINT_L1_TEST_URI}
+  all: "mlflow-artifacts:/3/6d2c5bc4b2de4f2b9ef5987a163f2518/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/cancer_mask_5/embeddings_train"
+  val: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/cancer_mask_5/embeddings_val"
+  test: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/cancer_mask_5/embeddings_test"
