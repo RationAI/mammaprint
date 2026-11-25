@@ -106,6 +106,11 @@ class EmbeddingArtifacts:
             for slide in slides
             if self.complete(slide)
         }
+        fully_reused = sorted(
+            slide["slide_id"]
+            for slide in slides
+            if not slide["tile_count"] and slide.get("status") == "fully_reused"
+        )
         path.write_text(
             json.dumps(
                 {
@@ -113,8 +118,12 @@ class EmbeddingArtifacts:
                     "missing_or_invalid": sorted(expected - complete.keys()),
                     "unexpected": sorted(saved.keys() - expected),
                     "zero_eligible_tiles": sorted(
-                        slide["slide_id"] for slide in slides if not slide["tile_count"]
+                        slide["slide_id"]
+                        for slide in slides
+                        if not slide["tile_count"]
+                        and slide.get("status") != "fully_reused"
                     ),
+                    **({"fully_reused_slides": fully_reused} if fully_reused else {}),
                 },
                 indent=2,
                 sort_keys=True,

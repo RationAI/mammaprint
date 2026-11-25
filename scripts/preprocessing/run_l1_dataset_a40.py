@@ -23,12 +23,11 @@ BASE = "e86923d6223a5b88ad9efcc9bd3da9db31fbbfd2"
 IMAGE = "cerit.io/rationai/base:2.0.6"
 TILING = "mlflow-artifacts:/3/7651a68400f6484db36d3626b1d64e83/artifacts/mou_1_224_cancer_mask"
 REVISION = "3158645804b69e3f3bc4439d4116edddf0840a72"
-FILES = (
+COMMON_FILES = (
     "preprocessing/embedding_selection.py",
     "preprocessing/embeddings.py",
     "preprocessing/resolution_embeddings.py",
     "preprocessing/embedding_artifacts.py",
-    "preprocessing/create_l1_dataset.py",
 )
 
 
@@ -58,12 +57,43 @@ def _environment() -> list[dict[str, Any]]:
     ]
 
 
-def _script(commit: str, run_id: str | None) -> str:
+def _script(
+    commit: str,
+    run_id: str | None,
+    *,
+    tissue_preparation_run_id: str | None = None,
+) -> str:
+    if tissue_preparation_run_id is not None:
+        worker = "embed_l1_tissue_missing"
+        worker_args = ["--preparation-run-id", tissue_preparation_run_id]
+    else:
+        worker = "create_l1_dataset"
+        worker_args = [
+            "--tiling",
+            TILING,
+            "--data-mapping",
+            "/mnt/projects/mammaprint/data_mapping.csv",
+            "--epithelium-masks",
+            "/mnt/projects/mammaprint/epithelium_onnx_masks",
+        ]
+    worker_file = f"preprocessing/{worker}.py"
     diff = subprocess.check_output(
-        ["git", "diff", "--binary", BASE, commit, "--", *FILES], cwd=ROOT
+        [
+            "git",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--no-renames",
+            BASE,
+            commit,
+            "--",
+            *COMMON_FILES,
+            worker_file,
+        ],
+        cwd=ROOT,
     )
-    if not diff or b"create_l1_dataset.py" not in diff:
-        raise ValueError(f"{commit} lacks the committed L1 dataset worker")
+    if f"diff --git a/{worker_file} ".encode() not in diff:
+        raise ValueError(f"{commit} lacks the committed L1 worker {worker_file}")
     overlay = base64.b64encode(gzip.compress(diff, mtime=0)).decode()
     command = [
         "uv",
@@ -71,13 +101,8 @@ def _script(commit: str, run_id: str | None) -> str:
         "--frozen",
         "python",
         "-m",
-        "preprocessing.create_l1_dataset",
-        "--tiling",
-        TILING,
-        "--data-mapping",
-        "/mnt/projects/mammaprint/data_mapping.csv",
-        "--epithelium-masks",
-        "/mnt/projects/mammaprint/epithelium_onnx_masks",
+        f"preprocessing.{worker}",
+        *worker_args,
         "--work-dir",
         "/scratch/dataset",
         "--encoder-revision",
@@ -138,6 +163,10 @@ def job(args: argparse.Namespace) -> dict[str, Any]:
             "name": args.job_name,
             "namespace": args.namespace,
             "labels": {"created_by": "kissmi"},
+            "annotations": {
+                "mammaprint/source-commit": args.source_commit,
+                "mammaprint/cluster-context": args.context,
+            },
         },
         "spec": {
             "backoffLimit": 0,
@@ -161,7 +190,11 @@ def job(args: argparse.Namespace) -> dict[str, Any]:
                             "command": [
                                 "/bin/bash",
                                 "-c",
-                                _script(args.source_commit, args.run_id),
+                                _script(
+                                    args.source_commit,
+                                    args.run_id,
+                                    tissue_preparation_run_id=args.tissue_preparation_run_id,
+                                ),
                             ],
                             "securityContext": {
                                 "allowPrivilegeEscalation": False,
@@ -182,17 +215,33 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", default=CLUSTER)
     parser.add_argument("--namespace", default=JOB_NAMESPACE)
-    parser.add_argument("--job-name", default="mammaprint-l1-embed-a40")
+    parser.add_argument("--job-name")
     parser.add_argument(
         "--source-commit", required=True, help="Local committed code to package"
     )
     parser.add_argument("--run-id", help="Resume a stopped job from its MLflow run ID")
     parser.add_argument(
+        "--tissue-preparation-run-id",
+        help="Embed the missing features from this completed L1 tissue preparation",
+    )
+    parser.add_argument(
         "--submit", action="store_true", help="Create this job after explicit approval"
     )
     args = parser.parse_args()
+    if args.job_name is None:
+        args.job_name = (
+            "mammaprint-l1-embed-tissue"
+            if args.tissue_preparation_run_id is not None
+            else "mammaprint-l1-embed-a40"
+        )
     args.source_commit = subprocess.check_output(
-        ["git", "rev-parse", "--verify", f"{args.source_commit}^{{commit}}"],
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            f"{args.source_commit}^{{commit}}",
+        ],
         cwd=ROOT,
         text=True,
     ).strip()

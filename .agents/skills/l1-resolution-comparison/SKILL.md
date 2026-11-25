@@ -53,7 +53,16 @@ uv run --frozen python -m scripts.preprocessing.run_filter_embeddings \
 
 Check the rendered job and obtain explicit submission approval before creating it. Read the resulting MLflow run ID in the job log. A successful CPU job publishes `metadata/tissue_reuse_audit.json` and two separate `manifest.json` and `frozen.tar.gz` pairs under `selection/` and `missing_selection/`. Confirm mask-score coverage, split counts, and fit geometry in the audit. If mask coverage fails, use the audit and verify the configured heatmap artifact and epithelial mask mount before approving recovery. The input archives are independent of the existing embedding Parquets.
 
-The full archive is the input to final CPU assembly. The missing-only archive is the input to a separately approved A40 job with the pinned Virchow2 revision from the manifest. Use the same FP32 normalization and verify source bytes before reusing vectors. See the [publication plan](../../../docs/superpowers/plans/2026-11-24-l1-dataset-publication.md) for expected counts and subsequent approval points.
+The full archive is the input to final CPU assembly. For the missing-only stage, confirm the preparation run is `FINISHED` and check its audit before submitting. Render this exact A40 job with the completed preparation run ID and the commit containing the tissue worker.
+
+```bash
+uv run --frozen python -m scripts.preprocessing.run_l1_dataset_a40 \
+  --source-commit "$CODE" --tissue-preparation-run-id "$PREPARATION_RUN" \
+  --context kubas-cluster --namespace rationai-jobs-ns \
+  --job-name mammaprint-l1-embed-tissue > l1-tissue-embedding-job.json
+```
+
+Obtain explicit approval after showing the rendered job. The worker validates the missing selection digest, model revision, FP32 settings and tile count against preparation metadata. The existing embedding worker streams results and receipts directly to MLflow. Check that the run is `FINISHED` with a complete missing-only inventory before assembly. To resume, confirm the previous pod stopped and render a distinct job name with the original code, preparation run and `--run-id <embedding_run>`, then obtain approval for the new submission. Verify source bytes before reusing vectors. See the [publication plan](../../../docs/superpowers/plans/2026-11-24-l1-dataset-publication.md) for expected counts and subsequent approval points.
 
 ## Prepare immutable input manifests
 
