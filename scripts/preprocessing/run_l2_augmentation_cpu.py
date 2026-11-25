@@ -178,7 +178,7 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
         for entry in shared._environment()
         if entry["name"] not in ("HF_TOKEN", "HF_HOME", "POD_UID")
     ]
-    return {
+    job: dict[str, Any] = {
         "apiVersion": "batch/v1",
         "kind": "Job",
         "metadata": {
@@ -226,6 +226,32 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
             },
         },
     }
+    if args.create_output_root:
+        job["spec"]["template"]["spec"]["initContainers"] = [
+            {
+                "name": "create-output-root",
+                "image": args.image,
+                "command": [
+                    "mkdir",
+                    "-p",
+                    "--",
+                    str(args.output_root),
+                    str(args.output_root / "outputs"),
+                ],
+                "securityContext": {
+                    "allowPrivilegeEscalation": False,
+                    "capabilities": {"drop": ["ALL"]},
+                },
+                "resources": {
+                    "requests": {"cpu": "100m", "memory": "64Mi"},
+                    "limits": {"cpu": "100m", "memory": "64Mi"},
+                },
+                "volumeMounts": [
+                    {"name": "projects", "mountPath": str(shared.PROJECTS)}
+                ],
+            }
+        ]
+    return job
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -249,6 +275,11 @@ def main(argv: list[str] | None = None) -> None:
             help="Precreated writable project subtree",
         )
         stage.add_argument("--output", type=shared._absolute_path, required=True)
+        stage.add_argument(
+            "--create-output-root",
+            action="store_true",
+            help="Create the requested output subtree with a short init container",
+        )
         stage.add_argument("--image", default=shared.IMAGE)
         stage.add_argument("--cpu", type=shared._positive_int, default=8)
         stage.add_argument("--memory", default="16Gi")

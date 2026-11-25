@@ -9,6 +9,8 @@ Use the existing cluster-launch environment with `kube_jobs` and `kubernetes` fo
 
 Use the [complete dataset creation commands](../../../docs/l2-augmentation-dataset-creation.md) to render CPU preparation and card-verification Jobs with `scripts.preprocessing.run_l2_augmentation_cpu`. The stages below can also run within an existing authorized allocation. Preparation writes `summary.json` with counts, feature bytes per view and suggested pilot slide IDs.
 
+The CPU renderer accepts `--create-output-root` to create a missing shared output subtree and its `outputs` directory using a short init container before mounting the scoped writable root.
+
 ## Freeze inputs on CPU
 
 Set an approved shared work root. Keep the frozen input roots separate from the A40 job's writable output subtree. Run the preparer as a CPU command in an existing authorized allocation.

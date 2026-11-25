@@ -67,6 +67,18 @@ def container(job):
 
 
 class RenderL2AugmentationCpuTest(unittest.TestCase):
+    def test_output_root_initialization_is_explicit_and_scoped(self):
+        self.assertNotIn("initContainers", render()["spec"]["template"]["spec"])
+        pod = render("prepare", "--create-output-root")["spec"]["template"]["spec"]
+        (init,) = pod["initContainers"]
+        self.assertEqual(
+            init["command"], ["mkdir", "-p", "--", ROOT, f"{ROOT}/outputs"]
+        )
+        self.assertEqual(init["resources"]["limits"], {"cpu": "100m", "memory": "64Mi"})
+        self.assertEqual(
+            init["volumeMounts"], [{"name": "projects", "mountPath": "/mnt/projects"}]
+        )
+
     def test_prepare_scopes_storage_cpu_resources_and_credentials(self):
         job = render("prepare", "--slides", "a", "b")
         pod = job["spec"]["template"]["spec"]

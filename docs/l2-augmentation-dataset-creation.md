@@ -21,6 +21,8 @@ export MPA_VAL=mlflow-artifacts:/3/d47d498ad0524ad2b14a140779a66e4f/artifacts/l2
 
 Create `$MPA_ROOT` and `$MPA_ROOT/outputs` once on the cluster's projects mount from an authorized environment that already has it mounted. The launchers mount pre-existing PVC subdirectories. Use a new versioned root if those locations contain an earlier selection. Keep WSI files and companion payloads on an immutable snapshot while embedding and resuming.
 
+Alternatively pass `--create-output-root` to the CPU preparation renderer. A short init container creates only that subtree and its `outputs` directory before the scoped main container starts.
+
 ```bash
 mkdir -p "$MPA_ROOT/outputs"
 ```
