@@ -1,4 +1,4 @@
-"""Render an L1 publication job or launch the existing L2 through L5 filters."""
+"""Render L1 preparation and publication jobs or launch the L2 through L5 filters."""
 
 from __future__ import annotations
 
@@ -22,10 +22,21 @@ ROOT = Path(__file__).resolve().parents[2]
 IMAGE = "cerit.io/rationai/base:2.0.6"
 PUBLISHED_BASE = "e86923d6223a5b88ad9efcc9bd3da9db31fbbfd2"
 L1_JOB_NAME = "mammaprint-l1-publish-cancer-splits"
+L1_PREP_JOB_NAME = "mammaprint-l1-prepare-tissue-selection"
+L1_TISSUE_TILING_URI = (
+    "mlflow-artifacts:/3/43602e9f922d46f18dc06910b66a3be1/artifacts/mou_1_224_tissue"
+)
+L1_CANCER_MASKS_URI = (
+    "mlflow-artifacts:/2/70b1c915966d43e3b5be46668075bd93/artifacts/heatmaps"
+)
 PUBLICATION_FILES = (
     "preprocessing/filter_embeddings.py",
     "preprocessing/embedded_mask_publication.py",
     "preprocessing/split_dataset.py",
+)
+PREPARATION_FILES = (
+    "preprocessing/embedding_selection.py",
+    "preprocessing/prepare_l1_tissue.py",
 )
 GIT_BRANCH = "feat/tiling-values"
 TISSUE_EMBEDDING_URIS = {
@@ -61,12 +72,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--upload-only", action="store_true")
     parser.add_argument("--upload-max-retries", type=int, default=3)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--prepare-l1-tissue",
+        action="store_true",
+        help="Prepare the scored L1 tissue selection for subsequent embedding",
+    )
     parser.add_argument("--l1-source-run-id", help="Completed L1 A40 embedding run")
-    parser.add_argument("--source-commit", help="Local committed L1 publication code")
+    parser.add_argument("--source-commit", help="Local commit with the L1 worker")
     parser.add_argument("--publication-run-id", help="Resume a stopped L1 publication")
     parser.add_argument("--context", default=CLUSTER)
     parser.add_argument("--namespace", default=JOB_NAMESPACE)
-    parser.add_argument("--job-name", default=L1_JOB_NAME)
+    parser.add_argument("--job-name")
     parser.add_argument(
         "--submit",
         action="store_true",
@@ -78,6 +94,8 @@ def _parse_args() -> argparse.Namespace:
             parser.error("L1 requires --l1-source-run-id and --source-commit")
         if args.dry_run and args.submit:
             parser.error("--dry-run and --submit are mutually exclusive")
+        if args.prepare_l1_tissue and args.publication_run_id is not None:
+            parser.error("--publication-run-id applies only to L1 publication")
         if (
             args.tiling_uri
             or args.embeddings_uri
@@ -89,22 +107,23 @@ def _parse_args() -> argparse.Namespace:
             or args.cancer_threshold != 0.5
             or tuple(args.strategies) != STRATEGY_CHOICES
         ):
-            parser.error(
-                "L1 uses the completed embedding run and fixed dataset variants"
-            )
+            parser.error("L1 uses pinned sources and thresholds")
+        if args.job_name is None:
+            args.job_name = L1_PREP_JOB_NAME if args.prepare_l1_tissue else L1_JOB_NAME
     else:
         if not args.tiling_uri:
             parser.error("L2 through L5 filtering requires --tiling-uri")
         if (
-            args.l1_source_run_id
+            args.prepare_l1_tissue
+            or args.l1_source_run_id
             or args.source_commit
             or args.publication_run_id
             or args.submit
             or args.context != CLUSTER
             or args.namespace != JOB_NAMESPACE
-            or args.job_name != L1_JOB_NAME
+            or args.job_name not in (None, L1_JOB_NAME)
         ):
-            parser.error("L1 publication options require --level 1")
+            parser.error("L1 options require --level 1")
     return args
 
 
@@ -112,7 +131,49 @@ def _token(value: float) -> str:
     return f"{value:g}".replace(".", "")
 
 
-def _l1_script(commit: str, source_run_id: str, publication_run_id: str | None) -> str:
+def _l1_script(commit: str, args: argparse.Namespace) -> str:
+    command = ["uv", "run", "--frozen", "python", "-m"]
+    files: tuple[str, ...]
+    if args.prepare_l1_tissue:
+        files = PREPARATION_FILES
+        worker = "preprocessing/prepare_l1_tissue.py"
+        command.extend(
+            [
+                "preprocessing.prepare_l1_tissue",
+                "--tiling-uri",
+                L1_TISSUE_TILING_URI,
+                "--cancer-run-id",
+                args.l1_source_run_id,
+                "--cancer-masks-uri",
+                L1_CANCER_MASKS_URI,
+                "--epithelium-masks",
+                "/mnt/projects/mammaprint/epithelium_onnx_masks",
+                "--data-mapping",
+                "/mnt/projects/mammaprint/data_mapping.csv",
+                "--work-dir",
+                "/scratch",
+                "--workers",
+                "8",
+            ]
+        )
+    else:
+        files = PUBLICATION_FILES
+        worker = "preprocessing/embedded_mask_publication.py"
+        command.extend(
+            [
+                "preprocessing.filter_embeddings",
+                "--level",
+                "1",
+                "--l1-source-run-id",
+                args.l1_source_run_id,
+                "--work-dir",
+                "/scratch",
+                "--data-mapping",
+                "/mnt/projects/mammaprint/data_mapping.csv",
+            ]
+        )
+        if args.publication_run_id:
+            command.extend(("--publication-run-id", args.publication_run_id))
     diff = subprocess.check_output(
         [
             "git",
@@ -123,31 +184,13 @@ def _l1_script(commit: str, source_run_id: str, publication_run_id: str | None) 
             PUBLISHED_BASE,
             commit,
             "--",
-            *PUBLICATION_FILES,
+            *files,
         ],
         cwd=ROOT,
     )
-    if b"diff --git a/preprocessing/embedded_mask_publication.py " not in diff:
-        raise ValueError(f"{commit} lacks the committed L1 publication worker")
+    if f"diff --git a/{worker} ".encode() not in diff:
+        raise ValueError(f"{commit} lacks the committed L1 worker {worker}")
     overlay = base64.b64encode(gzip.compress(diff, mtime=0)).decode()
-    command = [
-        "uv",
-        "run",
-        "--frozen",
-        "python",
-        "-m",
-        "preprocessing.filter_embeddings",
-        "--level",
-        "1",
-        "--l1-source-run-id",
-        source_run_id,
-        "--work-dir",
-        "/scratch",
-        "--data-mapping",
-        "/mnt/projects/mammaprint/data_mapping.csv",
-    ]
-    if publication_run_id:
-        command.extend(("--publication-run-id", publication_run_id))
     return "\n".join(
         [
             "set -euo pipefail",
@@ -239,11 +282,7 @@ def _l1_job(args: argparse.Namespace) -> dict[str, Any]:
                             "command": [
                                 "/bin/bash",
                                 "-c",
-                                _l1_script(
-                                    commit,
-                                    args.l1_source_run_id,
-                                    args.publication_run_id,
-                                ),
+                                _l1_script(commit, args),
                             ],
                             "securityContext": {
                                 "allowPrivilegeEscalation": False,

@@ -38,6 +38,23 @@ Review the rendered CPU job and obtain explicit submission approval before creat
 
 For an interrupted publication, verify the previous pod stopped and render a distinct job name with the original code and `--publication-run-id <id>`. Obtain approval for the new submission. The worker verifies the source selection, assignments and parent SHA-256 on reads. It skips destinations with matching completion receipts and recorded file sizes. A new job can repair interrupted copies without regenerating embeddings.
 
+## Prepare the broader L1 tissue and OR selection
+
+Use this CPU step to prepare `tissue_only/l1` and `epithel_or_cancer_5/l1`. The launcher pins the existing L1 tissue tiling and cancer heatmaps. It also reads the original epithelial mask directory and the completed cancer embedding run. The job samples the same non-overlapping grid with the original cap and seed, checks the recorded source files, fills missing mask scores, and freezes the exact matched and missing coordinates. It uses read-only input access and pod-local scratch for downloads.
+
+```bash
+SOURCE_RUN=6d2c5bc4b2de4f2b9ef5987a163f2518
+CODE="$(git rev-parse HEAD)"
+uv run --frozen python -m scripts.preprocessing.run_filter_embeddings \
+  --level 1 --prepare-l1-tissue --l1-source-run-id "$SOURCE_RUN" \
+  --source-commit "$CODE" --context kubas-cluster --namespace rationai-jobs-ns \
+  --job-name mammaprint-l1-prepare-tissue-selection > l1-tissue-preparation-job.json
+```
+
+Check the rendered job and obtain explicit submission approval before creating it. Read the resulting MLflow run ID in the job log. A successful CPU job publishes `metadata/tissue_reuse_audit.json` and two separate `manifest.json` and `frozen.tar.gz` pairs under `selection/` and `missing_selection/`. Confirm mask-score coverage, split counts, and fit geometry in the audit. If mask coverage fails, use the audit and verify the configured heatmap artifact and epithelial mask mount before approving recovery. The input archives are independent of the existing embedding Parquets.
+
+The full archive is the input to final CPU assembly. The missing-only archive is the input to a separately approved A40 job with the pinned Virchow2 revision from the manifest. Use the same FP32 normalization and verify source bytes before reusing vectors. See the [publication plan](../../../docs/superpowers/plans/2026-11-24-l1-dataset-publication.md) for expected counts and subsequent approval points.
+
 ## Prepare immutable input manifests
 
 Run on a CPU allocation with enough local scratch for the projected tile metadata and shared space for manifests and selected L2 embeddings. Use the existing artifacts listed in the corresponding raw and embedded Hydra cards. Match the encoder SHA to the historical L2 artifact and record any provenance gap before interpreting the result. Use a pinned epithelium mask snapshot if available.

@@ -67,7 +67,9 @@ def test_stable_grid_selection_and_missing_score_inventory(tmp_path):
     rows.sample(frac=1, random_state=8).to_parquet(
         tiling / "tiles.parquet", index=False
     )
-    reordered = _prepare(tmp_path, tiling, mapping, "reordered", cap=3)
+    reordered = _prepare(
+        tmp_path, tiling, mapping, "reordered", cap=3, source_gate="cancer"
+    )
     uncapped = _prepare(tmp_path, tiling, mapping, "uncapped")
 
     assert first["digest"] == reordered["digest"]
@@ -98,6 +100,62 @@ def test_stable_grid_selection_and_missing_score_inventory(tmp_path):
     assert (all_grid["cancer_overlap"] == 0.9).all()
     # The final tile y=26 ends below extent_y=37, as in grid_tiles(last="keep").
     assert int(all_grid["y"].max()) + 12 > 37
+
+
+def test_tissue_source_preserves_low_cancer_scores_and_requires_qc_gates(tmp_path):
+    tiling, mapping, rows = _tiling(tmp_path)
+    path = tiling / "tiles.parquet"
+    rows["cancer_overlap"] = 0.5
+    rows.loc[0, "cancer_overlap"] = 0.0
+    rows.to_parquet(path, index=False)
+
+    with pytest.raises(ValueError, match="expected cancer_overlap source gate"):
+        _prepare(tmp_path, tiling, mapping, "cancer")
+    manifest = _prepare(tmp_path, tiling, mapping, "tissue", source_gate="tissue")
+    assert manifest["source_gates"] == {
+        key: gate for key, gate in MASK_GATES.items() if key != "cancer_overlap"
+    }
+    chosen = pq.read_table(tmp_path / "tissue" / "tiles" / "a.parquet")
+    assert chosen["cancer_overlap"].to_pylist() == [0.0, 0.5, 0.5, 0.5, 0.5, 0.5]
+
+    rows.loc[0, "blur_overlap"] = 0.5
+    rows.to_parquet(path, index=False)
+    with pytest.raises(ValueError, match="expected blur_overlap source gate"):
+        _prepare(tmp_path, tiling, mapping, "failed-qc", source_gate="tissue")
+
+
+def test_tissue_source_recovers_cancer_and_epithelium_scores(tmp_path, monkeypatch):
+    from ratiopath.tiling import overlays
+
+    tiling, mapping, rows = _tiling(tmp_path)
+    rows.drop(columns="cancer_overlap").to_parquet(
+        tiling / "tiles.parquet", index=False
+    )
+    mask_sources = {}
+    for score in ("cancer_overlap", "epithelium_overlap"):
+        masks = tmp_path / score
+        masks.mkdir()
+        (masks / "a.tiff").touch()
+        mask_sources[score] = str(masks)
+
+    def fake_overlay(roi, mask_paths, x, y, mpp_x, mpp_y):
+        return [np.ma.array([0, 51, 102, 153])] * len(x)
+
+    monkeypatch.setattr(overlays, "_tile_overlay", fake_overlay)
+    manifest = _prepare(
+        tmp_path,
+        tiling,
+        mapping,
+        "tissue",
+        source_gate="tissue",
+        cap=2,
+        mask_sources=mask_sources,
+    )
+    chosen = pq.read_table(tmp_path / "tissue" / "tiles" / "a.parquet")
+    assert chosen["cancer_overlap"].to_pylist() == [0.3, 0.3]
+    assert chosen["epithelium_overlap"].to_pylist() == [0.75, 0.75]
+    assert manifest["score_missing"]["cancer_overlap"] == 0
+    assert manifest["score_missing"]["epithelium_overlap"] == 0
 
 
 def test_scores_restored_only_for_selected_coordinates(tmp_path, monkeypatch):

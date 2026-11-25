@@ -22,3 +22,11 @@ The saved selection Parquets give these exact counts before publishing. The slid
 ## What these cards cover
 
 The three cards represent the completed, cancer-gated L1 sample. In this pool, epithelium-only selects the same rows as epithelium AND cancer, and epithelium OR cancer selects the whole parent. The broader `tissue_only`, `epithel`, and `epithel_or_cancer_5` definitions used by other levels start from the tissue pool, which includes tiles below the cancer threshold. Any expansion to that pool is a separate scope decision.
+
+## Tissue-only and epithelium OR cancer
+
+The requested extension uses the existing L1 tissue tiling and the same non-overlapping grid, cap of 3,000, and seed 42. A read-only audit found identical WSI geometry and matching slide IDs across all 2,042 source slides. The new selection has 6,047,856 tiles. Exactly 4,646,673 coordinates match a completed embedding from the prior run, and 1,401,183 coordinates need embeddings. The raw tissue artifact has no usable cancer or epithelial scores for its selected rows. Matched rows inherit the saved scores, and the remaining rows use the existing mask scorer.
+
+1. Prepare and review `mammaprint-l1-prepare-tissue-selection`, a CPU job on `kubas-cluster` in `rationai-jobs-ns` with 16 CPUs, 64 GiB RAM and 32 GiB pod-local scratch. It reads the 0.21 GiB tissue metadata and 1.85 GiB cancer mask artifact from MLflow, reads the epithelial mask directory through a read-only mount, and freezes both full and missing-only selections. No embedding computation occurs during this stage. Obtain approval for the rendered submission.
+2. Verify the scored manifests, split counts and `tissue_reuse_audit.json`. Prepare a separate A40 job to embed the missing-only selection with the same FP32 Virchow2 revision. At the previous job's end-to-end average, 1,401,183 new tiles take roughly 10 A40 hours. Confirm the frozen count and show the exact GPU job for approval.
+3. Use a CPU publication job to combine the verified existing and newly computed vectors in the frozen tissue order, then reuse the existing OR rule with epithelium `> 0.25` or cancer `> 0.5`. Verify the train, validation and test files and fill in `tissue_only/l1` and `epithel_or_cancer_5/l1`. Obtain approval for the exact publication job once its input runs are verified.

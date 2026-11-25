@@ -1,4 +1,4 @@
-"""Freeze a capped non-overlapping sample from existing cancer-mask tiling."""
+"""Freeze a capped non-overlapping sample from existing cancer or tissue tiling."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import struct
 import tempfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -38,6 +38,14 @@ MASK_GATES = {
     "folding_overlap": 0.1,
     "residual_overlap": 0.5,
     "cancer_overlap": 0.5,
+}
+SOURCE_GATES = {
+    "cancer": MASK_GATES,
+    "tissue": {
+        name: threshold
+        for name, threshold in MASK_GATES.items()
+        if name != "cancer_overlap"
+    },
 }
 SPLITS = ("train", "val", "test")
 TILE_SCHEMA = pa.schema(
@@ -393,14 +401,16 @@ def _matched_l2(
     return array, mismatch, "selected"
 
 
-def _verify_scores(tiles: pd.DataFrame, slide_id: str) -> None:
+def _verify_scores(
+    tiles: pd.DataFrame, slide_id: str, source_gates: Mapping[str, float]
+) -> None:
     for key in SCORE_COLUMNS:
         if key not in tiles:
             tiles[key] = np.nan
         score = tiles[key].astype(np.float64).dropna()
         if (score < 0).any() or (score > 1).any():
             raise ValueError(f"Out-of-range {key} value on {slide_id}")
-        if key in MASK_GATES and (score <= MASK_GATES[key]).any():
+        if key in source_gates and (score <= source_gates[key]).any():
             raise ValueError(
                 f"{slide_id} contains tiles outside the expected {key} source gate"
             )
@@ -415,6 +425,7 @@ def _build_selection(
     cap: int,
     seed: int,
     mask_dirs: Mapping[str, Path],
+    source_gates: Mapping[str, float],
 ) -> list[str]:
     tiles_dir = work / "tiles"
     tiles_dir.mkdir()
@@ -440,7 +451,7 @@ def _build_selection(
                     if source_id in groups.indices
                     else empty.copy()
                 )
-                _verify_scores(tiles, stem)
+                _verify_scores(tiles, stem, source_gates)
                 grid = _grid_rows(tiles, slide)
                 chosen = _sample(grid, stem, cap, seed)
                 features = None
@@ -459,7 +470,7 @@ def _build_selection(
                 elif mask_dirs:
                     for score, mask_dir in mask_dirs.items():
                         _restore_scores(chosen, slide, score, mask_dir)
-                    _verify_scores(chosen, stem)
+                    _verify_scores(chosen, stem, source_gates)
 
                 table = pa.Table.from_pandas(
                     chosen[TILE_SCHEMA.names], schema=TILE_SCHEMA, preserve_index=False
@@ -496,6 +507,7 @@ def prepare_selection(
     l2_embeddings: str | None = None,
     slide_overhead_tiles: int = 0,
     mask_sources: Mapping[str, str] | None = None,
+    source_gate: Literal["cancer", "tissue"] = "cancer",
 ) -> dict[str, Any]:
     if level not in (1, 2) or (level == 2) != (l2_embeddings is not None):
         raise ValueError("An existing embedding artifact is required for L2 only")
@@ -503,6 +515,9 @@ def prepare_selection(
         raise ValueError(
             "Require a cap of 1-3000, positive shard count and nonnegative overhead"
         )
+    if source_gate not in SOURCE_GATES:
+        raise ValueError(f"Unknown source gate: {source_gate!r}")
+    source_gates = SOURCE_GATES[source_gate]
     if output.exists():
         raise FileExistsError(f"Frozen selection output already exists: {output}")
     tiling_dir = _artifact_dir(tiling)
@@ -524,6 +539,7 @@ def prepare_selection(
             cap=cap,
             seed=seed,
             mask_dirs=mask_dirs,
+            source_gates=source_gates,
         )
         shards_by_load = [(0, shard) for shard in range(shards)]
         for slide in sorted(
@@ -552,7 +568,7 @@ def prepare_selection(
                 "phase": [0, 0],
                 "edge": "keep",
             },
-            "source_gates": MASK_GATES,
+            "source_gates": source_gates,
             "source_score_columns": scores,
             "recovered_score_sources": mask_sources,
             "score_missing": {
@@ -594,6 +610,12 @@ def main() -> None:
     )
     parser.add_argument("--slide-overhead-tiles", type=int, default=0)
     parser.add_argument(
+        "--source-gate",
+        choices=tuple(SOURCE_GATES),
+        default="cancer",
+        help="Expected upstream tile gates. Tissue keeps cancer scores without a cutoff.",
+    )
+    parser.add_argument(
         "--mask-dir",
         action="append",
         default=[],
@@ -623,6 +645,7 @@ def main() -> None:
         l2_embeddings=args.l2_embeddings,
         slide_overhead_tiles=args.slide_overhead_tiles,
         mask_sources=mask_sources,
+        source_gate=args.source_gate,
     )
     count = sum(slide["tile_count"] for slide in manifest["slides"])
     print(
