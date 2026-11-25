@@ -1,0 +1,13 @@
+# @package dataset.levels.2
+# CM5 Virchow2 embeddings restricted to tiles with residual clean area > 0.90.
+# Uses the existing CM5 slide splits and keeps the original embedding vectors.
+defaults:
+  - /data/levels/l2@_here_
+  - _self_
+
+name: l2_qc_only_residual09_embed
+uris:
+  all: "mlflow-artifacts:/3/15d445fc8b854a77ae21c96666ce38b6/artifacts/embeddings"
+  train: "mlflow-artifacts:/3/15d445fc8b854a77ae21c96666ce38b6/artifacts/embeddings_train"
+  val: "mlflow-artifacts:/3/15d445fc8b854a77ae21c96666ce38b6/artifacts/embeddings_val"
+  test: "mlflow-artifacts:/3/15d445fc8b854a77ae21c96666ce38b6/artifacts/embeddings_test"
