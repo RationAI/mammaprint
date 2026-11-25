@@ -2,6 +2,8 @@
 
 These commands freeze the existing L2 cancer-mask-0.5 training bags, benchmark the stain embedding pipeline on one full A40, write the full augmented training artifact, and verify a YAML data card. The transforms operate on crops loaded from the original WSI files. The output contains every eligible historical tile in its original row order.
 
+The launchers mount both historical WSI locations read-only, `/mnt/data/MOU/breast/mammaprint` and `/mnt/projects/quality_control/resampled_mammaprint`. The latter contains the resampled TIFFs referenced by the raw L2 tiling metadata.
+
 ## Set the inputs
 
 Publish the implementation commit to the Git remote before launching a Job because each pod checks it out by SHA. Use the same code, image and Virchow2 revision for every compared view. The encoder SHA below is the pinned revision used by the project's recent L1 workflow. Its agreement with the older L2 embeddings still needs the clean parity probe described in the [augmentation runbook](../.agents/skills/l2-embedding-augmentation/SKILL.md).

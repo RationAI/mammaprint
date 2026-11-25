@@ -159,6 +159,12 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
         [
             {
                 "name": "projects",
+                "mountPath": str(shared.RESAMPLED_WSIS),
+                "subPath": str(shared.RESAMPLED_WSIS.relative_to(shared.PROJECTS)),
+                "readOnly": True,
+            },
+            {
+                "name": "projects",
                 "mountPath": str(args.output_root),
                 "subPath": str(args.output_root.relative_to(shared.PROJECTS)),
             },

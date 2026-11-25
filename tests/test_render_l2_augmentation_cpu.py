@@ -106,6 +106,15 @@ class RenderL2AugmentationCpuTest(unittest.TestCase):
             },
         )
         mounts = {mount["mountPath"]: mount for mount in worker["volumeMounts"]}
+        self.assertEqual(
+            mounts["/mnt/projects/quality_control/resampled_mammaprint"],
+            {
+                "name": "projects",
+                "mountPath": "/mnt/projects/quality_control/resampled_mammaprint",
+                "subPath": "quality_control/resampled_mammaprint",
+                "readOnly": True,
+            },
+        )
         for path in ("/mnt/data", "/mnt/data/Public", "/mnt/projects/mammaprint"):
             self.assertTrue(mounts[path]["readOnly"])
         self.assertEqual(mounts[ROOT]["subPath"], "mammaprint/augmentation")

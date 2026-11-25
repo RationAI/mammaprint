@@ -25,6 +25,7 @@ IMAGE = "cerit.io/rationai/base:2.0.6"
 TRACKING_URI = "http://mlflow-s3.rationai-mlflow"
 PROJECTS = PurePosixPath("/mnt/projects")
 PROJECT = PROJECTS / "mammaprint"
+RESAMPLED_WSIS = PROJECTS / "quality_control/resampled_mammaprint"
 DATA = PurePosixPath("/mnt/data")
 TELEMETRY = ".telemetry"
 MIB = 1024**2
@@ -352,6 +353,12 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
             volume["persistentVolumeClaim"]["readOnly"] = True
     volume_mounts.extend(
         [
+            {
+                "name": "projects",
+                "mountPath": str(RESAMPLED_WSIS),
+                "subPath": str(RESAMPLED_WSIS.relative_to(PROJECTS)),
+                "readOnly": True,
+            },
             {
                 "name": "projects",
                 "mountPath": str(args.output_root),

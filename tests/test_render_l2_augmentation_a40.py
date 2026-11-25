@@ -93,6 +93,15 @@ class RenderL2AugmentationA40Test(unittest.TestCase):
         )
         self.assertEqual(volumes["scratch"]["emptyDir"], {"sizeLimit": "32Gi"})
         mounts = {mount["mountPath"]: mount for mount in container["volumeMounts"]}
+        self.assertEqual(
+            mounts["/mnt/projects/quality_control/resampled_mammaprint"],
+            {
+                "name": "projects",
+                "mountPath": "/mnt/projects/quality_control/resampled_mammaprint",
+                "subPath": "quality_control/resampled_mammaprint",
+                "readOnly": True,
+            },
+        )
         self.assertTrue(
             all(
                 mounts[path]["readOnly"]

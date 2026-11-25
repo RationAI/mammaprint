@@ -11,6 +11,8 @@ Use the [complete dataset creation commands](../../../docs/l2-augmentation-datas
 
 The CPU renderer accepts `--create-output-root` to create a missing shared output subtree and its `outputs` directory using a short init container before mounting the scoped writable root.
 
+Both CPU and A40 launchers expose `/mnt/projects/quality_control/resampled_mammaprint` read-only in addition to the original DATA mount. The raw L2 metadata references TIFFs there. A missing file during preparation should be checked against both the manifest path and the mounted subdirectory before changing the cohort.
+
 ## Freeze inputs on CPU
 
 Set an approved shared work root. Keep the frozen input roots separate from the A40 job's writable output subtree. Run the preparer as a CPU command in an existing authorized allocation.
