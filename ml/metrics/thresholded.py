@@ -18,6 +18,15 @@ from torchmetrics.classification import (
 )
 from torchmetrics.wrappers import MetricInputTransformer
 
+from ml.metrics.logits import BinaryLogitMetric
+
+
+class SignAUROC(BinaryLogitMetric):
+    """Rank continuous regression scores against the sign of the target index."""
+
+    def transform_target(self, target: Tensor) -> Tensor:
+        return (target >= 0).long()
+
 
 class ThresholdedBinaryMetric(MetricInputTransformer):
     """Wraps a binary metric, binarizing continuous preds/targets at a threshold.
@@ -80,6 +89,7 @@ def thresholded_specificity(
 
 
 __all__ = [
+    "SignAUROC",
     "ThresholdedBinaryMetric",
     "thresholded_f1",
     "thresholded_precision",
