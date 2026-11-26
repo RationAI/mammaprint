@@ -1,0 +1,14 @@
+# @package dataset.levels.1
+# Epithelium > 0.25 and cancer > 0.5 within the capped L1 Virchow2 sample.
+# The parent non-overlapping selection used a cap of 3,000 tiles per slide and seed 42.
+defaults:
+  - /data/levels/l1@_here_
+  - _self_
+
+name: l1_epithel_and_cancer_025_05_embed
+stride: 224
+uris:
+  all: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/epithel_and_cancer_5/embeddings"
+  train: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/epithel_and_cancer_5/embeddings_train"
+  val: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/epithel_and_cancer_5/embeddings_val"
+  test: "mlflow-artifacts:/3/6bcde828a66649ae889fdad2d630b9b1/artifacts/epithel_and_cancer_5/embeddings_test"

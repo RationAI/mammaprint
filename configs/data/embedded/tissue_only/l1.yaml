@@ -1,0 +1,14 @@
+# @package dataset.levels.1
+# Virchow2 embeddings of the non-overlapping L1 tissue/QC sample.
+# The tissue sample used a cap of 3,000 tiles per slide and seed 42.
+defaults:
+  - /data/levels/l1@_here_
+  - _self_
+
+name: l1_tissue_embed
+stride: 224
+uris:
+  all: "mlflow-artifacts:/3/a909bfd70077477a95f1d9d93128c3c5/artifacts/tissue_only/embeddings"
+  train: "mlflow-artifacts:/3/a909bfd70077477a95f1d9d93128c3c5/artifacts/tissue_only/embeddings_train"
+  val: "mlflow-artifacts:/3/a909bfd70077477a95f1d9d93128c3c5/artifacts/tissue_only/embeddings_val"
+  test: "mlflow-artifacts:/3/a909bfd70077477a95f1d9d93128c3c5/artifacts/tissue_only/embeddings_test"
