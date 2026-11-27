@@ -13,7 +13,7 @@ from hydra.core.override_parser.overrides_parser import OverridesParser
 from hydra.errors import HydraException
 from kube_jobs import storage
 from kube_jobs.constants import HTTPS_PROXY, NO_PROXY, TTL_SECONDS_AFTER_FINISHED
-from kube_jobs.resolve_gpu import JobGPUType, resolve_gpu
+from kube_jobs.resolve_gpu import GPUConfig, JobGPUType, resolve_gpu
 from kube_jobs.resolve_storage import resolve_storage
 from kubernetes import client
 from kubernetes.utils.quantity import parse_quantity
@@ -201,7 +201,11 @@ def render_job(args: argparse.Namespace) -> dict[str, Any]:
     if args.overlay_embedding_loader and not args.overlay_base:
         raise ValueError("--overlay-embedding-loader requires --overlay-base")
     spec = seed_spec(args)
-    gpu = resolve_gpu(args.gpu)
+    gpu = (
+        GPUConfig(limits={"nvidia.com/mig-2g.24gb": 1})
+        if args.gpu == "mig-2g.24gb"
+        else resolve_gpu(args.gpu)
+    )
     mounts, volumes = resolve_storage([storage.secure.DATA, storage.secure.PROJECTS])
     annotations = {
         ANNOTATION + "target-context": args.context,
@@ -363,7 +367,9 @@ def main(argv: list[str] | None = None) -> None:
         help="Include committed MLflow download helper changes with the overlay",
     )
     parser.add_argument("--image", required=True)
-    parser.add_argument("--gpu", required=True, choices=get_args(JobGPUType.__value__))
+    parser.add_argument(
+        "--gpu", required=True, choices=(*get_args(JobGPUType.__value__), "mig-2g.24gb")
+    )
     parser.add_argument("--cpu", required=True)
     parser.add_argument("--memory", required=True)
     parser.add_argument("--shm", required=True)

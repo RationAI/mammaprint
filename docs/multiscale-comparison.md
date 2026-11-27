@@ -34,6 +34,8 @@ Host requests use the successful 4-core, 16-GiB allocation per active fit. Disk 
 
 ## Render and run
 
+For the requested 24-GB MIG allocation, add `--gpu mig-2g.24gb`. This uses the cluster's observed `nvidia.com/mig-2g.24gb` resource and a conservative 23-GiB visible-memory planning input. Seven fits need an analytical 8.75 GiB, within its 80% planning budget. MIG allocations use the slice resource for placement. The A40 product selector is omitted. Use a distinct batch ID such as `ms-mig24-v1` when replacing the A40 Jobs.
+
 To queue seven fits per mask on two A40 Jobs, use `--group-by-mask`. The approved larger host allocation uses the following additional flags. The current seven-fit variant permits all seven fits to run together on each GPU, with two compute threads per fit. Its combined analytical GPU planning estimate is 8.75 GiB per A40. Concurrent host-memory and throughput peaks are recorded by the batch runner. The scientific configurations and fourteen fits are identical to the matrix above. `--unlimited-storage` removes the scratch/shared-memory `emptyDir.sizeLimit` fields and the container's ephemeral-storage request and limit.
 
 ```bash

@@ -74,7 +74,7 @@ def plan(args: argparse.Namespace) -> list[dict]:
                         "experiment": experiment,
                         "seeds": seeds,
                         "max_parallel": parallel,
-                        "gpu": "A40",
+                        "gpu": getattr(args, "gpu", "A40"),
                         "cpu": 4 * parallel,
                         "memory": f"{16 * parallel}Gi",
                         "scratch_size": f"{scratch}Gi",
@@ -164,7 +164,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--batch-id", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--device-gib", type=float, default=45.0)
+    parser.add_argument("--gpu", choices=("A40", "mig-2g.24gb"), default="A40")
+    parser.add_argument("--device-gib", type=float)
     parser.add_argument("--max-parallel", type=int, choices=range(1, 8), default=2)
     parser.add_argument(
         "--group-by-mask",
@@ -188,6 +189,8 @@ def main(argv: list[str] | None = None) -> None:
         help="Create the reviewed Jobs after explicit approval",
     )
     args = parser.parse_args(argv)
+    if args.device_gib is None:
+        args.device_gib = 23.0 if args.gpu == "mig-2g.24gb" else 45.0
     if not math.isfinite(args.device_gib) or args.device_gib <= 0:
         parser.error("--device-gib must be finite and positive")
     if (

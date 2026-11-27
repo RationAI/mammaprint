@@ -82,11 +82,17 @@ def test_single_fit_mode_scales_host_and_disk_requests():
 
 
 @pytest.mark.parametrize(
-    "grouped,parallel,unlimited",
-    [(False, 2, False), (True, 2, True), (True, 7, True), (True, 7, False)],
+    "grouped,parallel,unlimited,gpu",
+    [
+        (False, 2, False, "A40"),
+        (True, 2, True, "A40"),
+        (True, 7, True, "A40"),
+        (True, 7, False, "A40"),
+        (True, 7, True, "mig-2g.24gb"),
+    ],
 )
 def test_full_renderer_is_offline_and_gives_distinct_fit_names(
-    tmp_path, monkeypatch, grouped, parallel, unlimited
+    tmp_path, monkeypatch, grouped, parallel, unlimited, gpu
 ):
     original = subprocess.check_output
 
@@ -108,6 +114,8 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(
         revision,
         "--output-dir",
         str(tmp_path),
+        "--gpu",
+        gpu,
     ]
     if grouped:
         flags += [
@@ -131,14 +139,17 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(
         container = manifest["spec"]["template"]["spec"]["containers"][0]
         spec = json.loads(container["args"][3].replace("$$", "$"))
         assert spec["max_parallel"] == parallel
-        assert container["resources"]["limits"]["nvidia.com/gpu"] == 1
+        resource = "nvidia.com/gpu" if gpu == "A40" else "nvidia.com/mig-2g.24gb"
+        assert container["resources"]["limits"][resource] == 1
+        if gpu != "A40":
+            assert "nodeSelector" not in manifest["spec"]["template"]["spec"]
         if grouped:
             assert len(spec["runs"]) == 7
             assert (
                 container["args"][6] == manifest["metadata"]["name"] == spec["batch_id"]
             )
             for resources in container["resources"].values():
-                expected = {"cpu": "16", "memory": "64Gi", "nvidia.com/gpu": 1}
+                expected = {"cpu": "16", "memory": "64Gi", resource: 1}
                 if not unlimited:
                     expected["ephemeral-storage"] = resources["ephemeral-storage"]
                     assert (
