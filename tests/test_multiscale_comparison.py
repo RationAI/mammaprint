@@ -81,7 +81,10 @@ def test_single_fit_mode_scales_host_and_disk_requests():
     assert sum(len(j["seeds"]) for j in jobs) == 14
 
 
-def test_full_renderer_is_offline_and_gives_distinct_fit_names(tmp_path, monkeypatch):
+@pytest.mark.parametrize("grouped", [False, True])
+def test_full_renderer_is_offline_and_gives_distinct_fit_names(
+    tmp_path, monkeypatch, grouped
+):
     original = subprocess.check_output
 
     def git_read(command, **kwargs):
@@ -91,20 +94,30 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(tmp_path, monkeyp
 
     monkeypatch.setattr(subprocess, "check_output", git_read)
     revision = original(["git", "rev-parse", "HEAD"], text=True).strip()
-    comparison.main(
-        [
-            "--context",
-            "kubas-cluster",
-            "--namespace",
-            "rationai-jobs-ns",
-            "--batch-id",
-            "test-v1",
-            "--source-commit",
-            revision,
-            "--output-dir",
-            str(tmp_path),
+    flags = [
+        "--context",
+        "kubas-cluster",
+        "--namespace",
+        "rationai-jobs-ns",
+        "--batch-id",
+        "test-v1",
+        "--source-commit",
+        revision,
+        "--output-dir",
+        str(tmp_path),
+    ]
+    if grouped:
+        flags += [
+            "--group-by-mask",
+            "--cpu",
+            "16",
+            "--memory-gib",
+            "64",
+            "--threads-per-fit",
+            "8",
+            "--unlimited-storage",
         ]
-    )
+    comparison.main(flags)
     names = set()
     fits = 0
     for path in tmp_path.glob("ms-*.json"):
@@ -113,9 +126,21 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(tmp_path, monkeyp
         spec = json.loads(container["args"][3].replace("$$", "$"))
         assert spec["max_parallel"] == 2
         assert container["resources"]["limits"]["nvidia.com/gpu"] == 1
+        if grouped:
+            assert len(spec["runs"]) == 7
+            assert (
+                container["args"][6] == manifest["metadata"]["name"] == spec["batch_id"]
+            )
+            for resources in container["resources"].values():
+                assert resources == {"cpu": "16", "memory": "64Gi", "nvidia.com/gpu": 1}
+            assert all(
+                "sizeLimit" not in v.get("emptyDir", {})
+                for v in manifest["spec"]["template"]["spec"]["volumes"]
+            )
         for run in spec["runs"]:
             assert "test_after_fit=true" in run["argv"]
             assert '+logger.tags.comparison_id="test-v1"' in run["argv"]
             names.add((spec["batch_id"], run["id"]))
             fits += 1
     assert fits == len(names) == 14
+    assert len(list(tmp_path.glob("ms-*.json"))) == (2 if grouped else 6)

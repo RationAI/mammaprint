@@ -13,6 +13,8 @@ Use `scripts/ml/estimate_training_batch_memory.py --architecture multiscale-slid
 
 ## Replay the original seed-0 attention fits
 
+The comparison launcher also supports `--group-by-mask --cpu 16 --memory-gib 64 --threads-per-fit 8 --unlimited-storage` for two Jobs with seven queued fits per A40 and two concurrent fits. This removes ephemeral-storage resources and every `emptyDir.sizeLimit`. Review the actual two manifests and retain the `--max-parallel 2` setting unless another concurrency is explicitly supported. The comparison reference contains the full command and aggregate resource scope.
+
 Use this workflow for the two historical L4/L3/L2 regression runs with epoch-0 checkpoints in MLflow. The worker starts a fresh fit, selects by minimum `valid/loss`, and tests once. Its MammaPrint MLflow run carries the original ID in `recovery_source_run_id`.
 
 The original training revision is `a8d498a59efa8bdcfd38310195cd1d4985c7bbdc`. The published revision `aab79d6167031e92f69f45173b4394260c1aaa4f` adds the corrected checkpoint logger to that source. Confirm the full SHA is reachable from the private repository before rendering. The historical F1 at minimum validation loss was 77.25% for CM5 and 76.97% for EAN5. Compare the replay with those values after it finishes.

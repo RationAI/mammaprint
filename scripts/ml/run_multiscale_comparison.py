@@ -12,6 +12,7 @@ from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 from scripts.ml import estimate_training_batch_memory as memory
+from scripts.ml.run_training_batch import validate_spec
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,6 +95,53 @@ def plan(args: argparse.Namespace) -> list[dict]:
     return jobs
 
 
+def group_by_mask(
+    manifests: list[dict], jobs: list[dict], args: argparse.Namespace
+) -> list[dict]:
+    grouped = []
+    for mask in MASKS:
+        members = [
+            (manifest, job)
+            for manifest, job in zip(manifests, jobs, strict=True)
+            if job["mask"] == mask
+        ]
+        manifest = members[0][0]
+        name = f"ms-{mask}-{args.batch_id}"
+        runs = []
+        for original, job in members:
+            spec = json.loads(
+                original["spec"]["template"]["spec"]["containers"][0]["args"][
+                    3
+                ].replace("$$", "$")
+            )
+            for run in spec["runs"]:
+                runs.append(
+                    {
+                        "id": f"{job['recipe'].removesuffix('_regression').replace('_', '-')}-{run['id']}",
+                        "argv": run["argv"],
+                    }
+                )
+        spec = validate_spec(
+            {
+                "version": 1,
+                "batch_id": name,
+                "max_parallel": args.max_parallel,
+                "runs": runs,
+            }
+        )
+        manifest["metadata"]["name"] = name
+        manifest["metadata"]["annotations"]["mammaprint.rationai.org/batch-id"] = name
+        template = manifest["spec"]["template"]
+        template["metadata"]["labels"]["app"] = name
+        container = template["spec"]["containers"][0]
+        container["args"][3] = json.dumps(spec, separators=(",", ":")).replace(
+            "$", "$$"
+        )
+        container["args"][6] = name
+        grouped.append(manifest)
+    return grouped
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", required=True)
@@ -103,6 +151,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device-gib", type=float, default=45.0)
     parser.add_argument("--max-parallel", type=int, choices=(1, 2), default=2)
+    parser.add_argument(
+        "--group-by-mask",
+        action="store_true",
+        help="Queue all seven fits for each mask on one GPU",
+    )
+    parser.add_argument("--cpu", type=memory.positive_int)
+    parser.add_argument("--memory-gib", type=memory.positive_int)
+    parser.add_argument("--threads-per-fit", type=memory.positive_int, default=4)
+    parser.add_argument(
+        "--unlimited-storage",
+        action="store_true",
+        help="Omit ephemeral-storage resources and emptyDir size limits",
+    )
     parser.add_argument(
         "--output-root", default="/mnt/projects/mammaprint/training-batches"
     )
@@ -172,7 +233,7 @@ def main(argv: list[str] | None = None) -> None:
             "--ephemeral-storage",
             job["ephemeral_storage"],
             "--threads-per-fit",
-            "4",
+            str(args.threads_per_fit),
             "--output-root",
             args.output_root,
             "--experiment",
@@ -194,6 +255,22 @@ def main(argv: list[str] | None = None) -> None:
         with contextlib.redirect_stdout(output):
             batch.main(flags)
         manifests.append(json.loads(output.getvalue()))
+    if args.group_by_mask:
+        manifests = group_by_mask(manifests, jobs, args)
+    for manifest in manifests:
+        pod = manifest["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        for resources in container["resources"].values():
+            if args.cpu:
+                resources["cpu"] = str(args.cpu)
+            if args.memory_gib:
+                resources["memory"] = f"{args.memory_gib}Gi"
+            if args.unlimited_storage:
+                resources.pop("ephemeral-storage", None)
+        if args.unlimited_storage:
+            for volume in pod["volumes"]:
+                if "emptyDir" in volume:
+                    volume["emptyDir"].pop("sizeLimit", None)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     for manifest in manifests:
@@ -204,13 +281,27 @@ def main(argv: list[str] | None = None) -> None:
         path.write_text(content)
         paths.append(path)
     (args.output_dir / "comparison-plan.json").write_text(
-        json.dumps(jobs, indent=2) + "\n"
+        json.dumps(
+            {
+                "configurations": jobs,
+                "submission": {
+                    "group_by_mask": args.group_by_mask,
+                    "cpu_override": args.cpu,
+                    "memory_gib_override": args.memory_gib,
+                    "threads_per_fit": args.threads_per_fit,
+                    "max_parallel": args.max_parallel,
+                    "unlimited_storage": args.unlimited_storage,
+                },
+            },
+            indent=2,
+        )
+        + "\n"
     )
     print(
         json.dumps(
             {
                 "fits": sum(len(j["seeds"]) for j in jobs),
-                "jobs": len(jobs),
+                "jobs": len(manifests),
                 "manifests": list(map(str, paths)),
             },
             indent=2,

@@ -34,6 +34,20 @@ Host requests use the successful 4-core, 16-GiB allocation per active fit. Disk 
 
 ## Render and run
 
+To queue seven fits per mask on two A40 Jobs, use `--group-by-mask`. The approved larger host allocation uses the following additional flags. Each GPU has two active fits at a time, with eight compute threads each. The scientific configurations and fourteen fits are identical to the matrix above. `--unlimited-storage` removes the scratch/shared-memory `emptyDir.sizeLimit` fields and the container's ephemeral-storage request and limit.
+
+```bash
+comparison_source=$(git rev-parse HEAD)
+.venv/bin/python -m scripts.ml.run_multiscale_comparison \
+  --context kubas-cluster --namespace rationai-jobs-ns \
+  --batch-id ms-paired-v2 --source-commit "$comparison_source" \
+  --output-dir /tmp/mammaprint-ms-paired-v2 \
+  --group-by-mask --max-parallel 2 --threads-per-fit 8 \
+  --cpu 16 --memory-gib 64 --unlimited-storage
+```
+
+Adding `--submit` creates these two Jobs. The renderer reports the actual number of Jobs and records resource overrides in `comparison-plan.json`. Both request exactly one A40. The total is two A40s, 32 CPU cores and 128 GiB host RAM.
+
 Use Python 3.12 with project dependencies and the compatible `rationai-kube-jobs` helper, version 0.4.0 at commit `7dc4aed3b1f8a76f8aacd8468c670fc582a75c02`. The global version 0.2.0 has an incompatible storage API. Install the helper into the launcher environment if needed.
 
 ```bash
