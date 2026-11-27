@@ -1,0 +1,13 @@
+# @package _global_
+# Shared 256-dimensional projection, per-level means, concatenation, slide mean, and linear regression.
+# Dataset: cancer_mask_5; levels L4/L3/L2; training seeds 0, 1, 2.
+defaults:
+  - /experiment/ml/multiscale/screen: _regression
+  - /ml/aggregator/multiscale_presets: multiscale_projected_mean
+  - override /data/pyramid: cancer_mask_5_l4_l3_l2
+  - _self_
+
+slide_dim: 768
+metadata:
+  run_name: Screen cm5 projected_mean regression L4/L3/L2 seed ${seed}
+  description: Shared 256-dimensional projection, per-level means, concatenation, slide mean, and linear regression.

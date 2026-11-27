@@ -1,9 +1,17 @@
 ---
 name: multiscale-checkpoint-evaluation
-description: Use when replaying the MammaPrint CM5 or EAN5 seed-0 slide-attention fits on A40 and testing their newly saved best checkpoints.
+description: Use when replaying MammaPrint multiscale checkpoints or preparing the CM5/EAN5 paired-seed comparison with shared A40 training and resource estimates.
 ---
 
 # Multiscale checkpoint evaluation
+
+## Compare configurations with shared A40 training
+
+Use `scripts/ml/run_multiscale_comparison.py` for the fourteen missing fits, grouped into six seed batches by mask and architecture. The exact configurations, verified launcher dependency, render command, resource formulas, known reuse runs, and retry procedure are in [the comparison reference](../../../docs/multiscale-comparison.md). This launcher reuses `scripts/ml/render_training_batch_job.py` and `scripts/ml/run_training_batch.py`. It defaults to offline rendering and requires explicit `--submit` after approval of the concrete manifests. Check that the source commit is published and matches the clean checkout.
+
+Use `scripts/ml/estimate_training_batch_memory.py --architecture multiscale-slide-attention --level 4 --mask cancer_mask_5 --include-test --device-gib 45` for the recorded CM5 pyramid. The `multiscale-mean-linear` and `multiscale-projected-mean` profiles use the same recorded region counts. EAN5 uses `--mask epithel_and_cancer_5`. The six evidence rows in `scripts/ml/multiscale_batch_bag_sizes.csv` record original audit digests. Estimates give 1.25 GiB per fit for the pinned recipes. Follow the shared-GPU workflow to measure concurrent peaks before increasing the proposed two-fit ceiling. Each active process also needs its own disk download, four cores and 16 GiB host RAM.
+
+## Replay the original seed-0 attention fits
 
 Use this workflow for the two historical L4/L3/L2 regression runs with epoch-0 checkpoints in MLflow. The worker starts a fresh fit, selects by minimum `valid/loss`, and tests once. Its MammaPrint MLflow run carries the original ID in `recovery_source_run_id`.
 

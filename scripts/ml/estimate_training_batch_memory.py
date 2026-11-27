@@ -17,6 +17,7 @@ PROJECTED_ATTENTION_WIDTH = 128
 RUNTIME_GIB = 1.0
 DEVICE_BUDGET_FRACTION = 0.8
 BAG_SIZES = Path(__file__).with_name("training_batch_bag_sizes.csv")
+PYRAMID_BAG_SIZES = Path(__file__).with_name("multiscale_batch_bag_sizes.csv")
 L1_CAP = 3000
 
 
@@ -45,6 +46,19 @@ def profiles() -> dict[str, Profile]:
         projector, 1
     )
     result = {
+        "multiscale-mean-linear": Profile(
+            7681, 2 * 21 * width + 3 * width, 2 * 21 * width + 3 * width
+        ),
+        "multiscale-projected-mean": Profile(
+            671745,
+            2 * 21 * width + 8 * 21 * projector + 3 * projector,
+            2 * 21 * width + 3 * 21 * projector,
+        ),
+        "multiscale-slide-attention": Profile(
+            1067266,
+            2 * 21 * width + 8 * 21 * projector + 8 * 3 * projector + 8 * 256,
+            2 * 21 * width + 3 * 21 * projector + 3 * 768 + 3 * 256,
+        ),
         "abmil-mean": Profile(
             projected_parameters,
             width + 8 * projector + 16,
@@ -90,15 +104,18 @@ class BagSize:
         )
 
 
-def bag_sizes(level: int, mask: str) -> dict[str, BagSize]:
+def bag_sizes(level: int, mask: str, *, multiscale: bool = False) -> dict[str, BagSize]:
+    if multiscale and level != 4:
+        raise ValueError("The recorded multiscale profiles use L4/L3/L2 pyramids")
     if level == 1 and mask == "cancer_mask_5":
         return dict.fromkeys(("train", "val", "test"), BagSize(L1_CAP, L1_CAP))
-    with BAG_SIZES.open(newline="", encoding="utf-8") as file:
+    path = PYRAMID_BAG_SIZES if multiscale else BAG_SIZES
+    with path.open(newline="", encoding="utf-8") as file:
         sizes = {
             row["split"]: BagSize(
                 float(row["mean_tiles"]),
                 int(row["max_tiles"]),
-                float(row["capped_1024_mean_tiles"]),
+                float(row["capped_1024_mean_tiles"]) if not multiscale else None,
             )
             for row in csv.DictReader(file)
             if int(row["level"]) == level and row["mask"] == mask
@@ -110,7 +127,10 @@ def bag_sizes(level: int, mask: str) -> dict[str, BagSize]:
 
 def estimate(args: argparse.Namespace) -> dict[str, object]:
     profile = PROFILES[args.architecture]
-    sizes = bag_sizes(args.level, args.mask)
+    multiscale = args.architecture.startswith("multiscale-")
+    sizes = bag_sizes(args.level, args.mask, multiscale=multiscale)
+    if multiscale and args.train_tile_cap:
+        raise ValueError("Multiscale recipes use uncapped retained regions")
     train_batch = args.train_batch_size or (4 if profile.projected else 1)
     eval_batch = args.eval_batch_size or (1 if profile.projected else train_batch)
     cap = (
@@ -146,7 +166,10 @@ def estimate(args: argparse.Namespace) -> dict[str, object]:
         "level": args.level,
         "mask": args.mask,
         "architecture": args.architecture,
-        "bag_evidence": "selection-cap proxy"
+        "bag_unit": "retained pyramid regions" if multiscale else "tiles",
+        "bag_evidence": "recorded complete-pyramid audits"
+        if multiscale
+        else "selection-cap proxy"
         if args.level == 1
         else "recorded tile counts",
         "train_batch_size": train_batch,

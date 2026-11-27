@@ -1,0 +1,17 @@
+# @package _global_
+# Reuse final per-level embedding cards and their predefined train/val/test splits.
+defaults:
+  - /data/embedded/cancer_mask_5/l2@dataset.levels.2
+  - /data/embedded/cancer_mask_5/l3@dataset.levels.3
+  - /data/embedded/cancer_mask_5/l4@dataset.levels.4
+  - _self_
+
+pyramid:
+  dataset_family: cancer_mask_5
+  anchor_level: 4
+  level_order: [4, 3, 2]
+  level_ratios: [1, 2, 4]
+  tile_extent: 224
+  require_complete: true
+  overlap_policy: non_overlapping
+  selection_seed: 0

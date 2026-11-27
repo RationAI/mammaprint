@@ -28,6 +28,9 @@ test_after_fit: false
 metadata:
   experiment_name: MammaPrint
   hyperparams:
+    dataset_family: ${pyramid.dataset_family}
+    level_order: ${pyramid.level_order}
+    level_ratios: ${pyramid.level_ratios}
     tile_extent: ${pyramid.tile_extent}
     overlap_policy: ${pyramid.overlap_policy}
     selection_seed: ${pyramid.selection_seed}
