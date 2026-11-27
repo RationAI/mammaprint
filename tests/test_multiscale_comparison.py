@@ -81,9 +81,12 @@ def test_single_fit_mode_scales_host_and_disk_requests():
     assert sum(len(j["seeds"]) for j in jobs) == 14
 
 
-@pytest.mark.parametrize("grouped", [False, True])
+@pytest.mark.parametrize(
+    "grouped,parallel,unlimited",
+    [(False, 2, False), (True, 2, True), (True, 7, True), (True, 7, False)],
+)
 def test_full_renderer_is_offline_and_gives_distinct_fit_names(
-    tmp_path, monkeypatch, grouped
+    tmp_path, monkeypatch, grouped, parallel, unlimited
 ):
     original = subprocess.check_output
 
@@ -114,9 +117,12 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(
             "--memory-gib",
             "64",
             "--threads-per-fit",
-            "8",
-            "--unlimited-storage",
+            "2" if parallel == 7 else "8",
+            "--max-parallel",
+            str(parallel),
         ]
+    if unlimited:
+        flags.append("--unlimited-storage")
     comparison.main(flags)
     names = set()
     fits = 0
@@ -124,7 +130,7 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(
         manifest = json.loads(path.read_text())
         container = manifest["spec"]["template"]["spec"]["containers"][0]
         spec = json.loads(container["args"][3].replace("$$", "$"))
-        assert spec["max_parallel"] == 2
+        assert spec["max_parallel"] == parallel
         assert container["resources"]["limits"]["nvidia.com/gpu"] == 1
         if grouped:
             assert len(spec["runs"]) == 7
@@ -132,11 +138,18 @@ def test_full_renderer_is_offline_and_gives_distinct_fit_names(
                 container["args"][6] == manifest["metadata"]["name"] == spec["batch_id"]
             )
             for resources in container["resources"].values():
-                assert resources == {"cpu": "16", "memory": "64Gi", "nvidia.com/gpu": 1}
-            assert all(
-                "sizeLimit" not in v.get("emptyDir", {})
-                for v in manifest["spec"]["template"]["spec"]["volumes"]
-            )
+                expected = {"cpu": "16", "memory": "64Gi", "nvidia.com/gpu": 1}
+                if not unlimited:
+                    expected["ephemeral-storage"] = resources["ephemeral-storage"]
+                    assert (
+                        int(resources["ephemeral-storage"].removesuffix("Gi")) > 7 * 176
+                    )
+                assert resources == expected
+            if unlimited:
+                assert all(
+                    "sizeLimit" not in v.get("emptyDir", {})
+                    for v in manifest["spec"]["template"]["spec"]["volumes"]
+                )
         for run in spec["runs"]:
             assert "test_after_fit=true" in run["argv"]
             assert '+logger.tags.comparison_id="test-v1"' in run["argv"]

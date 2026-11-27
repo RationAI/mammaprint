@@ -106,6 +106,12 @@ def group_by_mask(
             if job["mask"] == mask
         ]
         manifest = members[0][0]
+        largest_fit = max(job["estimate"]["planning_gib_per_fit"] for _, job in members)
+        if (
+            largest_fit * args.max_parallel
+            > args.device_gib * memory.DEVICE_BUDGET_FRACTION
+        ):
+            raise ValueError("Grouped fits exceed the 80% VRAM planning budget")
         name = f"ms-{mask}-{args.batch_id}"
         runs = []
         for original, job in members:
@@ -134,6 +140,15 @@ def group_by_mask(
         template = manifest["spec"]["template"]
         template["metadata"]["labels"]["app"] = name
         container = template["spec"]["containers"][0]
+        scratch = math.ceil(DOWNLOAD_GIB[mask] * args.max_parallel * 1.1 + 12)
+        for resources in container["resources"].values():
+            resources.update(
+                cpu=str(4 * args.max_parallel), memory=f"{16 * args.max_parallel}Gi"
+            )
+            resources["ephemeral-storage"] = f"{scratch + 8}Gi"
+        for volume in template["spec"]["volumes"]:
+            if volume["name"] == "scratch":
+                volume["emptyDir"]["sizeLimit"] = f"{scratch}Gi"
         container["args"][3] = json.dumps(spec, separators=(",", ":")).replace(
             "$", "$$"
         )
@@ -150,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device-gib", type=float, default=45.0)
-    parser.add_argument("--max-parallel", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--max-parallel", type=int, choices=range(1, 8), default=2)
     parser.add_argument(
         "--group-by-mask",
         action="store_true",
